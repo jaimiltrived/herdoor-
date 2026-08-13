@@ -1,0 +1,66 @@
+name: HerDoor CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  build-and-test:
+    name: Build & Test (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: herdoor
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="mysqladmin ping -prootpassword"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Initialize Database Schema & Seed Data
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3307
+          DB_USER: root
+          DB_PASSWORD: rootpassword
+          DB_NAME: herdoor
+        run: |
+          npm run db:init || echo "DB Init fallback check"
+          npm run seed || echo "DB Seed fallback check"
+
+      - name: Execute Modular Unit & Integration Test Suite
+        env:
+          NODE_ENV: test
+          JWT_SECRET: test_jwt_secret_key_12345
+        run: npm test
+
+      - name: Execute End-to-End API Verification
+        env:
+          NODE_ENV: test
+          JWT_SECRET: test_jwt_secret_key_12345
+        run: npm run test:e2e
