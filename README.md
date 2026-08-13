@@ -3,6 +3,8 @@
 [![Node.js](https://img.shields.io/badge/Node.js-v18%2B-green.svg)](https://nodejs.org/)
 [![Express.js](https://img.shields.io/badge/Express-v4.19-blue.svg)](https://expressjs.com/)
 [![MySQL](https://img.shields.io/badge/MySQL-v8.0-orange.svg)](https://www.mysql.com/)
+[![Jest](https://img.shields.io/badge/Jest-v29-red.svg)](https://jestjs.io/)
+[![CI/CD Pipeline](https://github.com/jaimiltrived/herdoor-/actions/workflows/ci.yml/badge.svg)](https://github.com/jaimiltrived/herdoor-/actions)
 [![Swagger](https://img.shields.io/badge/Swagger-UI-brightgreen.svg)](http://localhost:5000/api-docs)
 [![License](https://img.shields.io/badge/License-ISC-yellow.svg)](#license)
 
@@ -22,7 +24,7 @@
   - Flexible grain sourcing options: Customer-provided grain vs. Mill-supplied grain.
   - Multi-grain processing support (Wheat, Rice, Bajra, Jowar, Pulses, Spices).
 - **📦 End-to-End Order Lifecycle**
-  - Complete status workflow: `PENDING` ➔ `ACCEPTED` ➔ `GRINDING` ➔ `PACKING` ➔ `READY` ➔ `PICKED_UP` ➔ `OUT_FOR_DELIVERY` ➔ `DELIVERED`.
+  - Complete status workflow: `PENDING` ➔ `ACCEPTED` ➔ `PROCESSING` ➔ `PACKING` ➔ `READY` ➔ `PICKED_UP` ➔ `OUT_FOR_DELIVERY` ➔ `DELIVERED`.
   - Real-time estimated completion time (ETA) and full order timeline history.
 - **🏪 Shopkeeper / Mill Dashboard**
   - Manage incoming orders, set processing ETAs, accept/reject requests.
@@ -34,16 +36,21 @@
 - **⭐ Ratings, Reviews & Notifications**
   - Verified order reviews and ratings for flour mills.
   - Push notification token registration (FCM) and in-app notification center.
-- **📖 Interactive OpenAPI Documentation**
-  - Built-in Swagger UI and ready-to-use Postman collection.
+- **🌱 Automated JavaScript Database Seeder**
+  - Standalone seeding script (`npm run seed`) to quickly initialize MySQL schema data and passwords.
+- **🧪 Comprehensive Test Suite & CI/CD**
+  - Modular unit and integration test suite with Jest & Supertest.
+  - Continuous Integration pipeline via GitHub Actions.
 
 ---
 
 ## 🛠️ Technology Stack
 
-- **Runtime**: Node.js
+- **Runtime**: Node.js (v18+, v20+)
 - **Framework**: Express.js
 - **Database**: MySQL 8.0 / MySQL2 with Connection Pooling & In-Memory Data Store Fallback
+- **Testing**: Jest & Supertest
+- **CI/CD**: GitHub Actions (`.github/workflows/ci.yml`)
 - **Authentication**: JSON Web Tokens (`jsonwebtoken`) & `bcryptjs`
 - **API Documentation**: Swagger (`swagger-jsdoc` & `swagger-ui-express`)
 - **Security & Utilities**: `helmet`, `cors`, `morgan`, `dotenv`
@@ -54,10 +61,20 @@
 
 ```
 herdoor/
+├── .github/
+│   └── workflows/
+│       └── ci.yml                   # GitHub Actions CI/CD workflow definition
 ├── database/
-│   └── seed.sql                     # MySQL database schema & sample data
+│   ├── schema.sql                   # MySQL DDL schema definitions
+│   └── seed.sql                     # SQL seed script
 ├── scripts/
-│   └── init-db.js                   # Database initialization script
+│   ├── init-db.js                   # Database initialization script
+│   └── seed.js                      # JavaScript database seeder
+├── tests/
+│   ├── auth.test.js                 # Authentication & user tests
+│   ├── health.test.js               # Health check & docs tests
+│   ├── mills.test.js                # Flour mills & grain catalog tests
+│   └── orders.test.js               # Order lifecycle & state machine tests
 ├── src/
 │   ├── config/                      # Database & JWT configurations
 │   ├── constants/                   # Roles, statuses, and response codes
@@ -70,7 +87,7 @@ herdoor/
 │   └── server.js                    # Application entry point
 ├── API_DOCUMENTATION.md             # Detailed endpoint reference
 ├── herdoor_postman_collection.json  # Postman API Collection
-├── test-endpoints.js                # API endpoint test suite
+├── test-endpoints.js                # E2E API test script
 ├── package.json
 └── README.md
 ```
@@ -85,7 +102,7 @@ herdoor/
 - [npm](https://www.npmjs.com/)
 - [MySQL Server](https://www.mysql.com/) (Optional - in-memory fallback enabled for testing)
 
-### Installation
+### Installation & Setup
 
 1. **Clone the repository**:
    ```bash
@@ -105,18 +122,24 @@ herdoor/
    NODE_ENV=development
    JWT_SECRET=herdoor_super_secret_jwt_key_2026
    DB_HOST=localhost
+   DB_PORT=3307
    DB_USER=root
    DB_PASSWORD=yourpassword
-   DB_NAME=herdoor_db
+   DB_NAME=herdoor
    ```
 
-4. **Initialize Database** *(Optional)*:
-   ```bash
-   npm run db:init
-   ```
+4. **Initialize & Seed Database**:
+   - Initialize schema:
+     ```bash
+     npm run db:init
+     ```
+   - Run JavaScript Seeder:
+     ```bash
+     npm run seed
+     ```
 
 5. **Start the Application**:
-   - **Development Mode** (with Nodemon):
+   - **Development Mode**:
      ```bash
      npm run dev
      ```
@@ -125,10 +148,27 @@ herdoor/
      npm start
      ```
 
-6. **Run Endpoint Tests**:
-   ```bash
-   npm test
-   ```
+6. **Run Test Suites**:
+   - **Unit & Integration Tests (Jest & Supertest)**:
+     ```bash
+     npm test
+     ```
+   - **Standalone End-to-End API Tests**:
+     ```bash
+     npm run test:e2e
+     ```
+
+---
+
+## 🔄 CI/CD Pipeline
+
+This project uses **GitHub Actions** for Continuous Integration. Every `push` or `pull_request` to the `main`, `master`, or `develop` branch automatically runs:
+1. Multi-version Node.js environment build matrix (`18.x`, `20.x`).
+2. MySQL 8.0 service container startup.
+3. Automated database initialization & JavaScript seeding.
+4. Execution of the Jest test suite (`npm test`) and E2E verification (`npm run test:e2e`).
+
+The workflow configuration file is located at [.github/workflows/ci.yml](file:///d:/herdoor/.github/workflows/ci.yml).
 
 ---
 
