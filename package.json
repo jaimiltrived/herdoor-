@@ -1,0 +1,39 @@
+{
+  "name": "herdoor-backend",
+  "version": "1.0.0",
+  "description": "HerDoor API - Flour Mill & Grain Processing REST Services with MySQL Database & Swagger UI",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "node test-endpoints.js",
+    "db:init": "node scripts/init-db.js"
+  },
+  "keywords": [
+    "express",
+    "node",
+    "api",
+    "backend",
+    "herdoor",
+    "mysql",
+    "swagger",
+    "flour-mill"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "mysql2": "^3.9.7",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

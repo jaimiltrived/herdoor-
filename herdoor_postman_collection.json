@@ -1,0 +1,185 @@
+{
+  "info": {
+    "_postman_id": "herdoor-api-collection-2026",
+    "name": "HerDoor REST API Collection",
+    "description": "Postman Collection for HerDoor Flour Mill & Grain Processing REST APIs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Auth",
+      "item": [
+        {
+          "name": "Login Customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"ramesh@example.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Customer\",\n  \"email\": \"newcust@example.com\",\n  \"phone\": \"+919999888877\",\n  \"password\": \"Password123!\",\n  \"role\": \"CUSTOMER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Get Me Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Mills",
+      "item": [
+        {
+          "name": "Get Nearby Mills",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/mills/nearby?latitude=23.0225&longitude=72.5714&radius=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["mills", "nearby"],
+              "query": [
+                { "key": "latitude", "value": "23.0225" },
+                { "key": "longitude", "value": "72.5714" },
+                { "key": "radius", "value": "5" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Mill Services",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/mills/101/services",
+              "host": ["{{baseUrl}}"],
+              "path": ["mills", "101", "services"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Orders",
+      "item": [
+        {
+          "name": "Create Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"millId\": 101,\n  \"grainSource\": \"CUSTOMER\",\n  \"grainTypeId\": 1,\n  \"quantityKg\": 10,\n  \"serviceType\": \"GRINDING\",\n  \"fulfillmentType\": \"DELIVERY\",\n  \"addressId\": 25,\n  \"paymentMethod\": \"UPI\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders"]
+            }
+          }
+        },
+        {
+          "name": "Get Order Timeline",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/501/timeline",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "501", "timeline"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Shopkeeper",
+      "item": [
+        {
+          "name": "Get Shopkeeper Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/shopkeeper/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["shopkeeper", "dashboard"]
+            }
+          }
+        },
+        {
+          "name": "Accept Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estimatedCompletionMinutes\": 45\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/shopkeeper/orders/501/accept",
+              "host": ["{{baseUrl}}"],
+              "path": ["shopkeeper", "orders", "501", "accept"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
