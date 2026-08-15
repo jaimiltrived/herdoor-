@@ -1,5 +1,7 @@
-# 🌾 HerDoor API - Flour Mill & Grain Processing Platform
+# 🌾 HerDoor - Flour Mill & Grain Processing Platform
 
+[![Flutter](https://img.shields.io/badge/Flutter-v3.29%2B-blue.svg)](https://flutter.dev/)
+[![Dart](https://img.shields.io/badge/Dart-v3.11%2B-0175C2.svg)](https://dart.dev/)
 [![Node.js](https://img.shields.io/badge/Node.js-v18%2B-green.svg)](https://nodejs.org/)
 [![Express.js](https://img.shields.io/badge/Express-v4.19-blue.svg)](https://expressjs.com/)
 [![MySQL](https://img.shields.io/badge/MySQL-v8.0-orange.svg)](https://www.mysql.com/)
@@ -8,12 +10,20 @@
 [![Swagger](https://img.shields.io/badge/Swagger-UI-brightgreen.svg)](http://localhost:5000/api-docs)
 [![License](https://img.shields.io/badge/License-ISC-yellow.svg)](#license)
 
-**HerDoor** is a comprehensive RESTful API backend platform designed to modernize local flour mills (*chakki*) and grain processing services. It seamlessly connects customers, flour mill owners (*shopkeepers*), and delivery partners to enable door-to-door grain grinding, fresh flour delivery, real-time order tracking, and inventory management.
+**HerDoor** is a comprehensive full-stack mobile and web platform designed to modernize local flour mills (*chakki*) and grain processing services. It includes a cross-platform **Flutter Mobile App** and a robust **Node.js/Express RESTful API Backend**, seamlessly connecting customers, flour mill owners (*shopkeepers*), and delivery partners to enable door-to-door grain grinding, fresh flour delivery, real-time order tracking, and inventory management.
 
 ---
 
 ## ✨ Key Features
 
+- **📱 Flutter Mobile App UI**
+  - Cross-platform mobile & web client built with modern Material 3 design and Google Fonts (`Outfit`).
+  - Interactive authentication flows (Splash, Login, Register, Forgot Password).
+  - Main navigation dashboard with bottom navigation bar & drawer navigation.
+  - Nearby flour mill discovery list & detailed mill profile screens (grinding rates, mill status, reviews, operating hours).
+  - New Order creation screen with grain type selection, processing options, and address selection.
+  - Live Order Tracking screen with step-by-step lifecycle timeline, ETA, and mill/driver contact triggers.
+  - User Profile, Saved Delivery Addresses, Payment Methods management, Notification Feed, and Help & Support center.
 - **🔐 Authentication & Access Control**
   - Secure JWT authentication with role-based authorization (`CUSTOMER`, `SHOPKEEPER`, `DELIVERY`).
   - Mobile & Email authentication, OTP generation, verification, and password reset flows.
@@ -46,6 +56,13 @@
 
 ## 🛠️ Technology Stack
 
+### Frontend / Mobile App
+- **Framework**: Flutter (v3.29+)
+- **Language**: Dart (v3.11+)
+- **Design & Typography**: Material Design 3 & Google Fonts (`Outfit`)
+- **Icons**: `cupertino_icons`
+
+### Backend API & Database
 - **Runtime**: Node.js (v18+, v20+)
 - **Framework**: Express.js
 - **Database**: MySQL 8.0 / MySQL2 with Connection Pooling & In-Memory Data Store Fallback
@@ -67,6 +84,17 @@ herdoor/
 ├── database/
 │   ├── schema.sql                   # MySQL DDL schema definitions
 │   └── seed.sql                     # SQL seed script
+├── frontend/                        # Flutter Mobile & Cross-Platform Application
+│   ├── android/                     # Android platform configurations
+│   ├── ios/                         # iOS platform configurations
+│   ├── lib/                         # Application source code
+│   │   ├── models/                  # Data models (Order, Mill, User, Notification)
+│   │   ├── screens/                 # UI Screens (Auth, Dashboard, Mills, Orders, Tracking, Profile, etc.)
+│   │   ├── theme/                   # Custom AppTheme, palette & typography
+│   │   ├── widgets/                 # Reusable UI components & drawers
+│   │   └── main.dart                # Flutter app entry point
+│   ├── pubspec.yaml                 # Flutter dependencies & metadata
+│   └── web/                         # Web platform files
 ├── scripts/
 │   ├── init-db.js                   # Database initialization script
 │   └── seed.js                      # JavaScript database seeder
@@ -100,9 +128,10 @@ herdoor/
 
 - [Node.js](https://nodejs.org/) (v18 or higher)
 - [npm](https://www.npmjs.com/)
+- [Flutter SDK](https://docs.flutter.dev/get-started/install) (v3.29+ for running frontend)
 - [MySQL Server](https://www.mysql.com/) (Optional - in-memory fallback enabled for testing)
 
-### Installation & Setup
+### Backend API Setup
 
 1. **Clone the repository**:
    ```bash
@@ -110,7 +139,7 @@ herdoor/
    cd herdoor-
    ```
 
-2. **Install dependencies**:
+2. **Install API dependencies**:
    ```bash
    npm install
    ```
@@ -138,7 +167,7 @@ herdoor/
      npm run seed
      ```
 
-5. **Start the Application**:
+5. **Start the API Server**:
    - **Development Mode**:
      ```bash
      npm run dev
@@ -148,8 +177,8 @@ herdoor/
      npm start
      ```
 
-6. **Run Test Suites**:
-   - **Unit & Integration Tests (Jest & Supertest)**:
+6. **Run Backend Test Suites**:
+   - **Unit & Integration Tests**:
      ```bash
      npm test
      ```
@@ -157,6 +186,28 @@ herdoor/
      ```bash
      npm run test:e2e
      ```
+
+### Frontend Mobile App Setup
+
+1. **Navigate to the frontend folder**:
+   ```bash
+   cd frontend
+   ```
+
+2. **Install Flutter packages**:
+   ```bash
+   flutter pub get
+   ```
+
+3. **Run the Flutter Application**:
+   ```bash
+   # Run on connected mobile device or emulator
+   flutter run
+
+   # Or run in Chrome browser
+   flutter run -d chrome
+   ```
+
 
 ---
 
