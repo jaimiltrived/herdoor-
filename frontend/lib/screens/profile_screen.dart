@@ -6,6 +6,7 @@ import 'payment_methods_screen.dart';
 import 'notifications_screen.dart';
 import 'help_support_screen.dart';
 import 'settings_screen.dart';
+import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   final VoidCallback onLogout;
@@ -22,6 +23,10 @@ class ProfileScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.menu, color: AppTheme.textPrimary),
+          onPressed: () => Scaffold.of(context).openDrawer(),
+        ),
         title: Text(
           'My Profile',
           style: GoogleFonts.playfairDisplay(
@@ -93,7 +98,14 @@ class ProfileScreen extends StatelessWidget {
                     ),
                     IconButton(
                       icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryTerracotta),
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const EditProfileScreen(),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),

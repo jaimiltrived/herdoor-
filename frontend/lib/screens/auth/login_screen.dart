@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
+import '../../models/merchant_models.dart';
 import 'register_screen.dart';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  final VoidCallback onLoginSuccess;
-  const LoginScreen({super.key, required this.onLoginSuccess});
+  final Function(UserRole role) onLoginSuccess;
+
+  const LoginScreen({
+    super.key,
+    required this.onLoginSuccess,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -17,6 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController(text: '••••••••');
   bool _rememberMe = true;
   bool _obscurePassword = true;
+  UserRole _selectedRole = UserRole.merchant; // Default to Merchant to match prompt emphasis
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
               Center(
                 child: Container(
                   width: 72,
@@ -37,14 +43,16 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: AppTheme.surfaceWarm,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
-                    Icons.storefront_rounded,
+                  child: Icon(
+                    _selectedRole == UserRole.merchant
+                        ? Icons.storefront_rounded
+                        : Icons.shopping_bag_outlined,
                     size: 38,
                     color: AppTheme.primaryTerracotta,
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               Center(
                 child: Text(
                   'Welcome Back',
@@ -65,7 +73,126 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 24),
+
+              // Role Selector Segment Control
+              Text(
+                'Select Login Role',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3ECE1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppTheme.borderLight),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _selectedRole = UserRole.customer),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: _selectedRole == UserRole.customer
+                                ? Colors.white
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: _selectedRole == UserRole.customer
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.05),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.person_rounded,
+                                size: 18,
+                                color: _selectedRole == UserRole.customer
+                                    ? AppTheme.primaryTerracotta
+                                    : AppTheme.textSecondary,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Customer',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: _selectedRole == UserRole.customer
+                                      ? AppTheme.textPrimary
+                                      : AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _selectedRole = UserRole.merchant),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: _selectedRole == UserRole.merchant
+                                ? const Color(0xFF6E5616)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: _selectedRole == UserRole.merchant
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.08),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.store_rounded,
+                                size: 18,
+                                color: _selectedRole == UserRole.merchant
+                                    ? Colors.white
+                                    : AppTheme.textSecondary,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Merchant (Admin)',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: _selectedRole == UserRole.merchant
+                                      ? Colors.white
+                                      : AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
               Text(
                 'Phone Number or Email',
                 style: GoogleFonts.plusJakartaSans(
@@ -94,7 +221,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
               Text(
                 'Password',
                 style: GoogleFonts.plusJakartaSans(
@@ -169,18 +296,22 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: widget.onLoginSuccess,
+                  onPressed: () => widget.onLoginSuccess(_selectedRole),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryTerracotta,
+                    backgroundColor: _selectedRole == UserRole.merchant
+                        ? const Color(0xFF6E5616)
+                        : AppTheme.primaryTerracotta,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
                   ),
                   child: Text(
-                    'Sign In',
+                    _selectedRole == UserRole.merchant
+                        ? 'Sign In as Merchant'
+                        : 'Sign In as Customer',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -202,7 +333,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => RegisterScreen(onRegisterSuccess: widget.onLoginSuccess),
+                          builder: (context) => RegisterScreen(
+                            onRegisterSuccess: () => widget.onLoginSuccess(_selectedRole),
+                          ),
                         ),
                       );
                     },

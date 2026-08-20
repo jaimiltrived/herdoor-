@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
+import '../models/app_models.dart';
 
 class SavedAddressesScreen extends StatefulWidget {
   const SavedAddressesScreen({super.key});
@@ -77,13 +78,16 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
               child: ElevatedButton(
                 onPressed: () {
                   if (addressController.text.isNotEmpty) {
+                    final type = titleController.text.isEmpty ? 'Other' : titleController.text;
+                    final addrText = addressController.text;
                     setState(() {
                       _addresses.add({
-                        'type': titleController.text.isEmpty ? 'Other' : titleController.text,
-                        'address': addressController.text,
+                        'type': type,
+                        'address': addrText,
                         'city': cityController.text.isEmpty ? 'New York, NY' : cityController.text,
                         'phone': '+1 (555) 234-5678',
                       });
+                      MockData.savedAddresses.add('$type - $addrText');
                     });
                   }
                   Navigator.pop(context);

@@ -6,7 +6,8 @@ import 'mill_detail_screen.dart';
 
 class MillsListScreen extends StatefulWidget {
   final VoidCallback onStartOrder;
-  const MillsListScreen({super.key, required this.onStartOrder});
+  final bool showBackButton;
+  const MillsListScreen({super.key, required this.onStartOrder, this.showBackButton = false});
 
   @override
   State<MillsListScreen> createState() => _MillsListScreenState();
@@ -14,18 +15,42 @@ class MillsListScreen extends StatefulWidget {
 
 class _MillsListScreenState extends State<MillsListScreen> {
   final _searchController = TextEditingController();
-  String _selectedFilter = 'All';
+  String _selectedCategory = 'All';
+  final bool _isOpenNow = false;
   List<FlourMill> _filteredMills = MockData.mills;
+
+  List<Map<String, dynamic>> get _categories => [
+    {
+      'name': 'All',
+      'image': 'assets/images/cat_all.jpg',
+    },
+    {
+      'name': 'Wheat',
+      'image': 'assets/images/cat_wheat.jpg',
+    },
+    {
+      'name': 'Rice',
+      'image': 'assets/images/cat_rice.jpg',
+    },
+    {
+      'name': 'Millet',
+      'image': 'assets/images/cat_millet.jpg',
+    },
+    {
+      'name': 'Spices',
+      'image': 'assets/images/cat_spices.jpg',
+    },
+  ];
 
   void _filterMills(String query) {
     setState(() {
       _filteredMills = MockData.mills.where((mill) {
         final matchesQuery = mill.name.toLowerCase().contains(query.toLowerCase()) ||
             mill.specialty.toLowerCase().contains(query.toLowerCase());
-        final matchesCategory = _selectedFilter == 'All' ||
-            (_selectedFilter == 'Open Now' && mill.isOpen) ||
-            (_selectedFilter == 'Stone Ground' && mill.specialty.contains('Stone'));
-        return matchesQuery && matchesCategory;
+        final matchesCategory = _selectedCategory == 'All' ||
+            mill.specialty.toLowerCase().contains(_selectedCategory.toLowerCase());
+        final matchesOpen = !_isOpenNow || mill.isOpen;
+        return matchesQuery && matchesCategory && matchesOpen;
       }).toList();
     });
   }
@@ -35,10 +60,15 @@ class _MillsListScreenState extends State<MillsListScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppTheme.textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: widget.showBackButton
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppTheme.textPrimary),
+                onPressed: () => Navigator.pop(context),
+              )
+            : IconButton(
+                icon: const Icon(Icons.menu, color: AppTheme.textPrimary),
+                onPressed: () => Scaffold.of(context).openDrawer(),
+              ),
         title: Text(
           'Flour Mills Near You',
           style: GoogleFonts.playfairDisplay(
@@ -47,6 +77,27 @@ class _MillsListScreenState extends State<MillsListScreen> {
             color: AppTheme.primaryTerracotta,
           ),
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: Center(
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppTheme.borderLight, width: 2),
+                  image: const DecorationImage(
+                    image: NetworkImage(
+                      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
+                    ),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -54,68 +105,118 @@ class _MillsListScreenState extends State<MillsListScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Search Input Bar
-              TextField(
-                controller: _searchController,
-                onChanged: _filterMills,
-                style: GoogleFonts.plusJakartaSans(color: AppTheme.textPrimary),
-                decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.primaryTerracotta),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear_rounded, color: AppTheme.textMuted),
-                          onPressed: () {
-                            _searchController.clear();
-                            _filterMills('');
-                          },
-                        )
-                      : null,
-                  filled: true,
-                  fillColor: Colors.white,
-                  hintText: 'Search mills by name or grain specialty...',
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppTheme.borderLight),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppTheme.primaryTerracotta, width: 1.5),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Filter Chips
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: ['All', 'Open Now', 'Stone Ground', 'Organic'].map((chip) {
-                    final isSelected = chip == _selectedFilter;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: ChoiceChip(
-                        label: Text(chip),
-                        selected: isSelected,
-                        selectedColor: AppTheme.primaryTerracotta,
-                        backgroundColor: Colors.white,
-                        labelStyle: GoogleFonts.plusJakartaSans(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: isSelected ? Colors.white : AppTheme.textPrimary,
+              // Search Input and Toggle Row
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: _filterMills,
+                      style: GoogleFonts.plusJakartaSans(color: AppTheme.textPrimary),
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.primaryTerracotta),
+                        suffixIcon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_searchController.text.isNotEmpty)
+                              IconButton(
+                                icon: const Icon(Icons.clear_rounded, color: AppTheme.textMuted),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  _filterMills('');
+                                },
+                              ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 8.0),
+                              child: VerticalDivider(width: 1, color: AppTheme.borderLight),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.mic_none_rounded, color: AppTheme.primaryTerracotta),
+                              onPressed: () {},
+                            ),
+                          ],
                         ),
-                        onSelected: (selected) {
-                          setState(() {
-                            _selectedFilter = chip;
-                            _filterMills(_searchController.text);
-                          });
-                        },
+                        filled: true,
+                        fillColor: Colors.white,
+                        hintText: 'Search mills or grain...',
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: AppTheme.borderLight),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: AppTheme.primaryTerracotta, width: 1.5),
+                        ),
                       ),
-                    );
-                  }).toList(),
-                ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 20),
+
+              // Categories List (Horizontal)
+              SizedBox(
+                height: 100,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _categories.length,
+                  separatorBuilder: (context, index) => const SizedBox(width: 16),
+                  itemBuilder: (context, index) {
+                    final category = _categories[index];
+                    final isSelected = category['name'] == _selectedCategory;
+
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedCategory = category['name'];
+                          _filterMills(_searchController.text);
+                        });
+                      },
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(40),
+                            child: Image.asset(
+                              category['image'],
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => Container(
+                                width: 60,
+                                height: 60,
+                                color: AppTheme.surfaceWarm,
+                                child: const Icon(Icons.grain, color: AppTheme.primaryTerracotta),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            category['name'],
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          if (isSelected)
+                            Container(
+                              width: 40,
+                              height: 3,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryTerracotta,
+                                borderRadius: BorderRadius.circular(1.5),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 10),
 
               Text(
                 '${_filteredMills.length} Mills Available',
@@ -135,43 +236,60 @@ class _MillsListScreenState extends State<MillsListScreen> {
                 separatorBuilder: (context, index) => const SizedBox(height: 16),
                 itemBuilder: (context, index) {
                   final mill = _filteredMills[index];
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => MillDetailScreen(
-                            mill: mill,
-                            onStartOrder: widget.onStartOrder,
-                          ),
+                  return TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: 0, end: 1),
+                    duration: Duration(milliseconds: 300 + (index * 100)),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, child) {
+                      return Transform.translate(
+                        offset: Offset(0, 20 * (1 - value)),
+                        child: Opacity(
+                          opacity: value,
+                          child: child,
                         ),
                       );
                     },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppTheme.borderLight),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ClipRRect(
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                            child: Image.network(
-                              mill.imageUrl,
-                              height: 140,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => MillDetailScreen(
+                              mill: mill,
+                              onStartOrder: widget.onStartOrder,
+                              heroTag: 'mills_list_mill_${mill.id}',
                             ),
                           ),
+                        );
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppTheme.borderLight),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Hero(
+                              tag: 'mills_list_mill_${mill.id}',
+                              child: ClipRRect(
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                                child: Image.network(
+                                  mill.imageUrl,
+                                  height: 140,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
                           Padding(
                             padding: const EdgeInsets.all(16.0),
                             child: Column(
@@ -250,8 +368,9 @@ class _MillsListScreenState extends State<MillsListScreen> {
                         ],
                       ),
                     ),
-                  );
-                },
+                  ),
+                );
+              },
               ),
             ],
           ),

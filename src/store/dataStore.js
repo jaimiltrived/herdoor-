@@ -109,6 +109,7 @@ const store = {
       id: 501,
       orderNumber: 'ORD-2026-1001',
       userId: 1,
+      customerName: 'Ramesh Patel',
       millId: 101,
       grainSource: GRAIN_SOURCES.CUSTOMER,
       grainTypeId: 1,
@@ -129,6 +130,55 @@ const store = {
         { status: ORDER_STATUS.PROCESSING, timestamp: '2026-08-12T10:15:00Z', note: 'Grinding started' }
       ],
       createdAt: '2026-08-12T10:00:00Z'
+    },
+    {
+      id: 502,
+      orderNumber: 'ORD-2026-1002',
+      userId: 1,
+      customerName: 'Elena Rodriguez',
+      millId: 101,
+      grainSource: GRAIN_SOURCES.CUSTOMER,
+      grainTypeId: 6,
+      grainTypeName: 'Multigrain Mix',
+      quantityKg: 5,
+      serviceType: SERVICE_TYPES.GRINDING,
+      fulfillmentType: FULFILLMENT_TYPES.DELIVERY,
+      addressId: 25,
+      paymentMethod: 'UPI',
+      paymentStatus: 'PAID',
+      status: ORDER_STATUS.PLACED,
+      estimatedMinutes: 30,
+      estimatedCompletionTime: null,
+      totalAmount: 175.0,
+      timeline: [
+        { status: ORDER_STATUS.PLACED, timestamp: '2026-08-12T11:00:00Z', note: 'Order placed by customer' }
+      ],
+      createdAt: '2026-08-12T11:00:00Z'
+    },
+    {
+      id: 503,
+      orderNumber: 'ORD-2026-1003',
+      userId: 1,
+      customerName: 'Marcus Chen',
+      millId: 101,
+      grainSource: GRAIN_SOURCES.MILL,
+      grainTypeId: 4,
+      grainTypeName: 'Jowar (Sorghum)',
+      quantityKg: 10,
+      serviceType: SERVICE_TYPES.GRINDING,
+      fulfillmentType: FULFILLMENT_TYPES.DELIVERY,
+      addressId: 25,
+      paymentMethod: 'UPI',
+      paymentStatus: 'PAID',
+      status: ORDER_STATUS.DELIVERED,
+      estimatedMinutes: 40,
+      estimatedCompletionTime: '12:40',
+      totalAmount: 380.0,
+      timeline: [
+        { status: ORDER_STATUS.PLACED, timestamp: '2026-08-11T09:00:00Z', note: 'Order placed' },
+        { status: ORDER_STATUS.COMPLETED, timestamp: '2026-08-11T12:40:00Z', note: 'Order delivered' }
+      ],
+      createdAt: '2026-08-11T09:00:00Z'
     }
   ],
 
@@ -197,11 +247,35 @@ const store = {
   notifications: [
     {
       id: 1,
-      userId: 1,
-      title: 'Order Accepted',
-      message: 'Shree Ganesh Flour Mill accepted your order #ORD-2026-1001.',
+      userId: 2,
+      title: '🚨 New Order Received #ORD-2026-1002',
+      message: 'Elena Rodriguez placed a new order for 5kg Multigrain Mix (₹175.00).',
       read: false,
-      createdAt: '2026-08-12T10:05:00Z'
+      createdAt: '2026-08-12T11:00:00Z'
+    },
+    {
+      id: 2,
+      userId: 2,
+      title: '🛵 Driver Arrived for Pickup',
+      message: 'Rajesh Kumar (Electric Bike #EB-4821) arrived at store for order #ORD-2026-1001.',
+      read: false,
+      createdAt: '2026-08-12T10:30:00Z'
+    },
+    {
+      id: 3,
+      userId: 2,
+      title: '⚠️ Low Stock Alert: Dark Rye Blend',
+      message: 'Stock has fallen below threshold (15kg remaining). Restock soon.',
+      read: false,
+      createdAt: '2026-08-12T09:15:00Z'
+    },
+    {
+      id: 4,
+      userId: 2,
+      title: '🛡️ Food Safety Audit Status',
+      message: 'Daily chakki stone sanitization and grain moisture test verified (Score 99%).',
+      read: true,
+      createdAt: '2026-08-12T08:00:00Z'
     }
   ],
 

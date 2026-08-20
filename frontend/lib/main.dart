@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
+import 'models/app_models.dart';
+import 'models/merchant_models.dart';
 import 'screens/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/main_navigation_screen.dart';
+import 'screens/merchant/merchant_main_navigation_screen.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  MockData.startGlobalOrderSimulation();
   runApp(const HerDoorApp());
 }
 
@@ -17,7 +22,8 @@ class HerDoorApp extends StatefulWidget {
 
 class _HerDoorAppState extends State<HerDoorApp> {
   bool _isSplashDone = false;
-  bool _isLoggedIn = false; // Opens Login / Register / Forgot Password screen after splash
+  bool _isLoggedIn = false;
+  UserRole _activeRole = UserRole.merchant; // Default to Merchant to showcase admin side
 
   @override
   Widget build(BuildContext context) {
@@ -30,11 +36,30 @@ class _HerDoorAppState extends State<HerDoorApp> {
               onFinish: () => setState(() => _isSplashDone = true),
             )
           : (_isLoggedIn
-              ? MainNavigationScreen(
-                  onLogout: () => setState(() => _isLoggedIn = false),
-                )
+              ? (_activeRole == UserRole.merchant
+                  ? MerchantMainNavigationScreen(
+                      onLogout: () => setState(() => _isLoggedIn = false),
+                      onSwitchToCustomer: () {
+                        setState(() {
+                          _activeRole = UserRole.customer;
+                        });
+                      },
+                    )
+                  : MainNavigationScreen(
+                      onLogout: () => setState(() => _isLoggedIn = false),
+                      onSwitchToMerchant: () {
+                        setState(() {
+                          _activeRole = UserRole.merchant;
+                        });
+                      },
+                    ))
               : LoginScreen(
-                  onLoginSuccess: () => setState(() => _isLoggedIn = true),
+                  onLoginSuccess: (role) {
+                    setState(() {
+                      _activeRole = role;
+                      _isLoggedIn = true;
+                    });
+                  },
                 )),
     );
   }

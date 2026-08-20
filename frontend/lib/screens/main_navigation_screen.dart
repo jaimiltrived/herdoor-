@@ -3,14 +3,19 @@ import 'package:google_fonts/google_fonts.dart';
 import 'profile_screen.dart';
 import '../theme/app_theme.dart';
 import 'dashboard_screen.dart';
-import 'new_order_screen.dart';
-import 'order_tracking_screen.dart';
+import 'mills_list_screen.dart';
+import 'orders_list_screen.dart';
 import '../widgets/app_drawer.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   final VoidCallback onLogout;
+  final VoidCallback? onSwitchToMerchant;
 
-  const MainNavigationScreen({super.key, required this.onLogout});
+  const MainNavigationScreen({
+    super.key,
+    required this.onLogout,
+    this.onSwitchToMerchant,
+  });
 
   @override
   State<MainNavigationScreen> createState() => _MainNavigationScreenState();
@@ -32,10 +37,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         onNavigateTab: _onSelectTab,
         onStartNewOrder: () => _onSelectTab(1),
       ),
-      NewOrderScreen(
-        onOrderCreated: () => _onSelectTab(2),
+      MillsListScreen(
+        onStartOrder: () => _onSelectTab(2),
       ),
-      const OrderTrackingScreen(),
+      const OrdersListScreen(),
       ProfileScreen(
         onLogout: widget.onLogout,
         onNavigateTab: _onSelectTab,
@@ -47,6 +52,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       drawer: AppDrawer(
         onSelectTab: _onSelectTab,
         onLogout: widget.onLogout,
+        onSwitchRole: widget.onSwitchToMerchant,
       ),
       body: IndexedStack(
         index: _currentIndex,
@@ -74,13 +80,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 icon: Icons.home_outlined,
                 activeIcon: Icons.home_rounded,
                 label: 'Home',
-                activeColor: AppTheme.softCoral,
+                activeColor: AppTheme.primaryTerracotta,
               ),
               _buildNavItem(
                 index: 1,
-                icon: Icons.add_circle_outline_rounded,
-                activeIcon: Icons.add_circle_rounded,
-                label: 'New Order',
+                icon: Icons.list_alt_rounded,
+                activeIcon: Icons.list_rounded,
+                label: 'List',
                 activeColor: AppTheme.mustardGold,
                 isProminent: true,
               ),
@@ -115,55 +121,61 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }) {
     final isSelected = _currentIndex == index;
 
-    if (isSelected) {
-      return GestureDetector(
-        onTap: () => _onSelectTab(index),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          decoration: BoxDecoration(
-            color: activeColor,
-            borderRadius: BorderRadius.circular(30),
-          ),
-          child: Row(
-            children: [
-              Icon(activeIcon, color: Colors.white, size: 22),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ],
+    return GestureDetector(
+      onTap: () => _onSelectTab(index),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOutCubic,
+        padding: EdgeInsets.symmetric(
+          horizontal: isSelected ? 20 : 14,
+          vertical: isSelected ? 10 : 8,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected ? activeColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(30),
+        ),
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOutCubic,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: isSelected
+                ? Row(
+                    key: const ValueKey('row'),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(activeIcon, color: Colors.white, size: 22),
+                      const SizedBox(width: 6),
+                      Text(
+                        label,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  )
+                : Column(
+                    key: const ValueKey('col'),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, color: AppTheme.textSecondary, size: 22),
+                      const SizedBox(height: 2),
+                      Text(
+                        label,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         ),
-      );
-    } else {
-      return GestureDetector(
-        onTap: () => _onSelectTab(index),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          color: Colors.transparent,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: AppTheme.textSecondary, size: 22),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+      ),
+    );
   }
 }

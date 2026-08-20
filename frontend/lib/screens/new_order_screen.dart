@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
+import 'location_selection_screen.dart';
 
 class NewOrderScreen extends StatefulWidget {
-  final VoidCallback onOrderCreated;
+  final String millName;
+  final String? initialGrain;
 
-  const NewOrderScreen({super.key, required this.onOrderCreated});
+  const NewOrderScreen({
+    super.key,
+    this.millName = 'Artisan Mill Co.',
+    this.initialGrain,
+  });
 
   @override
   State<NewOrderScreen> createState() => _NewOrderScreenState();
@@ -13,8 +19,14 @@ class NewOrderScreen extends StatefulWidget {
 
 class _NewOrderScreenState extends State<NewOrderScreen> {
   int _grainSource = 1; // 1 = Own grain, 2 = Buy from mill
-  String _selectedGrain = 'Premium Wheat';
+  late String _selectedGrain;
   int _quantityKg = 5;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedGrain = widget.initialGrain ?? 'Premium Wheat';
+  }
 
   final List<Map<String, dynamic>> _grainTypes = [
     {'name': 'Premium Wheat', 'icon': Icons.grass_outlined},
@@ -28,14 +40,12 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu, color: AppTheme.textPrimary),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTheme.textPrimary, size: 20),
+          onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'HerDoor Flour Mill',
+          widget.millName,
           style: GoogleFonts.playfairDisplay(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -231,7 +241,19 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: widget.onOrderCreated,
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => LocationSelectionScreen(
+                          grainSource: _grainSource,
+                          selectedGrain: _selectedGrain,
+                          quantityKg: _quantityKg,
+                          millName: widget.millName,
+                        ),
+                      ),
+                    );
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryTerracotta,
                     shape: RoundedRectangleBorder(
@@ -242,7 +264,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Continue to Review',
+                        'Next: Select Location',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

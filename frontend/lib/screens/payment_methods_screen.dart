@@ -1,9 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
+import '../models/app_models.dart';
+import 'invoice_screen.dart';
 
 class PaymentMethodsScreen extends StatefulWidget {
-  const PaymentMethodsScreen({super.key});
+  final int grainSource;
+  final String selectedGrain;
+  final int quantityKg;
+  final String millName;
+  final String pickupLocation;
+  final String dropLocation;
+
+  const PaymentMethodsScreen({
+    super.key,
+    this.grainSource = 1,
+    this.selectedGrain = 'Premium Wheat',
+    this.quantityKg = 5,
+    this.millName = 'Artisan Mill Co.',
+    this.pickupLocation = 'Home - 124 Heritage Way',
+    this.dropLocation = 'Home - 124 Heritage Way',
+  });
 
   @override
   State<PaymentMethodsScreen> createState() => _PaymentMethodsScreenState();
@@ -12,31 +29,73 @@ class PaymentMethodsScreen extends StatefulWidget {
 class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   int _selectedMethod = 0;
 
-  final List<Map<String, String>> _methods = [
-    {
-      'title': 'Visa Card',
-      'subtitle': '•••• •••• •••• 4242 (Expires 12/28)',
-      'icon': 'credit_card',
-    },
-    {
-      'title': 'Mastercard',
-      'subtitle': '•••• •••• •••• 8890 (Expires 09/27)',
-      'icon': 'credit_card',
-    },
-    {
-      'title': 'Apple Pay / Google Wallet',
-      'subtitle': 'Fast & secure contactless checkout',
-      'icon': 'account_balance_wallet',
-    },
-    {
-      'title': 'Cash on Delivery (COD)',
-      'subtitle': 'Pay when flour is delivered home',
-      'icon': 'payments',
-    },
-  ];
+  void _showAddCardDialog() {
+    final titleController = TextEditingController();
+    final numberController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Add New Payment Card',
+          style: GoogleFonts.playfairDisplay(fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(
+                labelText: 'Cardholder Name / Bank',
+                hintText: 'e.g. Chase Visa',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: numberController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Card Number (Last 4 digits)',
+                hintText: 'e.g. 5521',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (numberController.text.trim().isNotEmpty) {
+                final cardName = titleController.text.trim().isEmpty ? 'Debit Card' : titleController.text.trim();
+                final last4 = numberController.text.trim();
+                setState(() {
+                  MockData.paymentMethods.add({
+                    'title': cardName,
+                    'subtitle': '•••• •••• •••• $last4 (Expires 12/29)',
+                    'icon': 'credit_card',
+                  });
+                  _selectedMethod = MockData.paymentMethods.length - 1;
+                });
+              }
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryTerracotta),
+            child: const Text('Save Card', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final methods = MockData.paymentMethods;
+    if (_selectedMethod >= methods.length) _selectedMethod = 0;
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
@@ -80,10 +139,10 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
               ListView.separated(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                itemCount: _methods.length,
+                itemCount: methods.length,
                 separatorBuilder: (context, index) => const SizedBox(height: 14),
                 itemBuilder: (context, index) {
-                  final item = _methods[index];
+                  final item = methods[index];
                   final isSelected = index == _selectedMethod;
                   return GestureDetector(
                     onTap: () => setState(() => _selectedMethod = index),
@@ -160,7 +219,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 width: double.infinity,
                 height: 52,
                 child: OutlinedButton.icon(
-                  onPressed: () {},
+                  onPressed: _showAddCardDialog,
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppTheme.primaryTerracotta,
                     side: const BorderSide(color: AppTheme.primaryTerracotta, width: 1.5),
@@ -172,6 +231,47 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 40),
+
+              // Review Order Button
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: () {
+                    final selectedPayment = methods[_selectedMethod];
+                    final paymentStr = '${selectedPayment['title']} (${selectedPayment['subtitle']})';
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => InvoiceScreen(
+                          grainSource: widget.grainSource,
+                          selectedGrain: widget.selectedGrain,
+                          quantityKg: widget.quantityKg,
+                          millName: widget.millName,
+                          pickupLocation: widget.pickupLocation,
+                          dropLocation: widget.dropLocation,
+                          paymentMethod: paymentStr,
+                        ),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryTerracotta,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(27),
+                    ),
+                  ),
+                  child: Text(
+                    'Review Order (Invoice)',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
                   ),
                 ),

@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import '../models/app_models.dart';
+import 'new_order_screen.dart';
 
 class MillDetailScreen extends StatefulWidget {
   final FlourMill mill;
   final VoidCallback onStartOrder;
+  final String? heroTag;
 
   const MillDetailScreen({
     super.key,
     required this.mill,
     required this.onStartOrder,
+    this.heroTag,
   });
 
   @override
@@ -34,13 +37,16 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                 // Top Banner Image with Floating Back & Share
                 Stack(
                   children: [
-                    Container(
-                      height: 260,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        image: DecorationImage(
-                          image: NetworkImage(widget.mill.imageUrl),
-                          fit: BoxFit.cover,
+                    Hero(
+                      tag: widget.heroTag ?? 'mill_image_${widget.mill.id}',
+                      child: Container(
+                        height: 260,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          image: DecorationImage(
+                            image: NetworkImage(widget.mill.imageUrl),
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
                     ),
@@ -455,8 +461,12 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                 height: 54,
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    Navigator.pop(context);
-                    widget.onStartOrder();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => NewOrderScreen(millName: widget.mill.name),
+                      ),
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryTerracotta,

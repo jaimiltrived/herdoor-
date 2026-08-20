@@ -11,11 +11,15 @@ import '../screens/settings_screen.dart';
 class AppDrawer extends StatelessWidget {
   final Function(int) onSelectTab;
   final VoidCallback onLogout;
+  final bool isMerchantMode;
+  final VoidCallback? onSwitchRole;
 
   const AppDrawer({
     super.key,
     required this.onSelectTab,
     required this.onLogout,
+    this.isMerchantMode = false,
+    this.onSwitchRole,
   });
 
   @override
@@ -46,9 +50,11 @@ class AppDrawer extends StatelessWidget {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(color: AppTheme.primaryTerracotta, width: 2),
-                        image: const DecorationImage(
+                        image: DecorationImage(
                           image: NetworkImage(
-                            'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80',
+                            isMerchantMode
+                                ? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80'
+                                : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80',
                           ),
                           fit: BoxFit.cover,
                         ),
@@ -57,11 +63,11 @@ class AppDrawer extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: AppTheme.mustardGold,
+                        color: isMerchantMode ? const Color(0xFF6E5616) : AppTheme.mustardGold,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        'Gold Member',
+                        isMerchantMode ? 'Merchant Admin' : 'Gold Customer',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -73,7 +79,7 @@ class AppDrawer extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'Sarah Jenkins',
+                  isMerchantMode ? 'Artisan Mill Co.' : 'Sarah Jenkins',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -81,7 +87,7 @@ class AppDrawer extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'sarah.jenkins@example.com',
+                  isMerchantMode ? 'merchant@artisanmill.com' : 'sarah.jenkins@example.com',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 13,
                     color: AppTheme.textSecondary,
@@ -90,7 +96,64 @@ class AppDrawer extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+
+          // Role Switcher Tile Banner inside Drawer
+          if (onSwitchRole != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: InkWell(
+                onTap: () {
+                  Navigator.pop(context);
+                  onSwitchRole!();
+                },
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isMerchantMode ? const Color(0xFFFFF3E0) : const Color(0xFFE8F5E9),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isMerchantMode ? Colors.orange[300]! : Colors.green[300]!,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isMerchantMode ? Icons.shopping_bag_outlined : Icons.storefront_rounded,
+                        color: isMerchantMode ? Colors.deepOrange : Colors.green[800],
+                        size: 24,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isMerchantMode ? 'Switch to Customer App' : 'Switch to Merchant Portal',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ),
+                            Text(
+                              isMerchantMode ? 'Order flour & track' : 'Manage orders & shop status',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: 6),
 
           // Drawer Navigation List
           Expanded(
@@ -99,8 +162,8 @@ class AppDrawer extends StatelessWidget {
               children: [
                 _buildDrawerItem(
                   context,
-                  icon: Icons.home_outlined,
-                  title: 'Home / Dashboard',
+                  icon: isMerchantMode ? Icons.grid_view_rounded : Icons.home_outlined,
+                  title: isMerchantMode ? 'Merchant Dashboard' : 'Home / Shop',
                   onTap: () {
                     Navigator.pop(context);
                     onSelectTab(0);
@@ -108,8 +171,8 @@ class AppDrawer extends StatelessWidget {
                 ),
                 _buildDrawerItem(
                   context,
-                  icon: Icons.add_circle_outline_rounded,
-                  title: 'Place New Order',
+                  icon: isMerchantMode ? Icons.receipt_long_rounded : Icons.add_circle_outline_rounded,
+                  title: isMerchantMode ? 'Incoming Orders (12)' : 'Place New Order',
                   onTap: () {
                     Navigator.pop(context);
                     onSelectTab(1);
@@ -117,63 +180,66 @@ class AppDrawer extends StatelessWidget {
                 ),
                 _buildDrawerItem(
                   context,
-                  icon: Icons.local_shipping_outlined,
-                  title: 'Track Active Orders',
+                  icon: isMerchantMode ? Icons.inventory_2_rounded : Icons.local_shipping_outlined,
+                  title: isMerchantMode ? 'Manage Inventory' : 'Track Active Orders',
                   onTap: () {
                     Navigator.pop(context);
                     onSelectTab(2);
                   },
                 ),
-                _buildDrawerItem(
-                  context,
-                  icon: Icons.storefront_outlined,
-                  title: 'Flour Mills Near You',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => MillsListScreen(
-                          onStartOrder: () => onSelectTab(1),
+                if (!isMerchantMode)
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.storefront_outlined,
+                    title: 'Flour Mills Near You',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => MillsListScreen(
+                            onStartOrder: () => onSelectTab(1),
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                ),
+                      );
+                    },
+                  ),
                 const Divider(height: 24, color: AppTheme.borderLight),
                 _buildDrawerItem(
                   context,
                   icon: Icons.person_outline_rounded,
-                  title: 'My Profile',
+                  title: isMerchantMode ? 'Store Profile' : 'My Profile',
                   onTap: () {
                     Navigator.pop(context);
                     onSelectTab(3);
                   },
                 ),
-                _buildDrawerItem(
-                  context,
-                  icon: Icons.location_on_outlined,
-                  title: 'Saved Addresses',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const SavedAddressesScreen()),
-                    );
-                  },
-                ),
-                _buildDrawerItem(
-                  context,
-                  icon: Icons.payment_outlined,
-                  title: 'Payment Methods',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const PaymentMethodsScreen()),
-                    );
-                  },
-                ),
+                if (!isMerchantMode) ...[
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.location_on_outlined,
+                    title: 'Saved Addresses',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const SavedAddressesScreen()),
+                      );
+                    },
+                  ),
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.payment_outlined,
+                    title: 'Payment Methods',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const PaymentMethodsScreen()),
+                      );
+                    },
+                  ),
+                ],
                 _buildDrawerItem(
                   context,
                   icon: Icons.notifications_none_rounded,

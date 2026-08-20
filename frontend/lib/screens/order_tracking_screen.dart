@@ -1,10 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import '../models/app_models.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
-  const OrderTrackingScreen({super.key});
+  final OrderModel order;
+  const OrderTrackingScreen({super.key, required this.order});
 
   @override
   State<OrderTrackingScreen> createState() => _OrderTrackingScreenState();
@@ -12,17 +14,32 @@ class OrderTrackingScreen extends StatefulWidget {
 
 class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   int _viewMode = 0; // 0 = Stepper View (Image 1), 1 = Map & Details View (Image 5)
+  Timer? _uiRefreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _uiRefreshTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _uiRefreshTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu, color: AppTheme.textPrimary),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTheme.textPrimary, size: 20),
+          onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           'HerDoor Flour Mill',
@@ -111,7 +128,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   // --- IMAGE 1 UI VIEW ---
   Widget _buildImage1StepperView() {
-    final activeOrder = MockData.activeOrder;
+    final activeOrder = widget.order;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -291,6 +308,56 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             );
           },
         ),
+
+        if (activeOrder.isActive && activeOrder.trackingSteps.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceWarm,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.mustardDark.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: AppTheme.primaryTerracotta,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Auto-Tracking Active: Steps advance automatically every 4 seconds',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      MockData.advanceOrderStep(activeOrder);
+                    });
+                  },
+                  child: Text(
+                    'Skip Next >',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.primaryTerracotta,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }

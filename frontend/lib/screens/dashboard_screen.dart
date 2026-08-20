@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import '../models/app_models.dart';
 import 'mill_detail_screen.dart';
+import 'mills_list_screen.dart';
+import 'order_tracking_screen.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   final Function(int) onNavigateTab;
   final VoidCallback onStartNewOrder;
 
@@ -13,6 +16,29 @@ class DashboardScreen extends StatelessWidget {
     required this.onNavigateTab,
     required this.onStartNewOrder,
   });
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -88,145 +114,144 @@ class DashboardScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
 
-              // Active Order Banner Card (Matching Image 2)
-              GestureDetector(
-                onTap: () => onNavigateTab(2), // Navigate to Track tab
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'ACTIVE ORDER',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.primaryTerracotta,
-                              letterSpacing: 0.8,
-                            ),
-                          ),
-                          Text(
-                            'Order #HD-842',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Your Wheat Flour is being milled',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
-                          height: 1.25,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Estimated pickup: 2:00 PM',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
+              // Active Order Banner Card (Dynamic from MockData)
+              Builder(
+                builder: (context) {
+                  final activeOrders = MockData.orders.where((o) => o.isActive).toList();
+                  final hasActive = activeOrders.isNotEmpty;
+                  final activeOrder = hasActive ? activeOrders.first : null;
 
-                      // Progress step indicators (Prepped, Working, Ready)
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              children: [
-                                Text(
-                                  'Prepped',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppTheme.mustardDark,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Container(
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.mustardDark,
-                                    borderRadius: BorderRadius.circular(3),
-                                  ),
-                                ),
-                              ],
-                            ),
+                  return GestureDetector(
+                    onTap: () {
+                      if (hasActive && activeOrder != null) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => OrderTrackingScreen(order: activeOrder),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              children: [
-                                Text(
-                                  'Working',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppTheme.primaryTerracotta,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Container(
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.primaryTerracotta,
-                                    borderRadius: BorderRadius.circular(3),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              children: [
-                                Text(
-                                  'Ready',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppTheme.textMuted,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Container(
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.borderLight,
-                                    borderRadius: BorderRadius.circular(3),
-                                  ),
-                                ),
-                              ],
-                            ),
+                        );
+                      } else {
+                        widget.onStartNewOrder();
+                      }
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppTheme.borderLight),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
+                      child: hasActive && activeOrder != null
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.mustardGold.withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        'ACTIVE ORDER',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                          color: AppTheme.mustardDark,
+                                          letterSpacing: 0.8,
+                                        ),
+                                      ),
+                                    ),
+                                    Text(
+                                      activeOrder.orderId,
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppTheme.primaryTerracotta,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  '${activeOrder.itemSummary} • ${activeOrder.quantityKg}',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.textPrimary,
+                                    height: 1.25,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${activeOrder.millName} — ${activeOrder.statusStep}',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.mustardDark,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Delivery: ${activeOrder.estimatedDelivery}',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 13,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Tap to track live order',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppTheme.primaryTerracotta,
+                                      ),
+                                    ),
+                                    const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.primaryTerracotta),
+                                  ],
+                                ),
+                              ],
+                            )
+                          : Column(
+                              children: [
+                                const Icon(Icons.shopping_bag_outlined, color: AppTheme.primaryTerracotta, size: 36),
+                                const SizedBox(height: 10),
+                                Text(
+                                  'No Active Orders',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Order fresh stone-milled flour delivered directly to your home.',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 13,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 20),
 
@@ -235,7 +260,7 @@ class DashboardScreen extends StatelessWidget {
                 children: [
                   Expanded(
                     child: GestureDetector(
-                      onTap: onStartNewOrder,
+                      onTap: widget.onStartNewOrder,
                       child: Container(
                         height: 110,
                         padding: const EdgeInsets.all(16),
@@ -268,7 +293,7 @@ class DashboardScreen extends StatelessWidget {
                   const SizedBox(width: 14),
                   Expanded(
                     child: GestureDetector(
-                      onTap: onStartNewOrder,
+                      onTap: widget.onStartNewOrder,
                       child: Container(
                         height: 110,
                         padding: const EdgeInsets.all(16),
@@ -316,7 +341,17 @@ class DashboardScreen extends StatelessWidget {
                     ),
                   ),
                   TextButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => MillsListScreen(
+                            onStartOrder: widget.onStartNewOrder,
+                            showBackButton: true,
+                          ),
+                        ),
+                      );
+                    },
                     child: Text(
                       'See all',
                       style: GoogleFonts.plusJakartaSans(
@@ -338,42 +373,59 @@ class DashboardScreen extends StatelessWidget {
                 separatorBuilder: (context, index) => const SizedBox(height: 14),
                 itemBuilder: (context, index) {
                   final mill = MockData.mills[index];
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => MillDetailScreen(
-                            mill: mill,
-                            onStartOrder: onStartNewOrder,
-                          ),
+                  return TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: 0, end: 1),
+                    duration: Duration(milliseconds: 300 + (index * 100)),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, child) {
+                      return Transform.translate(
+                        offset: Offset(0, 20 * (1 - value)),
+                        child: Opacity(
+                          opacity: value,
+                          child: child,
                         ),
                       );
                     },
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceCream,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: AppTheme.borderLight.withValues(alpha: 0.5)),
-                      ),
-                      child: Row(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(14),
-                            child: Image.network(
-                              mill.imageUrl,
-                              width: 72,
-                              height: 72,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => Container(
-                                width: 72,
-                                height: 72,
-                                color: AppTheme.surfaceWarm,
-                                child: const Icon(Icons.storefront, color: AppTheme.primaryTerracotta),
-                              ),
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => MillDetailScreen(
+                              mill: mill,
+                              onStartOrder: widget.onStartNewOrder,
+                              heroTag: 'dashboard_mill_${mill.id}',
                             ),
                           ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceCream,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: AppTheme.borderLight.withValues(alpha: 0.5)),
+                        ),
+                        child: Row(
+                          children: [
+                            Hero(
+                              tag: 'dashboard_mill_${mill.id}',
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: Image.network(
+                                  mill.imageUrl,
+                                  width: 72,
+                                  height: 72,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => Container(
+                                    width: 72,
+                                    height: 72,
+                                    color: AppTheme.surfaceWarm,
+                                    child: const Icon(Icons.storefront, color: AppTheme.primaryTerracotta),
+                                  ),
+                                ),
+                              ),
+                            ),
                           const SizedBox(width: 14),
                           Expanded(
                             child: Column(
@@ -441,8 +493,9 @@ class DashboardScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                  );
-                },
+                  ),
+                );
+              },
               ),
               const SizedBox(height: 24),
             ],

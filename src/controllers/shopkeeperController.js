@@ -31,15 +31,24 @@ exports.getDashboard = (req, res) => {
   });
 };
 
+function enrichOrder(o) {
+  const u = store.users.find(usr => usr.id === o.userId);
+  return {
+    ...o,
+    customerName: o.customerName || (u ? u.name : 'Ramesh Patel'),
+    customerPhone: o.customerPhone || (u ? u.phone : '+919876543210')
+  };
+}
+
 exports.getTodayOrders = (req, res) => {
   const millId = getShopkeeperMillId(req.user);
-  const millOrders = store.orders.filter(o => o.millId === millId);
+  const millOrders = store.orders.filter(o => o.millId === millId).map(enrichOrder);
   res.json({ status: 'success', count: millOrders.length, data: { orders: millOrders } });
 };
 
 exports.getPendingOrders = (req, res) => {
   const millId = getShopkeeperMillId(req.user);
-  const pending = store.orders.filter(o => o.millId === millId && o.status === ORDER_STATUS.PLACED);
+  const pending = store.orders.filter(o => o.millId === millId && o.status === ORDER_STATUS.PLACED).map(enrichOrder);
   res.json({ status: 'success', count: pending.length, data: { orders: pending } });
 };
 
@@ -50,14 +59,14 @@ exports.getNewOrders = (req, res) => {
 exports.getActiveOrders = (req, res) => {
   const millId = getShopkeeperMillId(req.user);
   const activeStatuses = [ORDER_STATUS.ACCEPTED, ORDER_STATUS.PROCESSING, ORDER_STATUS.PACKING, ORDER_STATUS.READY, ORDER_STATUS.READY_FOR_PICKUP];
-  const active = store.orders.filter(o => o.millId === millId && activeStatuses.includes(o.status));
+  const active = store.orders.filter(o => o.millId === millId && activeStatuses.includes(o.status)).map(enrichOrder);
   res.json({ status: 'success', count: active.length, data: { orders: active } });
 };
 
 exports.getCompletedOrders = (req, res) => {
   const millId = getShopkeeperMillId(req.user);
   const completedStatuses = [ORDER_STATUS.DELIVERED, ORDER_STATUS.PICKED_UP, ORDER_STATUS.COMPLETED];
-  const completed = store.orders.filter(o => o.millId === millId && completedStatuses.includes(o.status));
+  const completed = store.orders.filter(o => o.millId === millId && completedStatuses.includes(o.status)).map(enrichOrder);
   res.json({ status: 'success', count: completed.length, data: { orders: completed } });
 };
 

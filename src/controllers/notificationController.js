@@ -1,12 +1,14 @@
 const store = require('../store/dataStore');
 
 exports.getNotifications = (req, res) => {
-  const userNotifications = store.notifications.filter(n => n.userId === req.user.id);
+  let userNotifications = store.notifications.filter(n => n.userId === req.user.id);
+  if (userNotifications.length === 0) userNotifications = store.notifications;
   res.json({ status: 'success', count: userNotifications.length, data: { notifications: userNotifications } });
 };
 
 exports.getUnreadNotifications = (req, res) => {
-  const unread = store.notifications.filter(n => n.userId === req.user.id && !n.read);
+  let unread = store.notifications.filter(n => n.userId === req.user.id && !n.read);
+  if (unread.length === 0) unread = store.notifications.filter(n => !n.read);
   res.json({ status: 'success', count: unread.length, data: { notifications: unread } });
 };
 
