@@ -78,6 +78,7 @@ class OrderModel {
   final String paymentMethod;
   final double millingFee;
   final double deliveryFee;
+  final List<Map<String, dynamic>> items;
 
   OrderModel({
     required this.orderId,
@@ -97,6 +98,7 @@ class OrderModel {
     this.paymentMethod = 'Visa Card (•••• 4242)',
     this.millingFee = 5.00,
     this.deliveryFee = 2.50,
+    this.items = const [],
   });
 }
 
@@ -119,16 +121,27 @@ class MockData {
       'icon': 'credit_card',
     },
     {
-      'title': 'Apple Pay / Google Wallet',
-      'subtitle': 'Fast & secure contactless checkout',
-      'icon': 'account_balance_wallet',
+      'title': 'Apple Pay',
+      'subtitle': 'Connected to Wallet',
+      'icon': 'phone_iphone',
     },
     {
-      'title': 'Cash on Delivery (COD)',
-      'subtitle': 'Pay when flour is delivered home',
+      'title': 'Cash on Delivery',
+      'subtitle': 'Pay with cash upon delivery',
       'icon': 'payments',
     },
   ];
+
+  static final Set<String> favoriteMillIds = {'m1', 'm2'};
+
+  static bool isFavorite(String millId) => favoriteMillIds.contains(millId);
+  static void toggleFavorite(String millId) {
+    if (favoriteMillIds.contains(millId)) {
+      favoriteMillIds.remove(millId);
+    } else {
+      favoriteMillIds.add(millId);
+    }
+  }
 
   static final List<FlourMill> mills = [
     FlourMill(
@@ -195,7 +208,7 @@ class MockData {
       millName: 'Artisan Mill Co.',
       itemSummary: 'Premium Sharbati',
       quantityKg: '10 kg',
-      estimatedDelivery: 'Today, by 6:00 PM',
+      estimatedDelivery: 'Within 20 minutes',
       statusStep: 'Milling in Progress',
       totalPrice: 14.00,
       isActive: true,
@@ -209,66 +222,90 @@ class MockData {
       deliveryFee: 2.00,
       trackingSteps: [
         TrackingStep(
-          title: 'Grain Selection',
-          subtitle: 'High-grade Sharbati wheat selected.',
-          timeText: '09:00 AM',
+          title: 'Order Placed',
+          subtitle: 'We received your order.',
+          timeText: '10:00 AM',
           isCompleted: true,
         ),
         TrackingStep(
-          title: 'Collection from Home',
-          subtitle: 'Empty container picked up.',
-          timeText: '10:30 AM',
+          title: 'Order Pickup',
+          subtitle: 'Picked up by Rahul Sharma (Pickup Agent)',
+          timeText: '10:20 AM',
           isCompleted: true,
         ),
         TrackingStep(
-          title: 'Arrival at Shop',
-          subtitle: 'Container ready for filling.',
-          timeText: '11:15 AM',
-          isCompleted: true,
-        ),
-        TrackingStep(
-          title: 'Milling in Progress',
-          subtitle: 'Fresh cold-pressed milling started.',
-          timeText: 'Current Step',
+          title: 'Order Processing',
+          subtitle: 'Milling & quality packaging in progress at mill.',
+          timeText: 'In 20 mins',
           isCompleted: false,
           isCurrent: true,
         ),
         TrackingStep(
-          title: 'Packaging',
-          subtitle: 'Filling your container securely.',
-          timeText: '',
-          isCompleted: false,
-        ),
-        TrackingStep(
-          title: 'Dispatched',
-          subtitle: 'Order leaves the mill.',
-          timeText: '',
-          isCompleted: false,
-        ),
-        TrackingStep(
-          title: 'With Delivery Partner',
-          subtitle: 'On the way to your door.',
+          title: 'Out for Delivery',
+          subtitle: 'Delivery partner on the way to your door.',
           timeText: '',
           isCompleted: false,
         ),
         TrackingStep(
           title: 'Delivered',
-          subtitle: 'Fresh flour arrives home.',
+          subtitle: 'Fresh flour delivered at your door.',
           timeText: '',
           isCompleted: false,
         ),
       ],
     ),
     OrderModel(
+      orderId: '#HD-6212',
+      millName: 'Artisan Mill Co.',
+      itemSummary: 'Whole Wheat (Milling), Pre-packed Wheat, Masala Mix',
+      quantityKg: '35 items',
+      estimatedDelivery: 'Delivered Today',
+      statusStep: 'Delivered',
+      totalPrice: 69.00,
+      isActive: false,
+      date: 'Today',
+      items: [
+        {
+          'name': 'Whole Wheat (Milling)',
+          'type': 'milling',
+          'source': 'Own Grain',
+          'quantity': 13,
+          'price': 0.50,
+        },
+        {
+          'name': 'Pre-packed Wheat',
+          'type': 'readymade',
+          'quantity': 14,
+          'price': 2.50,
+        },
+        {
+          'name': 'Masala Mix',
+          'type': 'readymade',
+          'quantity': 8,
+          'price': 3.00,
+        },
+      ],
+      trackingSteps: [],
+    ),
+    OrderModel(
       orderId: '#HD-7104',
       millName: 'Heritage Grains',
-      itemSummary: 'Multigrain Mix',
+      itemSummary: 'Multigrain Mix (Milling)',
       quantityKg: '5 kg',
       estimatedDelivery: 'Delivered Aug 14',
       statusStep: 'Delivered',
-      totalPrice: 26.00,
+      totalPrice: 2.50,
       isActive: false,
       date: '14 Aug 2026',
+      items: [
+        {
+          'name': 'Multigrain Mix (Milling)',
+          'type': 'milling',
+          'source': 'Own Grain',
+          'quantity': 5,
+          'price': 0.50,
+        },
+      ],
       trackingSteps: [],
     ),
   ];
@@ -280,7 +317,8 @@ class MockData {
 
   static void startGlobalOrderSimulation() {
     if (_globalOrderTimer != null && _globalOrderTimer!.isActive) return;
-    _globalOrderTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+    // Step advances every 20 minutes
+    _globalOrderTimer = Timer.periodic(const Duration(minutes: 20), (timer) {
       if (!isAutoSimulationRunning) return;
       final activeOrders = orders.where((o) => o.isActive).toList();
       if (activeOrders.isEmpty) return;
@@ -321,7 +359,7 @@ class MockData {
         steps[nextIndex] = TrackingStep(
           title: steps[nextIndex].title,
           subtitle: steps[nextIndex].subtitle,
-          timeText: 'Just Now',
+          timeText: isLast ? 'Delivered' : 'In 20 mins',
           isCompleted: isLast,
           isCurrent: !isLast,
         );

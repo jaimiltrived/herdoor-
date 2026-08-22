@@ -3,11 +3,13 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import '../models/app_models.dart';
 import 'mill_detail_screen.dart';
+import 'profile_screen.dart';
 
 class MillsListScreen extends StatefulWidget {
   final VoidCallback onStartOrder;
+  final VoidCallback? onOpenDrawer;
   final bool showBackButton;
-  const MillsListScreen({super.key, required this.onStartOrder, this.showBackButton = false});
+  const MillsListScreen({super.key, required this.onStartOrder, this.onOpenDrawer, this.showBackButton = false});
 
   @override
   State<MillsListScreen> createState() => _MillsListScreenState();
@@ -67,7 +69,7 @@ class _MillsListScreenState extends State<MillsListScreen> {
               )
             : IconButton(
                 icon: const Icon(Icons.menu, color: AppTheme.textPrimary),
-                onPressed: () => Scaffold.of(context).openDrawer(),
+                onPressed: widget.onOpenDrawer,
               ),
         title: Text(
           'Flour Mills Near You',
@@ -81,17 +83,25 @@ class _MillsListScreenState extends State<MillsListScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
             child: Center(
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppTheme.borderLight, width: 2),
-                  image: const DecorationImage(
-                    image: NetworkImage(
-                      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                  );
+                },
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppTheme.borderLight, width: 2),
+                    image: const DecorationImage(
+                      image: NetworkImage(
+                        'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
+                      ),
+                      fit: BoxFit.cover,
                     ),
-                    fit: BoxFit.cover,
                   ),
                 ),
               ),
@@ -278,17 +288,54 @@ class _MillsListScreenState extends State<MillsListScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Hero(
-                              tag: 'mills_list_mill_${mill.id}',
-                              child: ClipRRect(
-                                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                                child: Image.network(
-                                  mill.imageUrl,
-                                  height: 140,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
+                            Stack(
+                              children: [
+                                Hero(
+                                  tag: 'mills_list_mill_${mill.id}',
+                                  child: ClipRRect(
+                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                                    child: Image.network(
+                                      mill.imageUrl,
+                                      height: 140,
+                                      width: double.infinity,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                Positioned(
+                                  top: 10,
+                                  right: 10,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        MockData.toggleFavorite(mill.id);
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.15),
+                                            blurRadius: 6,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Icon(
+                                        MockData.isFavorite(mill.id)
+                                            ? Icons.favorite_rounded
+                                            : Icons.favorite_border_rounded,
+                                        color: MockData.isFavorite(mill.id)
+                                            ? AppTheme.primaryTerracotta
+                                            : AppTheme.textSecondary,
+                                        size: 18,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           Padding(
                             padding: const EdgeInsets.all(16.0),

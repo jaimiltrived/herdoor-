@@ -13,6 +13,7 @@ class AppDrawer extends StatelessWidget {
   final VoidCallback onLogout;
   final bool isMerchantMode;
   final VoidCallback? onSwitchRole;
+  final VoidCallback? onCloseDrawer;
 
   const AppDrawer({
     super.key,
@@ -20,6 +21,7 @@ class AppDrawer extends StatelessWidget {
     required this.onLogout,
     this.isMerchantMode = false,
     this.onSwitchRole,
+    this.onCloseDrawer,
   });
 
   @override
@@ -104,7 +106,7 @@ class AppDrawer extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: InkWell(
                 onTap: () {
-                  Navigator.pop(context);
+                  (onCloseDrawer != null ? onCloseDrawer!.call() : Navigator.pop(context));
                   onSwitchRole!();
                 },
                 borderRadius: BorderRadius.circular(14),
@@ -165,7 +167,7 @@ class AppDrawer extends StatelessWidget {
                   icon: isMerchantMode ? Icons.grid_view_rounded : Icons.home_outlined,
                   title: isMerchantMode ? 'Merchant Dashboard' : 'Home / Shop',
                   onTap: () {
-                    Navigator.pop(context);
+                    (onCloseDrawer != null ? onCloseDrawer!.call() : Navigator.pop(context));
                     onSelectTab(0);
                   },
                 ),
@@ -174,7 +176,7 @@ class AppDrawer extends StatelessWidget {
                   icon: isMerchantMode ? Icons.receipt_long_rounded : Icons.add_circle_outline_rounded,
                   title: isMerchantMode ? 'Incoming Orders (12)' : 'Place New Order',
                   onTap: () {
-                    Navigator.pop(context);
+                    (onCloseDrawer != null ? onCloseDrawer!.call() : Navigator.pop(context));
                     onSelectTab(1);
                   },
                 ),
@@ -183,7 +185,7 @@ class AppDrawer extends StatelessWidget {
                   icon: isMerchantMode ? Icons.inventory_2_rounded : Icons.local_shipping_outlined,
                   title: isMerchantMode ? 'Manage Inventory' : 'Track Active Orders',
                   onTap: () {
-                    Navigator.pop(context);
+                    (onCloseDrawer != null ? onCloseDrawer!.call() : Navigator.pop(context));
                     onSelectTab(2);
                   },
                 ),
@@ -193,7 +195,7 @@ class AppDrawer extends StatelessWidget {
                     icon: Icons.storefront_outlined,
                     title: 'Flour Mills Near You',
                     onTap: () {
-                      Navigator.pop(context);
+                      (onCloseDrawer != null ? onCloseDrawer!.call() : Navigator.pop(context));
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -210,7 +212,7 @@ class AppDrawer extends StatelessWidget {
                   icon: Icons.person_outline_rounded,
                   title: isMerchantMode ? 'Store Profile' : 'My Profile',
                   onTap: () {
-                    Navigator.pop(context);
+                    (onCloseDrawer != null ? onCloseDrawer!.call() : Navigator.pop(context));
                     onSelectTab(3);
                   },
                 ),
@@ -220,7 +222,7 @@ class AppDrawer extends StatelessWidget {
                     icon: Icons.location_on_outlined,
                     title: 'Saved Addresses',
                     onTap: () {
-                      Navigator.pop(context);
+                      (onCloseDrawer != null ? onCloseDrawer!.call() : Navigator.pop(context));
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (context) => const SavedAddressesScreen()),
@@ -232,7 +234,7 @@ class AppDrawer extends StatelessWidget {
                     icon: Icons.payment_outlined,
                     title: 'Payment Methods',
                     onTap: () {
-                      Navigator.pop(context);
+                      (onCloseDrawer != null ? onCloseDrawer!.call() : Navigator.pop(context));
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (context) => const PaymentMethodsScreen()),
@@ -245,7 +247,7 @@ class AppDrawer extends StatelessWidget {
                   icon: Icons.notifications_none_rounded,
                   title: 'Notifications',
                   onTap: () {
-                    Navigator.pop(context);
+                    (onCloseDrawer != null ? onCloseDrawer!.call() : Navigator.pop(context));
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (context) => const NotificationsScreen()),
@@ -258,7 +260,7 @@ class AppDrawer extends StatelessWidget {
                   icon: Icons.help_outline_rounded,
                   title: 'Help & Support',
                   onTap: () {
-                    Navigator.pop(context);
+                    (onCloseDrawer != null ? onCloseDrawer!.call() : Navigator.pop(context));
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (context) => const HelpSupportScreen()),
@@ -270,7 +272,7 @@ class AppDrawer extends StatelessWidget {
                   icon: Icons.settings_outlined,
                   title: 'Settings',
                   onTap: () {
-                    Navigator.pop(context);
+                    (onCloseDrawer != null ? onCloseDrawer!.call() : Navigator.pop(context));
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (context) => const SettingsScreen()),
@@ -289,7 +291,7 @@ class AppDrawer extends StatelessWidget {
               height: 48,
               child: OutlinedButton.icon(
                 onPressed: () {
-                  Navigator.pop(context);
+                  (onCloseDrawer != null ? onCloseDrawer!.call() : Navigator.pop(context));
                   onLogout();
                 },
                 style: OutlinedButton.styleFrom(

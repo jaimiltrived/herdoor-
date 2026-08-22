@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'profile_screen.dart';
+import 'favorites_screen.dart';
 import '../theme/app_theme.dart';
 import 'dashboard_screen.dart';
 import 'mills_list_screen.dart';
@@ -23,10 +23,18 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
+  bool _isDrawerOpen = false;
 
   void _onSelectTab(int index) {
     setState(() {
       _currentIndex = index;
+      _isDrawerOpen = false;
+    });
+  }
+
+  void _toggleDrawer() {
+    setState(() {
+      _isDrawerOpen = !_isDrawerOpen;
     });
   }
 
@@ -36,27 +44,66 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       DashboardScreen(
         onNavigateTab: _onSelectTab,
         onStartNewOrder: () => _onSelectTab(1),
+        onOpenDrawer: _toggleDrawer,
       ),
       MillsListScreen(
         onStartOrder: () => _onSelectTab(2),
+        onOpenDrawer: _toggleDrawer,
       ),
-      const OrdersListScreen(),
-      ProfileScreen(
-        onLogout: widget.onLogout,
+      OrdersListScreen(
+        onOpenDrawer: _toggleDrawer,
+      ),
+      FavoritesScreen(
+        onOpenDrawer: _toggleDrawer,
         onNavigateTab: _onSelectTab,
       ),
     ];
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final drawerWidth = screenWidth * 0.8;
+
     return Scaffold(
       backgroundColor: AppTheme.background,
-      drawer: AppDrawer(
-        onSelectTab: _onSelectTab,
-        onLogout: widget.onLogout,
-        onSwitchRole: widget.onSwitchToMerchant,
-      ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: pages,
+      body: Stack(
+        children: [
+          IndexedStack(
+            index: _currentIndex,
+            children: pages,
+          ),
+          
+          // Scrim overlay
+          if (_isDrawerOpen)
+            GestureDetector(
+              onTap: _toggleDrawer,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 600),
+                curve: Curves.easeOutCubic,
+                opacity: _isDrawerOpen ? 1.0 : 0.0,
+                child: Container(
+                  color: Colors.black54,
+                ),
+              ),
+            ),
+            
+          // Custom Slow Drawer
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 600),
+            curve: Curves.easeOutCubic,
+            left: _isDrawerOpen ? 0 : -drawerWidth,
+            top: 0,
+            bottom: 0,
+            width: drawerWidth,
+            child: Material(
+              elevation: 16,
+              child: AppDrawer(
+                onSelectTab: _onSelectTab,
+                onLogout: widget.onLogout,
+                onSwitchRole: widget.onSwitchToMerchant,
+                onCloseDrawer: _toggleDrawer,
+              ),
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -94,14 +141,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 index: 2,
                 icon: Icons.local_shipping_outlined,
                 activeIcon: Icons.local_shipping_rounded,
-                label: 'Track',
+                label: 'Orders',
                 activeColor: AppTheme.mustardGold,
               ),
               _buildNavItem(
                 index: 3,
-                icon: Icons.person_outline_rounded,
-                activeIcon: Icons.person_rounded,
-                label: 'Profile',
+                icon: Icons.favorite_outline_rounded,
+                activeIcon: Icons.favorite_rounded,
+                label: 'Favorites',
                 activeColor: AppTheme.primaryTerracotta,
               ),
             ],

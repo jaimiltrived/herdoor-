@@ -3,9 +3,12 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import '../models/app_models.dart';
 import 'order_tracking_screen.dart';
+import 'cart_screen.dart';
+import 'profile_screen.dart';
 
 class OrdersListScreen extends StatefulWidget {
-  const OrdersListScreen({super.key});
+  final VoidCallback? onOpenDrawer;
+  const OrdersListScreen({super.key, this.onOpenDrawer});
 
   @override
   State<OrdersListScreen> createState() => _OrdersListScreenState();
@@ -26,7 +29,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.menu, color: AppTheme.textPrimary),
-          onPressed: () => Scaffold.of(context).openDrawer(),
+          onPressed: widget.onOpenDrawer,
         ),
         title: Text(
           'HerDoor Flour Mill',
@@ -40,17 +43,25 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
             child: Center(
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppTheme.borderLight, width: 2),
-                  image: const DecorationImage(
-                    image: NetworkImage(
-                      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                  );
+                },
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppTheme.borderLight, width: 2),
+                    image: const DecorationImage(
+                      image: NetworkImage(
+                        'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
+                      ),
+                      fit: BoxFit.cover,
                     ),
-                    fit: BoxFit.cover,
                   ),
                 ),
               ),
@@ -262,14 +273,57 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
               if (order.isActive) ...[
                 const SizedBox(height: 16),
                 const Divider(color: AppTheme.borderLight, height: 1),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 Center(
-                  child: Text(
-                    'Tap to Track Order',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.primaryTerracotta,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Tap to Track Order',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryTerracotta,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: AppTheme.primaryTerracotta),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(height: 16),
+                const Divider(color: AppTheme.borderLight, height: 1),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryTerracotta,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      final cartItems = _createCartItemsFromOrder(order);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CartScreen(
+                            cartItems: cartItems,
+                            millName: order.millName,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.repeat_rounded, size: 18),
+                    label: Text(
+                      'Repeat Order',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
@@ -279,5 +333,45 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
         ),
       ),
     );
+  }
+
+  List<Map<String, dynamic>> _createCartItemsFromOrder(OrderModel order) {
+    if (order.items.isNotEmpty) {
+      return List<Map<String, dynamic>>.from(
+        order.items.map((item) => Map<String, dynamic>.from(item)),
+      );
+    }
+    List<Map<String, dynamic>> items = [];
+    final names = order.itemSummary.split(', ');
+    for (var name in names) {
+      final cleanName = name.trim();
+      if (cleanName.isEmpty) continue;
+      if (cleanName.toLowerCase().contains('milling')) {
+        items.add({
+          'name': cleanName,
+          'type': 'milling',
+          'source': 'Own Grain',
+          'quantity': 5,
+          'price': 0.50,
+        });
+      } else {
+        items.add({
+          'name': cleanName,
+          'type': 'readymade',
+          'quantity': 1,
+          'price': cleanName.toLowerCase().contains('masala') ? 3.00 : 2.50,
+        });
+      }
+    }
+    if (items.isEmpty) {
+      items.add({
+        'name': order.selectedGrain.isNotEmpty ? order.selectedGrain : 'Whole Wheat (Milling)',
+        'type': 'milling',
+        'source': 'Own Grain',
+        'quantity': 5,
+        'price': 0.50,
+      });
+    }
+    return items;
   }
 }

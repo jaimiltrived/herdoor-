@@ -6,15 +6,19 @@ import '../models/app_models.dart';
 import 'mill_detail_screen.dart';
 import 'mills_list_screen.dart';
 import 'order_tracking_screen.dart';
+import 'cart_screen.dart';
+import 'profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final Function(int) onNavigateTab;
   final VoidCallback onStartNewOrder;
+  final VoidCallback onOpenDrawer;
 
   const DashboardScreen({
     super.key,
     required this.onNavigateTab,
     required this.onStartNewOrder,
+    required this.onOpenDrawer,
   });
 
   @override
@@ -23,6 +27,56 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   Timer? _refreshTimer;
+
+
+  String _getProductImage(String summary) {
+    final lower = summary.toLowerCase();
+    if (lower.contains('wheat') || lower.contains('sharbati')) return 'assets/images/cat_wheat.jpg';
+    if (lower.contains('rice')) return 'assets/images/cat_rice.jpg';
+    if (lower.contains('millet')) return 'assets/images/cat_millet.jpg';
+    if (lower.contains('spice')) return 'assets/images/cat_spices.jpg';
+    return 'assets/images/cat_all.jpg';
+  }
+
+  List<Map<String, dynamic>> _createCartItemsFromOrder(OrderModel order) {
+    if (order.items.isNotEmpty) {
+      return List<Map<String, dynamic>>.from(
+        order.items.map((item) => Map<String, dynamic>.from(item)),
+      );
+    }
+    List<Map<String, dynamic>> items = [];
+    final names = order.itemSummary.split(', ');
+    for (var name in names) {
+      final cleanName = name.trim();
+      if (cleanName.isEmpty) continue;
+      if (cleanName.toLowerCase().contains('milling')) {
+        items.add({
+          'name': cleanName,
+          'type': 'milling',
+          'source': 'Own Grain',
+          'quantity': 5,
+          'price': 0.50,
+        });
+      } else {
+        items.add({
+          'name': cleanName,
+          'type': 'readymade',
+          'quantity': 1,
+          'price': cleanName.toLowerCase().contains('masala') ? 3.00 : 2.50,
+        });
+      }
+    }
+    if (items.isEmpty) {
+      items.add({
+        'name': order.selectedGrain.isNotEmpty ? order.selectedGrain : 'Whole Wheat (Milling)',
+        'type': 'milling',
+        'source': 'Own Grain',
+        'quantity': 5,
+        'price': 0.50,
+      });
+    }
+    return items;
+  }
 
   @override
   void initState() {
@@ -42,6 +96,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final pastOrders = MockData.orders.where((o) => !o.isActive).toList();
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: SafeArea(
@@ -58,7 +114,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.menu, color: AppTheme.textPrimary, size: 26),
-                        onPressed: () => Scaffold.of(context).openDrawer(),
+                        onPressed: widget.onOpenDrawer,
                       ),
                       const SizedBox(width: 4),
                       const Icon(
@@ -77,17 +133,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ],
                   ),
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppTheme.borderLight, width: 2),
-                      image: const DecorationImage(
-                        image: NetworkImage(
-                          'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ProfileScreen(
+                            onNavigateTab: widget.onNavigateTab,
+                            onOpenDrawer: widget.onOpenDrawer,
+                          ),
                         ),
-                        fit: BoxFit.cover,
+                      );
+                    },
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppTheme.borderLight, width: 2),
+                        image: const DecorationImage(
+                          image: NetworkImage(
+                            'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
+                          ),
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
                   ),
@@ -293,7 +362,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(width: 14),
                   Expanded(
                     child: GestureDetector(
-                      onTap: widget.onStartNewOrder,
+                      onTap: () => widget.onNavigateTab(2),
                       child: Container(
                         height: 110,
                         padding: const EdgeInsets.all(16),
@@ -312,7 +381,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Repeat Last Order',
+                              'Recent Order',
+                              textAlign: TextAlign.center,
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
@@ -327,6 +397,138 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
               const SizedBox(height: 28),
+
+              // Recent Orders Section
+              if (pastOrders.isNotEmpty) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Recent Orders',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        widget.onNavigateTab(2); // Go to Track/Orders tab
+                      },
+                      child: Text(
+                        'See all',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.primaryTerracotta,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: pastOrders.length > 2 ? 2 : pastOrders.length,
+                  itemBuilder: (context, index) {
+                    final order = pastOrders[index];
+                    return GestureDetector(
+                      onTap: () {
+                        final cartItems = _createCartItemsFromOrder(order);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CartScreen(
+                              cartItems: cartItems,
+                              millName: order.millName,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppTheme.borderLight),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.02),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.asset(
+                                _getProductImage(order.itemSummary),
+                                width: 50,
+                                height: 50,
+                                fit: BoxFit.cover,
+                                errorBuilder: (c, e, s) => Container(
+                                  width: 50,
+                                  height: 50,
+                                  color: AppTheme.surfaceWarm,
+                                  child: const Icon(Icons.inventory_2_outlined, color: AppTheme.primaryTerracotta, size: 20),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          order.millName,
+                                          style: GoogleFonts.plusJakartaSans(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppTheme.textPrimary,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      Text(
+                                        order.date,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 12,
+                                          color: AppTheme.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${order.itemSummary} • ${order.quantityKg}',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 13,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+              ],
 
               // Flour Mills Near You Section
               Row(

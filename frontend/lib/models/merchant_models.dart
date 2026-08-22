@@ -118,7 +118,7 @@ class MerchantOrder {
   final String quantityText;
   final String timeAgo;
   String statusTag; // 'NEW', 'IN PROGRESS', 'PACKING', 'READY FOR PICKUP', 'OUT FOR DELIVERY', 'COMPLETED'
-  final Color statusColor;
+  Color statusColor;
   final String? binLocation;
   String? estimatedCompletionTime;
   final String? deliveryDriverName;

@@ -13,7 +13,6 @@ class MerchantInventoryScreen extends StatefulWidget {
 
 class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
   int _mainInventoryTab = 0; // 0: Flour Inventory, 1: Raw Grain Vendor Hub
-  int _selectedCategory = 0; // 0: All-Purpose, 1: Whole Wheat, 2: Rye
   bool _isLoading = true;
   List<MerchantInventoryItem> _inventoryItems = MerchantMockData.inventoryItems;
   List<MerchantInventoryItem> _lowStockItems = [];
@@ -544,18 +543,6 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
             const SizedBox(height: 20),
 
             if (_mainInventoryTab == 0) ...[
-              // Category Chips for Flour
-              Row(
-                children: [
-                  _buildCategoryChip(0, 'All Products'),
-                  const SizedBox(width: 10),
-                  _buildCategoryChip(1, 'Flour'),
-                  const SizedBox(width: 10),
-                  _buildCategoryChip(2, 'Grains'),
-                ],
-              ),
-              const SizedBox(height: 20),
-
               // Inventory Items List
               if (_isLoading)
                 const Padding(
@@ -571,33 +558,6 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
 
             const SizedBox(height: 20),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCategoryChip(int index, String label) {
-    final isSelected = _selectedCategory == index;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedCategory = index),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primaryTerracotta : Colors.transparent,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: isSelected ? AppTheme.primaryTerracotta : const Color(0xFFCBA034),
-            width: 1.2,
-          ),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: isSelected ? Colors.white : AppTheme.textPrimary,
-          ),
         ),
       ),
     );
@@ -664,13 +624,20 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.95),
                     borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Text(
-                    item.inStock ? '${item.stockKg} kg in stock' : 'Low Stock (${item.stockKg}kg)',
+                    '₹${item.price.toStringAsFixed(2)} / kg',
                     style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: item.inStock ? AppTheme.textPrimary : Colors.red[700],
+                      color: AppTheme.textPrimary,
                     ),
                   ),
                 ),
@@ -762,13 +729,26 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      '₹${item.price.toStringAsFixed(2)} / kg',
-                      style: GoogleFonts.playfairDisplay(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: item.inStock ? AppTheme.textPrimary : AppTheme.textMuted,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${item.stockKg.toInt()} kg',
+                          style: GoogleFonts.playfairDisplay(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: item.inStock ? AppTheme.textPrimary : Colors.red[700],
+                          ),
+                        ),
+                        Text(
+                          item.inStock ? 'In Stock' : 'Low Stock',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: item.inStock ? const Color(0xFF27AE60) : Colors.red[700],
+                          ),
+                        ),
+                      ],
                     ),
                     Row(
                       children: [

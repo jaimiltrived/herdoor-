@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../theme/app_theme.dart';
 import '../models/app_models.dart';
-import 'new_order_screen.dart';
+import 'cart_screen.dart';
+import 'mill_map_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class MillDetailScreen extends StatefulWidget {
   final FlourMill mill;
-  final VoidCallback onStartOrder;
+  final VoidCallback? onStartOrder;
   final String? heroTag;
 
   const MillDetailScreen({
     super.key,
     required this.mill,
-    required this.onStartOrder,
+    this.onStartOrder,
     this.heroTag,
   });
 
@@ -21,7 +25,21 @@ class MillDetailScreen extends StatefulWidget {
 }
 
 class _MillDetailScreenState extends State<MillDetailScreen> {
-  String _selectedSlot = '11:15 AM';
+  int _menuTab = 0; // 0 = Custom Milling, 1 = Readymade
+  late bool _isFavorite;
+  
+  // Cart State
+  List<Map<String, dynamic>> _cartItems = [];
+
+  double get _cartTotal {
+    return _cartItems.fold(0.0, (total, item) => total + (item['price'] * item['quantity']));
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _isFavorite = MockData.isFavorite(widget.mill.id);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -164,19 +182,66 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                                 color: AppTheme.textSecondary,
                               ),
                             ),
+                            const Spacer(),
+                            GestureDetector(
+                              onTap: () async {
+                                final Uri url = Uri.parse('tel:1234567890');
+                                if (await canLaunchUrl(url)) {
+                                  await launchUrl(url);
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: const BoxDecoration(
+                                  color: AppTheme.surfaceCream,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.phone_outlined, size: 18, color: AppTheme.textPrimary),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _isFavorite = !_isFavorite;
+                                  MockData.toggleFavorite(widget.mill.id);
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: _isFavorite ? AppTheme.primaryTerracotta.withValues(alpha: 0.15) : AppTheme.surfaceCream,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  _isFavorite ? Icons.favorite : Icons.favorite_border,
+                                  size: 18,
+                                  color: _isFavorite ? AppTheme.primaryTerracotta : AppTheme.textPrimary,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 20),
-                        // 3 Action Buttons (Call, Directions, Favorite)
-                        Row(
-                          children: [
-                            Expanded(child: _buildActionButton(Icons.phone_outlined, 'Call')),
-                            const SizedBox(width: 10),
-                            Expanded(child: _buildActionButton(Icons.alt_route_rounded, 'Directions')),
-                            const SizedBox(width: 10),
-                            Expanded(child: _buildActionButton(Icons.favorite_outline, 'Favorite')),
-                          ],
+                        const SizedBox(height: 24),
+                        // Our Story Section
+                        Text(
+                          'Our Story',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textPrimary,
+                          ),
                         ),
+                        const SizedBox(height: 10),
+                        Text(
+                          widget.mill.story,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
+                            color: AppTheme.textSecondary,
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 28),
                       ],
                     ),
                   ),
@@ -187,28 +252,7 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Services Section
-                      Text(
-                        'Services',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(child: _buildServiceTile(Icons.settings_outlined, 'Custom Grinding')),
-                          const SizedBox(width: 10),
-                          Expanded(child: _buildServiceTile(Icons.shopping_bag_outlined, 'Buy Fresh Flour')),
-                          const SizedBox(width: 10),
-                          Expanded(child: _buildServiceTile(Icons.blender_outlined, 'Custom Mix')),
-                        ],
-                      ),
-                      const SizedBox(height: 28),
-
-                      // Availability Section
+                      // Availability & Timings Section
                       Container(
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
@@ -249,6 +293,7 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                             const SizedBox(height: 12),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   'Today',
@@ -258,181 +303,314 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                                     color: AppTheme.textPrimary,
                                   ),
                                 ),
-                                Text(
-                                  '8:00 AM - 6:00 PM',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 14,
-                                    color: AppTheme.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-                            Text(
-                              'Available Slots Today',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 12,
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: ['10:30 AM', '11:15 AM', '2:00 PM'].map((slot) {
-                                final isSelected = slot == _selectedSlot;
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 10.0),
-                                  child: GestureDetector(
-                                    onTap: () => setState(() => _selectedSlot = slot),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                      decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? AppTheme.surfaceWarm
-                                            : AppTheme.surfaceCream,
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(
-                                          color: isSelected ? AppTheme.primaryTerracotta : AppTheme.borderLight,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        slot,
-                                        style: GoogleFonts.plusJakartaSans(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.bold,
-                                          color: isSelected ? AppTheme.primaryTerracotta : AppTheme.textPrimary,
-                                        ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      '10:00 AM - 12:00 PM',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppTheme.textSecondary,
                                       ),
                                     ),
-                                  ),
-                                );
-                              }).toList(),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '4:00 PM - 9:00 PM',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppTheme.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 28),
 
-                      // The Mill Story Section
+                      // Location & Map Section
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => MillMapScreen(
+                                mill: widget.mill,
+                                address: '123 Stone Mill Road, Heritage District, NY 10001',
+                              ),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: AppTheme.borderLight),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.location_on_outlined, color: AppTheme.primaryTerracotta, size: 22),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '123 Stone Mill Road, Heritage District, NY 10001',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppTheme.textPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                  const Icon(
+                                    Icons.open_in_full_rounded,
+                                    size: 16,
+                                    color: AppTheme.primaryTerracotta,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              // Real OpenStreetMap
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: SizedBox(
+                                  height: 120,
+                                  width: double.infinity,
+                                  child: Stack(
+                                    children: [
+                                      FlutterMap(
+                                        options: MapOptions(
+                                          initialCenter: const LatLng(40.7128, -74.0060), // New York
+                                          initialZoom: 15.0,
+                                          interactionOptions: const InteractionOptions(flags: InteractiveFlag.none), // Static map feel
+                                        ),
+                                        children: [
+                                          TileLayer(
+                                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                            userAgentPackageName: 'com.example.herdoor_app',
+                                          ),
+                                          MarkerLayer(
+                                            markers: [
+                                              Marker(
+                                                point: const LatLng(40.7128, -74.0060),
+                                                width: 40,
+                                                height: 40,
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    color: AppTheme.primaryTerracotta,
+                                                    shape: BoxShape.circle,
+                                                    border: Border.all(color: Colors.white, width: 2),
+                                                    boxShadow: [
+                                                      BoxShadow(color: AppTheme.primaryTerracotta.withValues(alpha: 0.4), blurRadius: 8, spreadRadius: 2),
+                                                    ],
+                                                  ),
+                                                  child: const Icon(Icons.storefront, color: Colors.white, size: 20),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                      Positioned(
+                                        bottom: 8,
+                                        right: 8,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(alpha: 0.65),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.touch_app_rounded, size: 12, color: Colors.white),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                'Tap to expand',
+                                                style: GoogleFonts.plusJakartaSans(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      // Services Section
                       Text(
-                        'The Mill Story',
+                        'Services',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: AppTheme.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        widget.mill.story,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 14,
-                          height: 1.5,
-                          color: AppTheme.textSecondary,
-                        ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(child: _buildServiceTile(Icons.settings_outlined, 'Custom Grinding')),
+                          const SizedBox(width: 10),
+                          Expanded(child: _buildServiceTile(Icons.shopping_bag_outlined, 'Buy Fresh Flour')),
+                          const SizedBox(width: 10),
+                          Expanded(child: _buildServiceTile(Icons.blender_outlined, 'Custom Mix')),
+                        ],
                       ),
                       const SizedBox(height: 28),
 
-                      // Popular Grains Section
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Popular Grains',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.textPrimary,
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: () {},
-                            child: Text(
-                              'View All',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.primaryTerracotta,
+                      // --- MENU TOGGLE ---
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceCream,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() => _menuTab = 0),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: _menuTab == 0 ? Colors.white : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: _menuTab == 0 ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)] : [],
+                                  ),
+                                  child: Center(
+                                    child: Text('Custom Milling', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, color: _menuTab == 0 ? AppTheme.primaryTerracotta : AppTheme.textSecondary)),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() => _menuTab = 1),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: _menuTab == 1 ? Colors.white : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: _menuTab == 1 ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)] : [],
+                                  ),
+                                  child: Center(
+                                    child: Text('Readymade', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, color: _menuTab == 1 ? AppTheme.primaryTerracotta : AppTheme.textSecondary)),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 24),
 
-                      Row(
-                        children: MockData.popularGrains.map((product) {
-                          return Expanded(
-                            child: Container(
-                              margin: const EdgeInsets.only(right: 12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(color: AppTheme.borderLight),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-                                    child: Image.network(
-                                      product.imageUrl,
-                                      height: 110,
-                                      width: double.infinity,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          product.name,
-                                          style: GoogleFonts.plusJakartaSans(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            color: AppTheme.textPrimary,
-                                          ),
-                                        ),
-                                        Text(
-                                          product.description,
-                                          style: GoogleFonts.plusJakartaSans(
-                                            fontSize: 11,
-                                            color: AppTheme.textSecondary,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 10),
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              '\$${product.pricePerKg.toStringAsFixed(2)}/kg',
-                                              style: GoogleFonts.plusJakartaSans(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.bold,
-                                                color: AppTheme.textPrimary,
-                                              ),
-                                            ),
-                                            Container(
-                                              width: 32,
-                                              height: 32,
-                                              decoration: const BoxDecoration(
-                                                color: AppTheme.softCoral,
-                                                shape: BoxShape.circle,
-                                              ),
-                                              child: const Icon(Icons.add, color: Colors.white, size: 20),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
+                      // --- CONDITIONAL MENU CONTENT ---
+                      if (_menuTab == 0) ...[
+                        Text(
+                          'Select Grain to Mill',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Column(
+                          children: MockData.popularGrains.map((product) {
+                            return _CustomMillingItemCard(
+                              product: product,
+                              onAddToCart: (item) {
+                                setState(() {
+                                  _cartItems.add(item);
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  content: Text('${item['name']} added to cart!'),
+                                  duration: const Duration(seconds: 1),
+                                  behavior: SnackBarBehavior.floating,
+                                ));
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ] else ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Readymade Products',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimary,
                               ),
                             ),
-                          );
-                        }).toList(),
-                      ),
+                            TextButton(
+                              onPressed: () {},
+                              child: Text(
+                                'View All',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.primaryTerracotta,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Column(
+                          children: [
+                            _ReadymadeItemCard(
+                              title: 'Pre-packed Wheat',
+                              desc: '1kg Pack • Stone ground flour',
+                              imageUrl: 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&w=400&q=80',
+                              price: 2.50,
+                              onAddToCart: (item) {
+                                setState(() {
+                                  _cartItems.add(item);
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  content: Text('${item['name']} added to cart!'),
+                                  duration: const Duration(seconds: 1),
+                                  behavior: SnackBarBehavior.floating,
+                                ));
+                              },
+                            ),
+                            _ReadymadeItemCard(
+                              title: 'Masala Mix',
+                              desc: '500g Pack • Premium blend spices',
+                              imageUrl: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=400&q=80',
+                              price: 3.00,
+                              onAddToCart: (item) {
+                                setState(() {
+                                  _cartItems.add(item);
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  content: Text('${item['name']} added to cart!'),
+                                  duration: const Duration(seconds: 1),
+                                  behavior: SnackBarBehavior.floating,
+                                ));
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -445,7 +623,9 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
             bottom: 0,
             left: 0,
             right: 0,
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: AppTheme.background,
@@ -459,54 +639,42 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
               ),
               child: SizedBox(
                 height: 54,
-                child: ElevatedButton.icon(
+                child: ElevatedButton(
                   onPressed: () {
+                    if (_cartItems.isEmpty) return;
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => NewOrderScreen(millName: widget.mill.name),
+                        builder: (context) => CartScreen(
+                          millName: widget.mill.name,
+                          cartItems: _cartItems,
+                        ),
                       ),
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryTerracotta,
+                    backgroundColor: _cartItems.isEmpty ? Colors.grey[300] : AppTheme.primaryTerracotta,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
                   ),
-                  icon: const Icon(Icons.shopping_cart_outlined, color: Colors.white),
-                  label: Text(
-                    'Start Order',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.shopping_cart_outlined, color: _cartItems.isEmpty ? Colors.grey[500] : Colors.white),
+                      const SizedBox(width: 8),
+                      Text(
+                        _cartItems.isEmpty 
+                            ? 'Cart is empty' 
+                            : 'View Cart (${_cartItems.length} items) - \$${_cartTotal.toStringAsFixed(2)}',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: _cartItems.isEmpty ? Colors.grey[600] : Colors.white,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionButton(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceCream,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, size: 20, color: AppTheme.textPrimary),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textPrimary,
             ),
           ),
         ],
@@ -541,6 +709,355 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
               fontWeight: FontWeight.w600,
               color: AppTheme.textPrimary,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReadymadeItemCard extends StatefulWidget {
+  final String title;
+  final String desc;
+  final String imageUrl;
+  final double price;
+  final Function(Map<String, dynamic> item) onAddToCart;
+
+  const _ReadymadeItemCard({
+    required this.title,
+    required this.desc,
+    required this.imageUrl,
+    required this.price,
+    required this.onAddToCart,
+  });
+
+  @override
+  State<_ReadymadeItemCard> createState() => _ReadymadeItemCardState();
+}
+
+class _ReadymadeItemCardState extends State<_ReadymadeItemCard> {
+  int _quantity = 1;
+
+  @override
+  Widget build(BuildContext context) {
+    final totalPrice = widget.price * _quantity;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.borderLight),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.network(
+                  widget.imageUrl,
+                  width: 75,
+                  height: 75,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.title,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.desc,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '\$${widget.price.toStringAsFixed(2)} each',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryTerracotta,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Quantity Stepper
+              Container(
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceCream,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.borderLight),
+                ),
+                child: Row(
+                  children: [
+                    InkWell(
+                      onTap: () {
+                        if (_quantity > 1) {
+                          setState(() => _quantity--);
+                        }
+                      },
+                      borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        child: Icon(Icons.remove, size: 18, color: AppTheme.textPrimary),
+                      ),
+                    ),
+                    Text(
+                      '$_quantity',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () {
+                        setState(() => _quantity++);
+                      },
+                      borderRadius: const BorderRadius.horizontal(right: Radius.circular(12)),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        child: Icon(Icons.add, size: 18, color: AppTheme.textPrimary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Add to Cart Button
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryTerracotta,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+                onPressed: () {
+                  widget.onAddToCart({
+                    'name': widget.title,
+                    'type': 'readymade',
+                    'quantity': _quantity,
+                    'price': widget.price,
+                  });
+                },
+                icon: const Icon(Icons.shopping_bag_outlined, size: 16),
+                label: Text(
+                  'Add • \$${totalPrice.toStringAsFixed(2)}',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CustomMillingItemCard extends StatefulWidget {
+  final GrainProduct product;
+  final Function(Map<String, dynamic> item) onAddToCart;
+
+  const _CustomMillingItemCard({
+    required this.product,
+    required this.onAddToCart,
+  });
+
+  @override
+  State<_CustomMillingItemCard> createState() => _CustomMillingItemCardState();
+}
+
+class _CustomMillingItemCardState extends State<_CustomMillingItemCard> {
+  int _quantity = 5;
+
+  @override
+  Widget build(BuildContext context) {
+    const unitPrice = 0.50;
+    final totalPrice = unitPrice * _quantity;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.borderLight),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.network(
+                  widget.product.imageUrl,
+                  width: 80,
+                  height: 80,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.product.name,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.product.description,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceWarm,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppTheme.primaryTerracotta.withValues(alpha: 0.3)),
+                      ),
+                      child: Text(
+                        'Milling Price: \$0.50/kg',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryTerracotta,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Quantity and Add to Cart Row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Quantity Stepper
+              Container(
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceCream,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.borderLight),
+                ),
+                child: Row(
+                  children: [
+                    InkWell(
+                      onTap: () {
+                        if (_quantity > 1) {
+                          setState(() => _quantity--);
+                        }
+                      },
+                      borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        child: Icon(Icons.remove, size: 18, color: AppTheme.textPrimary),
+                      ),
+                    ),
+                    Text(
+                      '$_quantity kg',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () {
+                        setState(() => _quantity++);
+                      },
+                      borderRadius: const BorderRadius.horizontal(right: Radius.circular(12)),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        child: Icon(Icons.add, size: 18, color: AppTheme.textPrimary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Add to Cart Button
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryTerracotta,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+                onPressed: () {
+                  widget.onAddToCart({
+                    'name': '${widget.product.name} (Milling)',
+                    'type': 'milling',
+                    'source': 'Own Grain',
+                    'quantity': _quantity,
+                    'price': unitPrice,
+                  });
+                },
+                icon: const Icon(Icons.shopping_bag_outlined, size: 16),
+                label: Text(
+                  'Add • \$${totalPrice.toStringAsFixed(2)}',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

@@ -6,27 +6,38 @@ import 'payment_methods_screen.dart';
 import 'notifications_screen.dart';
 import 'help_support_screen.dart';
 import 'settings_screen.dart';
+import 'orders_list_screen.dart';
 import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
-  final VoidCallback onLogout;
-  final Function(int) onNavigateTab;
+  final VoidCallback? onLogout;
+  final Function(int)? onNavigateTab;
+  final VoidCallback? onOpenDrawer;
 
   const ProfileScreen({
     super.key,
-    required this.onLogout,
-    required this.onNavigateTab,
+    this.onLogout,
+    this.onNavigateTab,
+    this.onOpenDrawer,
   });
 
   @override
   Widget build(BuildContext context) {
+    final canPop = Navigator.canPop(context);
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.menu, color: AppTheme.textPrimary),
-          onPressed: () => Scaffold.of(context).openDrawer(),
-        ),
+        leading: canPop
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTheme.textPrimary, size: 20),
+                onPressed: () => Navigator.pop(context),
+              )
+            : (onOpenDrawer != null
+                ? IconButton(
+                    icon: const Icon(Icons.menu, color: AppTheme.textPrimary),
+                    onPressed: onOpenDrawer,
+                  )
+                : null),
         title: Text(
           'My Profile',
           style: GoogleFonts.playfairDisplay(
@@ -125,7 +136,17 @@ class ProfileScreen extends StatelessWidget {
                       icon: Icons.shopping_bag_outlined,
                       title: 'My Orders History',
                       subtitle: '2 active orders • 12 completed',
-                      onTap: () => onNavigateTab(2),
+                      onTap: () {
+                        if (onNavigateTab != null) {
+                          Navigator.pop(context);
+                          onNavigateTab!(2);
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const OrdersListScreen()),
+                          );
+                        }
+                      },
                     ),
                     const Divider(height: 1, color: AppTheme.borderLight),
                     _buildMenuItem(
@@ -210,7 +231,13 @@ class ProfileScreen extends StatelessWidget {
                 width: double.infinity,
                 height: 52,
                 child: OutlinedButton.icon(
-                  onPressed: onLogout,
+                  onPressed: () {
+                    if (onLogout != null) {
+                      onLogout!();
+                    } else {
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    }
+                  },
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppTheme.primaryTerracotta,
                     side: const BorderSide(color: AppTheme.primaryTerracotta, width: 1.5),
@@ -240,8 +267,10 @@ class ProfileScreen extends StatelessWidget {
     required String subtitle,
     required VoidCallback onTap,
   }) {
-    return ListTile(
-      onTap: onTap,
+    return Material(
+      color: Colors.transparent,
+      child: ListTile(
+        onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
       leading: Container(
         padding: const EdgeInsets.all(10),
@@ -267,6 +296,7 @@ class ProfileScreen extends StatelessWidget {
         ),
       ),
       trailing: const Icon(Icons.chevron_right, color: AppTheme.textMuted),
+      ),
     );
   }
 }

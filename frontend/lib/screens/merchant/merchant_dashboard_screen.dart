@@ -4,6 +4,7 @@ import '../../theme/app_theme.dart';
 import '../../models/merchant_models.dart';
 import '../../services/merchant_api_service.dart';
 import 'merchant_order_process_detail_screen.dart';
+import 'merchant_active_driver_pickup_screen.dart';
 
 class MerchantDashboardScreen extends StatefulWidget {
   final Function(int) onNavigateTab;
@@ -19,8 +20,14 @@ class MerchantDashboardScreen extends StatefulWidget {
 
 class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
   bool _isAcceptingOrders = true;
-  bool _isLoading = true;
-  MerchantDashboardMetrics? _metrics;
+  bool _isLoading = false;
+  int _readyForDispatchCount = 3;
+  MerchantDashboardMetrics _metrics = MerchantDashboardMetrics(
+    pendingOrders: 3,
+    activeOrders: 3,
+    completedOrders: 9,
+    totalRevenue: 90.0,
+  );
   List<MerchantOrder> _activeOrders = MerchantMockData.activeOrders;
 
   @override
@@ -30,23 +37,27 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
   }
 
   Future<void> _loadDashboardData() async {
-    setState(() => _isLoading = true);
-
     // Fetch availability state
     final bool? availability = await MerchantApiService.instance.getShopAvailability();
-    if (availability != null) {
+    if (availability != null && mounted) {
       _isAcceptingOrders = availability;
     }
 
     // Fetch dashboard metrics
     final metrics = await MerchantApiService.instance.getDashboardMetrics();
-    if (metrics != null) {
+    if (metrics != null && mounted) {
       _metrics = metrics;
+    }
+
+    // Fetch real count for Ready for Dispatch orders
+    final completedOrders = await MerchantApiService.instance.getCompletedOrders();
+    if (completedOrders != null && completedOrders.isNotEmpty && mounted) {
+      _readyForDispatchCount = completedOrders.length;
     }
 
     // Fetch active processing orders
     final activeOrders = await MerchantApiService.instance.getActiveOrders();
-    if (activeOrders != null && activeOrders.isNotEmpty) {
+    if (activeOrders != null && activeOrders.isNotEmpty && mounted) {
       _activeOrders = activeOrders;
     }
 
@@ -223,79 +234,206 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
             ),
             const SizedBox(height: 20),
 
-            // New Orders Stats Card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20.0),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: AppTheme.borderLight),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFFFB3AC),
-                          shape: BoxShape.circle,
+            // Two Overview Stats Cards: Total Orders & Live Active Orders
+            Row(
+              children: [
+                // Card 1: Total Orders
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(16.0),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppTheme.borderLight),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
                         ),
-                        child: const Icon(
-                          Icons.verified_rounded,
-                          color: Colors.white,
-                          size: 24,
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFFB3AC),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.verified_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFECEB),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '+${_metrics.pendingOrders} Pending',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.primaryTerracotta,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFECEB),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          _isLoading
-                              ? 'Syncing...'
-                              : '+${_metrics?.pendingOrders ?? 3} Pending',
+                        const SizedBox(height: 14),
+                        Text(
+                          '${_metrics.pendingOrders + _metrics.activeOrders + _metrics.completedOrders}',
                           style: GoogleFonts.plusJakartaSans(
-                            fontSize: 13,
+                            fontSize: 28,
                             fontWeight: FontWeight.bold,
-                            color: AppTheme.primaryTerracotta,
+                            color: AppTheme.textPrimary,
                           ),
                         ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Total Orders Today',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                        Text(
+                          '(₹${_metrics.totalRevenue.toInt()})',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            color: AppTheme.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+
+                // Card 2: Live Active Orders & Delivery Boy Status
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const MerchantActiveDriverPickupScreen(),
+                        ),
+                      );
+                      if (mounted) _loadDashboardData();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(16.0),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppTheme.borderLight),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.03),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    _isLoading ? '...' : '${(_metrics?.pendingOrders ?? 0) + (_metrics?.activeOrders ?? 0) + 12}',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimary,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFFFE082),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.two_wheeler_rounded,
+                                  color: Color(0xFF6E5616),
+                                  size: 22,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF3E0),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 6,
+                                      height: 6,
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFFE67E22),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Driver on Way',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: const Color(0xFFD35400),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            '$_readyForDispatchCount',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryTerracotta,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Ready for Dispatch',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            'Shop Ready • Pickup Pending',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: const Color(0xFFD35400),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  Text(
-                    'Total Orders Today (₹${_metrics?.totalRevenue ?? 90.0})',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
             const SizedBox(height: 24),
 

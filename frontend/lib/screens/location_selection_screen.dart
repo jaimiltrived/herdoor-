@@ -114,14 +114,7 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => PaymentMethodsScreen(
-                          grainSource: widget.grainSource,
-                          selectedGrain: widget.selectedGrain,
-                          quantityKg: widget.quantityKg,
-                          millName: widget.millName,
-                          pickupLocation: _pickupLocation,
-                          dropLocation: _dropLocation,
-                        ),
+                        builder: (context) => const PaymentMethodsScreen(),
                       ),
                     );
                   },

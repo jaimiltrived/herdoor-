@@ -551,7 +551,9 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppTheme.borderLight),
       ),
-      child: ListTile(
+      child: Material(
+        color: Colors.transparent,
+        child: ListTile(
         onTap: onTap,
         leading: Container(
           width: 40,
@@ -578,6 +580,7 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
           ),
         ),
         trailing: const Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 20),
+        ),
       ),
     );
   }

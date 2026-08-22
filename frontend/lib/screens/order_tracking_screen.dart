@@ -331,7 +331,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Auto-Tracking Active: Steps advance automatically every 4 seconds',
+                    'Auto-Tracking Active: Order will be completed in 20 minutes',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -385,14 +385,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       );
     } else {
       final icons = [
-        Icons.grass,
-        Icons.home_outlined,
-        Icons.storefront_outlined,
-        Icons.sync,
-        Icons.inventory_2_outlined,
-        Icons.local_shipping_outlined,
-        Icons.two_wheeler_outlined,
-        Icons.check_circle_outline,
+        Icons.receipt_long_rounded,
+        Icons.person_pin_circle_rounded,
+        Icons.precision_manufacturing_rounded,
+        Icons.two_wheeler_rounded,
+        Icons.check_circle_outline_rounded,
       ];
       return Container(
         width: 36,
@@ -420,7 +417,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           child: Column(
             children: [
               Text(
-                'Order #HD-8921',
+                'Order ${widget.order.orderId}',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -429,7 +426,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Estimated completion: 2:00 PM today',
+                'Estimated completion: ${widget.order.estimatedDelivery}',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 14,
                   color: AppTheme.textSecondary,
@@ -460,16 +457,16 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 ),
               ),
               const SizedBox(height: 18),
-              _buildSimpleStep(true, 'Order Placed', '9:45 AM', false),
-              _buildSimpleStep(true, 'Item Collected', '10:15 AM', false),
+              _buildSimpleStep(true, 'Order Placed', '10:00 AM', false),
+              _buildSimpleStep(true, 'Order Pickup', 'Picked up by Rahul Sharma', false),
               _buildSimpleStep(
                 false,
-                'Working/Milling',
-                'In Progress - Grinding fresh whole wheat.',
+                'Order Processing',
+                'In Progress • In 20 mins',
                 true,
               ),
-              _buildSimpleStep(false, 'Dispatched', '', false),
-              _buildSimpleStep(false, 'Delivered', '', false, isLast: true),
+              _buildSimpleStep(false, 'Out for Delivery', 'Driver on the way', false),
+              _buildSimpleStep(false, 'Delivered', 'At your door', false, isLast: true),
             ],
           ),
         ),

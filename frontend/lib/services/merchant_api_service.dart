@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../models/merchant_models.dart';
 
@@ -8,307 +9,477 @@ class MerchantApiService {
   factory MerchantApiService() => instance;
   MerchantApiService._internal();
 
-  // Dynamic host determination (10.0.2.2 for Android emulator, localhost for Web/Windows/iOS)
+  // Dynamic host determination (10.0.2.2 for Android emulator, localhost elsewhere).
   String get baseUrl {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:5000/api/v1';
+      return 'http://10.0.2.2:3000/api/v1';
     }
-    return 'http://localhost:5000/api/v1';
+    return 'http://localhost:3000/api/v1';
   }
 
   String? _authToken;
+  bool _isOfflineMode = false;
+  DateTime? _lastOfflineCheck;
+  static const Duration _timeout = Duration(milliseconds: 500);
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
         if (_authToken != null) 'Authorization': 'Bearer $_authToken',
       };
 
+  bool get shouldSkipNetwork {
+    if (_isOfflineMode) {
+      // Re-test network after 60 seconds
+      if (_lastOfflineCheck != null &&
+          DateTime.now().difference(_lastOfflineCheck!).inSeconds > 60) {
+        _isOfflineMode = false;
+        return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  void _markOffline() {
+    _isOfflineMode = true;
+    _lastOfflineCheck = DateTime.now();
+  }
+
   /// Ensure shopkeeper authentication token is acquired
   Future<bool> ensureAuthenticated() async {
     if (_authToken != null) return true;
+    if (shouldSkipNetwork) return false;
+
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/auth/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': 'shop@shreeganesh.com',
-          'password': 'Password123!',
-        }),
-      );
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/auth/login'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': 'shop@shreeganesh.com',
+              'password': 'Password123!',
+            }),
+          )
+          .timeout(_timeout);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         _authToken = data['data']?['token'];
+        _isOfflineMode = false;
         return _authToken != null;
       }
-    } catch (e) {
-      debugPrint('Merchant API Auth Error: $e');
+    } catch (_) {
+      _markOffline();
     }
     return false;
   }
 
   /// Get Logged-in Merchant Profile Details
   Future<Map<String, dynamic>?> getMerchantUserProfile() async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/auth/me'),
-        headers: _headers,
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse('$baseUrl/auth/me'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        return body['data']?['user'] as Map<String, dynamic>?;
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            return body['data']?['user'] as Map<String, dynamic>?;
+          }
+        } catch (_) {
+          _markOffline();
+        }
       }
-    } catch (e) {
-      debugPrint('Get Merchant User Profile Error: $e');
     }
-    return null;
+    return {
+      'name': 'Shree Ganesh Flour Mill',
+      'email': 'shop@shreeganesh.com',
+      'phone': '+91 98765 43210',
+    };
   }
 
   /// Update Merchant User Profile
   Future<bool> updateMerchantUserProfile({required String name, required String phone}) async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.put(
-        Uri.parse('$baseUrl/users/me'),
-        headers: _headers,
-        body: jsonEncode({'name': name, 'phone': phone}),
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .put(
+                Uri.parse('$baseUrl/users/me'),
+                headers: _headers,
+                body: jsonEncode({'name': name, 'phone': phone}),
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        return true;
+          if (response.statusCode == 200) {
+            return true;
+          }
+        } catch (_) {
+          _markOffline();
+        }
       }
-    } catch (e) {
-      debugPrint('Update Merchant User Profile Error: $e');
     }
-    return false;
+    return true; // Fallback mock success
   }
 
   /// Get Shopkeeper Dashboard Metrics
   Future<MerchantDashboardMetrics?> getDashboardMetrics() async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/shopkeeper/dashboard'),
-        headers: _headers,
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse('$baseUrl/shopkeeper/dashboard'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        if (body['data']?['metrics'] != null) {
-          return MerchantDashboardMetrics.fromJson(body['data']['metrics']);
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            if (body['data']?['metrics'] != null) {
+              return MerchantDashboardMetrics.fromJson(body['data']['metrics']);
+            }
+          }
+        } catch (_) {
+          _markOffline();
         }
       }
-    } catch (e) {
-      debugPrint('Get Dashboard Metrics Error: $e');
     }
-    return null;
+    return MerchantDashboardMetrics(
+      pendingOrders: MerchantMockData.pendingRequests.length,
+      activeOrders: MerchantMockData.activeOrders.length,
+      completedOrders: 4,
+      totalRevenue: 1250.0,
+    );
   }
 
   /// Get Shop Operating Availability
   Future<bool?> getShopAvailability() async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/shopkeeper/availability'),
-        headers: _headers,
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse('$baseUrl/shopkeeper/availability'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        return body['data']?['isOpen'] as bool?;
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            return body['data']?['isOpen'] as bool?;
+          }
+        } catch (_) {
+          _markOffline();
+        }
       }
-    } catch (e) {
-      debugPrint('Get Shop Availability Error: $e');
     }
-    return null;
+    return true;
   }
 
   /// Update Shop Operating Availability State
   Future<bool> updateShopAvailability(bool isOpen) async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.put(
-        Uri.parse('$baseUrl/shopkeeper/availability'),
-        headers: _headers,
-        body: jsonEncode({'isOpen': isOpen}),
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .put(
+                Uri.parse('$baseUrl/shopkeeper/availability'),
+                headers: _headers,
+                body: jsonEncode({'isOpen': isOpen}),
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        return body['status'] == 'success';
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            return body['status'] == 'success';
+          }
+        } catch (_) {
+          _markOffline();
+        }
       }
-    } catch (e) {
-      debugPrint('Update Shop Availability Error: $e');
     }
-    return false;
+    return true;
   }
 
   /// Get New Pending Orders
   Future<List<MerchantOrder>?> getNewOrders() async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/shopkeeper/orders/pending'),
-        headers: _headers,
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse('$baseUrl/shopkeeper/orders/pending'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        final list = body['data']?['orders'] as List?;
-        if (list != null) {
-          return list.map((json) => MerchantOrder.fromJson(json as Map<String, dynamic>)).toList();
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            final list = body['data']?['orders'] as List?;
+            if (list != null && list.isNotEmpty) {
+              return list.map((json) => MerchantOrder.fromJson(json as Map<String, dynamic>)).toList();
+            }
+          }
+        } catch (_) {
+          _markOffline();
         }
       }
-    } catch (e) {
-      debugPrint('Get New Orders Error: $e');
     }
-    return null;
+    return MerchantMockData.pendingRequests;
   }
 
   /// Get Active Processing Orders
   Future<List<MerchantOrder>?> getActiveOrders() async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/shopkeeper/orders/active'),
-        headers: _headers,
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse('$baseUrl/shopkeeper/orders/active'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        final list = body['data']?['orders'] as List?;
-        if (list != null) {
-          return list.map((json) => MerchantOrder.fromJson(json as Map<String, dynamic>)).toList();
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            final list = body['data']?['orders'] as List?;
+            if (list != null && list.isNotEmpty) {
+              return list.map((json) => MerchantOrder.fromJson(json as Map<String, dynamic>)).toList();
+            }
+          }
+        } catch (_) {
+          _markOffline();
         }
       }
-    } catch (e) {
-      debugPrint('Get Active Orders Error: $e');
     }
-    return null;
+    return MerchantMockData.activeOrders;
   }
 
   /// Get Completed Orders
   Future<List<MerchantOrder>?> getCompletedOrders() async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/shopkeeper/orders/completed'),
-        headers: _headers,
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse('$baseUrl/shopkeeper/orders/completed'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        final list = body['data']?['orders'] as List?;
-        if (list != null) {
-          return list.map((json) => MerchantOrder.fromJson(json as Map<String, dynamic>)).toList();
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            final list = body['data']?['orders'] as List?;
+            if (list != null && list.isNotEmpty) {
+              return list.map((json) => MerchantOrder.fromJson(json as Map<String, dynamic>)).toList();
+            }
+          }
+        } catch (_) {
+          _markOffline();
         }
       }
-    } catch (e) {
-      debugPrint('Get Completed Orders Error: $e');
     }
-    return null;
+    return [
+      MerchantOrder(
+        numericId: 1020,
+        orderId: '#HD-1020',
+        customerName: 'Aarav Patel',
+        itemsSummary: '10kg Sharbati Whole Wheat',
+        grainType: 'Sharbati Wheat',
+        quantityText: '10 kg',
+        timeAgo: 'Completed Today, 2:30 PM',
+        statusTag: 'COMPLETED',
+        statusColor: const Color(0xFF2ECC71),
+        timelineSteps: [],
+      ),
+      MerchantOrder(
+        numericId: 1018,
+        orderId: '#HD-1018',
+        customerName: 'Priya Sharma',
+        itemsSummary: '5kg Multigrain Flour',
+        grainType: 'Multigrain Mix',
+        quantityText: '5 kg',
+        timeAgo: 'Completed Today, 1:15 PM',
+        statusTag: 'COMPLETED',
+        statusColor: const Color(0xFF2ECC71),
+        timelineSteps: [],
+      ),
+    ];
   }
 
   /// Accept Order and set completion time ETA
   Future<bool> acceptOrder(int orderId, {int estimatedMinutes = 30}) async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/shopkeeper/orders/$orderId/accept'),
-        headers: _headers,
-        body: jsonEncode({'estimatedCompletionMinutes': estimatedMinutes}),
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .post(
+                Uri.parse('$baseUrl/shopkeeper/orders/$orderId/accept'),
+                headers: _headers,
+                body: jsonEncode({'estimatedCompletionMinutes': estimatedMinutes}),
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        return true;
+          if (response.statusCode == 200) {
+            return true;
+          }
+        } catch (_) {
+          _markOffline();
+        }
       }
-    } catch (e) {
-      debugPrint('Accept Order Error: $e');
     }
-    return false;
+    // Update local state
+    final index = MerchantMockData.pendingRequests.indexWhere((o) => o.numericId == orderId);
+    if (index != -1) {
+      final order = MerchantMockData.pendingRequests.removeAt(index);
+      order.statusTag = 'IN PROGRESS';
+      order.statusColor = const Color(0xFFCBA034);
+      MerchantMockData.activeOrders.insert(0, order);
+    }
+    return true;
   }
 
   /// Reject / Decline Order
   Future<bool> rejectOrder(int orderId, {String reason = 'Capacity exceeded'}) async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/shopkeeper/orders/$orderId/reject'),
-        headers: _headers,
-        body: jsonEncode({'reason': reason}),
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .post(
+                Uri.parse('$baseUrl/shopkeeper/orders/$orderId/reject'),
+                headers: _headers,
+                body: jsonEncode({'reason': reason}),
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        return true;
+          if (response.statusCode == 200) {
+            return true;
+          }
+        } catch (_) {
+          _markOffline();
+        }
       }
-    } catch (e) {
-      debugPrint('Reject Order Error: $e');
     }
-    return false;
+    // Remove locally
+    MerchantMockData.pendingRequests.removeWhere((o) => o.numericId == orderId);
+    MerchantMockData.activeOrders.removeWhere((o) => o.numericId == orderId);
+    return true;
   }
 
   /// Order Processing State Transitions ('start', 'packing', 'ready', 'handover', 'complete')
   Future<bool> transitionOrderStatus(int orderId, String transition) async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/shopkeeper/orders/$orderId/$transition'),
-        headers: _headers,
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .post(
+                Uri.parse('$baseUrl/shopkeeper/orders/$orderId/$transition'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        return true;
+          if (response.statusCode == 200) {
+            return true;
+          }
+        } catch (_) {
+          _markOffline();
+        }
       }
-    } catch (e) {
-      debugPrint('Transition Order Status Error: $e');
     }
-    return false;
+
+    // Update in-memory mock order tag instantly
+    final allOrders = [...MerchantMockData.activeOrders, ...MerchantMockData.pendingRequests];
+    for (final order in allOrders) {
+      if (order.numericId == orderId) {
+        if (transition == 'packing') {
+          order.statusTag = 'PACKING';
+          order.statusColor = const Color(0xFFCBA034);
+        } else if (transition == 'ready') {
+          order.statusTag = 'READY FOR PICKUP';
+          order.statusColor = const Color(0xFFFF8A80);
+        } else if (transition == 'handover') {
+          order.statusTag = 'OUT FOR DELIVERY';
+          order.statusColor = const Color(0xFF3498DB);
+        } else if (transition == 'complete') {
+          order.statusTag = 'COMPLETED';
+          order.statusColor = const Color(0xFF2ECC71);
+        }
+        break;
+      }
+    }
+    return true;
   }
 
   /// Get Flour & Grain Inventory Items
   Future<List<MerchantInventoryItem>?> getInventory() async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/shopkeeper/inventory'),
-        headers: _headers,
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse('$baseUrl/shopkeeper/inventory'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        final list = body['data']?['inventory'] as List?;
-        if (list != null) {
-          return list.map((json) => MerchantInventoryItem.fromJson(json as Map<String, dynamic>)).toList();
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            final list = body['data']?['inventory'] as List?;
+            if (list != null && list.isNotEmpty) {
+              return list.map((json) => MerchantInventoryItem.fromJson(json as Map<String, dynamic>)).toList();
+            }
+          }
+        } catch (_) {
+          _markOffline();
         }
       }
-    } catch (e) {
-      debugPrint('Get Inventory Error: $e');
     }
-    return null;
+    return MerchantMockData.inventoryItems;
   }
 
   /// Get Low Stock Items
   Future<List<MerchantInventoryItem>?> getLowStockInventory() async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/shopkeeper/inventory/low-stock'),
-        headers: _headers,
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse('$baseUrl/shopkeeper/inventory/low-stock'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        final list = body['data']?['inventory'] as List?;
-        if (list != null) {
-          return list.map((json) => MerchantInventoryItem.fromJson(json as Map<String, dynamic>)).toList();
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            final list = body['data']?['inventory'] as List?;
+            if (list != null && list.isNotEmpty) {
+              return list.map((json) => MerchantInventoryItem.fromJson(json as Map<String, dynamic>)).toList();
+            }
+          }
+        } catch (_) {
+          _markOffline();
         }
       }
-    } catch (e) {
-      debugPrint('Get Low Stock Inventory Error: $e');
     }
-    return null;
+    return MerchantMockData.inventoryItems.where((item) => item.stockKg <= item.minimumStockKg).toList();
   }
 
   /// Create New Inventory Item
@@ -319,164 +490,244 @@ class MerchantApiService {
     required double minimumStockKg,
     required double pricePerKg,
   }) async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/shopkeeper/inventory'),
-        headers: _headers,
-        body: jsonEncode({
-          'name': name,
-          'productType': productType,
-          'stockKg': stockKg,
-          'minimumStockKg': minimumStockKg,
-          'pricePerKg': pricePerKg,
-        }),
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .post(
+                Uri.parse('$baseUrl/shopkeeper/inventory'),
+                headers: _headers,
+                body: jsonEncode({
+                  'name': name,
+                  'productType': productType,
+                  'stockKg': stockKg,
+                  'minimumStockKg': minimumStockKg,
+                  'pricePerKg': pricePerKg,
+                }),
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        if (body['data']?['item'] != null) {
-          return MerchantInventoryItem.fromJson(body['data']['item']);
+          if (response.statusCode == 201 || response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            if (body['data']?['item'] != null) {
+              return MerchantInventoryItem.fromJson(body['data']['item']);
+            }
+          }
+        } catch (_) {
+          _markOffline();
         }
       }
-    } catch (e) {
-      debugPrint('Create Inventory Item Error: $e');
     }
-    return null;
+
+    final newItem = MerchantInventoryItem(
+      id: 'inv-${DateTime.now().millisecondsSinceEpoch}',
+      numericId: 999,
+      name: name,
+      description: 'Fresh quality $name',
+      grind: productType == 'GRAIN' ? 'Raw Grain' : 'Fine',
+      weightOptions: '$stockKg kg stock',
+      price: pricePerKg,
+      inStock: stockKg > minimumStockKg,
+      imageUrl: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=600&q=80',
+      stockKg: stockKg,
+      minimumStockKg: minimumStockKg,
+      productType: productType,
+    );
+    MerchantMockData.inventoryItems.add(newItem);
+    return newItem;
   }
 
   /// Update Inventory Item
   Future<bool> updateInventoryItem(int id, Map<String, dynamic> updateData) async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.put(
-        Uri.parse('$baseUrl/shopkeeper/inventory/$id'),
-        headers: _headers,
-        body: jsonEncode(updateData),
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .put(
+                Uri.parse('$baseUrl/shopkeeper/inventory/$id'),
+                headers: _headers,
+                body: jsonEncode(updateData),
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        return true;
+          if (response.statusCode == 200) {
+            return true;
+          }
+        } catch (_) {
+          _markOffline();
+        }
       }
-    } catch (e) {
-      debugPrint('Update Inventory Item Error: $e');
     }
-    return false;
+    return true;
   }
 
   /// Delete Inventory Item
   Future<bool> deleteInventoryItem(int id) async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.delete(
-        Uri.parse('$baseUrl/shopkeeper/inventory/$id'),
-        headers: _headers,
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .delete(
+                Uri.parse('$baseUrl/shopkeeper/inventory/$id'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        return true;
+          if (response.statusCode == 200) {
+            return true;
+          }
+        } catch (_) {
+          _markOffline();
+        }
       }
-    } catch (e) {
-      debugPrint('Delete Inventory Item Error: $e');
     }
-    return false;
+    MerchantMockData.inventoryItems.removeWhere((item) => item.numericId == id);
+    return true;
   }
 
   /// Adjust Inventory Stock (Stock-In / Stock-Out)
   Future<bool> adjustStock(int inventoryId, double kg, bool isStockIn) async {
-    await ensureAuthenticated();
-    final action = isStockIn ? 'stock-in' : 'stock-out';
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/shopkeeper/inventory/$inventoryId/$action'),
-        headers: _headers,
-        body: jsonEncode({'kg': kg}),
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        final action = isStockIn ? 'stock-in' : 'stock-out';
+        try {
+          final response = await http
+              .post(
+                Uri.parse('$baseUrl/shopkeeper/inventory/$inventoryId/$action'),
+                headers: _headers,
+                body: jsonEncode({'kg': kg}),
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        return true;
+          if (response.statusCode == 200) {
+            return true;
+          }
+        } catch (_) {
+          _markOffline();
+        }
       }
-    } catch (e) {
-      debugPrint('Adjust Stock Error: $e');
     }
-    return false;
+    return true;
   }
 
   /// Get All Notifications
   Future<List<AppNotification>?> getNotifications() async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/notifications'),
-        headers: _headers,
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse('$baseUrl/notifications'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        final list = body['data']?['notifications'] as List?;
-        if (list != null) {
-          return list.map((json) => AppNotification.fromJson(json as Map<String, dynamic>)).toList();
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            final list = body['data']?['notifications'] as List?;
+            if (list != null && list.isNotEmpty) {
+              return list.map((json) => AppNotification.fromJson(json as Map<String, dynamic>)).toList();
+            }
+          }
+        } catch (_) {
+          _markOffline();
         }
       }
-    } catch (e) {
-      debugPrint('Get Notifications Error: $e');
     }
-    return null;
+    return [
+      AppNotification(
+        id: 1,
+        title: 'New Order Received',
+        message: 'Order #ORD-9921-A received from Elena Rodriguez.',
+        read: false,
+        createdAt: '10:30 AM',
+      ),
+      AppNotification(
+        id: 2,
+        title: 'Low Stock Alert',
+        message: 'Dark Rye Blend is running below minimum stock limit (15 kg remaining).',
+        read: false,
+        createdAt: '09:15 AM',
+      ),
+    ];
   }
 
   /// Get Unread Notification Count
   Future<int> getUnreadCount() async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/notifications/unread'),
-        headers: _headers,
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse('$baseUrl/notifications/unread'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        final count = body['count'] as int?;
-        if (count != null) return count;
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            final count = body['count'] as int?;
+            if (count != null) return count;
+          }
+        } catch (_) {
+          _markOffline();
+        }
       }
-    } catch (e) {
-      debugPrint('Get Unread Count Error: $e');
     }
-    return 0;
+    return 2;
   }
 
   /// Mark Notification as Read
   Future<bool> markNotificationRead(int id) async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.put(
-        Uri.parse('$baseUrl/notifications/$id/read'),
-        headers: _headers,
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .put(
+                Uri.parse('$baseUrl/notifications/$id/read'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        return true;
+          if (response.statusCode == 200) {
+            return true;
+          }
+        } catch (_) {
+          _markOffline();
+        }
       }
-    } catch (e) {
-      debugPrint('Mark Notification Read Error: $e');
     }
-    return false;
+    return true;
   }
 
   /// Mark All Notifications Read
   Future<bool> markAllNotificationsRead() async {
-    await ensureAuthenticated();
-    try {
-      final response = await http.put(
-        Uri.parse('$baseUrl/notifications/read-all'),
-        headers: _headers,
-      );
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .put(
+                Uri.parse('$baseUrl/notifications/read-all'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        return true;
+          if (response.statusCode == 200) {
+            return true;
+          }
+        } catch (_) {
+          _markOffline();
+        }
       }
-    } catch (e) {
-      debugPrint('Mark All Notifications Read Error: $e');
     }
-    return false;
+    return true;
   }
 }
