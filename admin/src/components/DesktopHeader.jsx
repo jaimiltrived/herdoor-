@@ -1,47 +1,45 @@
 import React from 'react';
-import { Search, Bell, Sliders, Store, UserCheck } from 'lucide-react';
+import { Search, Bell, HelpCircle, Moon } from 'lucide-react';
 
-export default function DesktopHeader({ shopStatus, onToggleShopStatus, onOpenAvailabilityModal }) {
+export default function DesktopHeader() {
   return (
-    <header className="desktop-top-header">
-      {/* Search Input Bar */}
-      <div className="search-bar-box">
-        <Search size={18} color="var(--text-secondary)" />
-        <input type="text" placeholder="Search orders (#HD-1042), customer name, or flour item..." />
+    <header className="super-admin-top-header">
+      {/* Search Input Bar matching Image 1 */}
+      <div className="search-pill-container">
+        <Search size={18} color="#756D69" />
+        <input
+          type="text"
+          placeholder="Search ledger, transactions..."
+          className="search-input-field"
+        />
       </div>
 
-      {/* Header Right Actions */}
-      <div className="header-right-actions">
-        {/* Shop Status Toggle Button */}
-        <button
-          className="btn-outline"
-          onClick={onOpenAvailabilityModal}
-          style={{
-            backgroundColor: shopStatus ? '#E8F8F0' : '#F2F4F4',
-            borderColor: shopStatus ? '#2ECC71' : '#95A5A6',
-            color: shopStatus ? '#1E8449' : '#7F8C8D',
-            padding: '8px 18px',
-          }}
-        >
-          <span className={shopStatus ? 'green-dot' : 'grey-dot'}></span>
-          <span style={{ fontWeight: 800 }}>{shopStatus ? 'Accepting Orders' : 'Shop Closed'}</span>
-        </button>
-
-        {/* Quick Settings Launcher */}
-        <button
-          className="btn-outline"
-          onClick={onOpenAvailabilityModal}
-          title="Configure Service Radius & Hours"
-        >
-          <Sliders size={16} />
-          <span>Settings</span>
-        </button>
-
+      {/* Header Right Actions matching Image 1 */}
+      <div className="header-right-tools">
         {/* Notification Bell */}
-        <button className="icon-btn notification-badge-wrapper" title="3 New Notifications">
-          <Bell size={22} />
-          <span className="red-dot"></span>
+        <button className="icon-btn notification-wrapper" title="Notifications">
+          <Bell size={20} color="#2A2421" />
+          <span className="notification-dot"></span>
         </button>
+
+        {/* Help Circle */}
+        <button className="icon-btn" title="Help & Support">
+          <HelpCircle size={20} color="#2A2421" />
+        </button>
+
+        {/* Dark Mode Moon Icon */}
+        <button className="icon-btn" title="Toggle Dark Mode">
+          <Moon size={20} color="#2A2421" />
+        </button>
+
+        {/* User Profile Avatar */}
+        <div className="header-user-avatar-box">
+          <img
+            src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80"
+            alt="User Avatar"
+            className="header-avatar-img"
+          />
+        </div>
       </div>
     </header>
   );

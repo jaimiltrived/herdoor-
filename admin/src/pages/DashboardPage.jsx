@@ -1,54 +1,202 @@
 import React from 'react';
-import { Clock, ShieldCheck, ChevronRight, ArrowUpRight, Truck, Eye, CheckCircle2, UserCheck } from 'lucide-react';
+import {
+  Clock,
+  ShieldCheck,
+  ChevronRight,
+  ArrowUpRight,
+  Truck,
+  Eye,
+  Gift,
+  Landmark,
+  Users,
+  Percent,
+  BarChart3,
+  Store,
+  Sparkles,
+  ArrowRight
+} from 'lucide-react';
 import { pendingRequests } from '../data/mockData';
 
 export default function DashboardPage({
-  orders,
-  shopStatus,
-  onToggleShopStatus,
-  onOpenAcceptModal,
-  onSelectOrderDetails,
-  onNavigateTab,
+  orders = [],
+  shopStatus = true,
+  onToggleShopStatus = () => {},
+  onOpenAcceptModal = () => {},
+  onSelectOrderDetails = () => {},
+  onNavigateTab = () => {},
 }) {
+  const quickAccessActions = [
+    {
+      id: 16,
+      title: 'Gift & Vouchers',
+      subtitle: 'Issue promo rewards & codes',
+      icon: Gift,
+      color: '#8C4A3E',
+      bg: '#FFECEB',
+      badge: 'PROMO HUB'
+    },
+    {
+      id: 10,
+      title: 'Accounting Ledger',
+      subtitle: 'Revenue, expenses & tax P&L',
+      icon: Landmark,
+      color: '#7A6818',
+      bg: '#EFE6D2',
+      badge: 'FINANCIALS'
+    },
+    {
+      id: 2,
+      title: 'Citizen Directory',
+      subtitle: 'Manage registered users & VIPs',
+      icon: Users,
+      color: '#1E8449',
+      bg: '#E8F8F0',
+      badge: 'CUSTOMERS'
+    },
+    {
+      id: 8,
+      title: 'Commission Rates',
+      subtitle: 'Configure merchant tier rates',
+      icon: Percent,
+      color: '#8C6E15',
+      bg: '#FBF4DF',
+      badge: 'REVENUE'
+    },
+    {
+      id: 15,
+      title: 'Advanced Analytics',
+      subtitle: 'Predictive multi-grain forecast',
+      icon: BarChart3,
+      color: '#6B701D',
+      bg: '#EFF3DB',
+      badge: 'INTELLIGENCE'
+    },
+    {
+      id: 1,
+      title: 'Flour Mills & Fleet',
+      subtitle: 'Mill capacity & dispatch riders',
+      icon: Store,
+      color: '#2A2421',
+      bg: '#F3EBE1',
+      badge: 'OPERATIONS'
+    },
+  ];
+
   return (
     <div className="dashboard-page">
       {/* Hero Banner Header */}
       <div
         style={{
-          backgroundColor: 'var(--surface-warm)',
+          backgroundColor: '#F3EBE1',
           borderRadius: 20,
           padding: '24px 28px',
           marginBottom: 28,
           display: 'flex',
           justify: 'space-between',
           alignItems: 'center',
-          border: '1px solid var(--border-light)',
+          border: '1px solid #ECE4D9',
+          boxShadow: '0 4px 16px rgba(140, 74, 62, 0.05)'
         }}
       >
         <div>
-          <h1 className="serif-heading" style={{ fontSize: '1.7rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-            Welcome back, Artisan Mill Co. 👋
+          <h1 className="serif-heading" style={{ fontSize: '1.8rem', fontWeight: 800, color: '#2A2421' }}>
+            Welcome back to HerDoor Portal 👋
           </h1>
-          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: 4 }}>
-            Live Store Management Dashboard • You have <strong>12 pending order requests</strong> waiting for acceptance today.
+          <p style={{ fontSize: '0.92rem', color: '#756D69', marginTop: 4 }}>
+            Super Admin Platform Console • Monitoring <strong>48 active flour mills</strong> & <strong>12 new order requests</strong> today.
           </p>
         </div>
-        <button className="btn-primary" onClick={() => onNavigateTab(1)}>
-          <span>Open Order Control Center</span>
+        <button
+          className="btn-primary"
+          onClick={() => onNavigateTab(5)}
+          style={{ backgroundColor: '#8C4A3E', background: 'linear-gradient(135deg, #8C4A3E, #6E372D)' }}
+        >
+          <span>View Orders Console</span>
           <ChevronRight size={18} />
         </button>
       </div>
 
-      {/* Top Banner Stats Grid (4 Widescreen Columns) */}
+      {/* Quick Access Shortcuts Grid (Requested by User) */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Sparkles size={20} color="#8C4A3E" />
+            <h2 className="serif-heading" style={{ fontSize: '1.35rem', fontWeight: 800, color: '#2A2421' }}>
+              Quick Access Console & Gift Shortcuts
+            </h2>
+          </div>
+          <span style={{ fontSize: '0.8rem', color: '#756D69', fontWeight: 600 }}>1-Click Platform Launcher</span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+          {quickAccessActions.map((qa) => {
+            const IconComp = qa.icon;
+            return (
+              <div
+                key={qa.id}
+                onClick={() => onNavigateTab(qa.id)}
+                style={{
+                  backgroundColor: 'white',
+                  borderRadius: 18,
+                  border: '1px solid #ECE4D9',
+                  padding: '18px 20px',
+                  cursor: 'pointer',
+                  transition: 'all 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+                  boxShadow: '0 4px 16px rgba(140, 74, 62, 0.04)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justify: 'space-between',
+                }}
+                className="quick-access-tile"
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <div
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 14,
+                      backgroundColor: qa.bg,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justify: 'center',
+                      color: qa.color,
+                    }}
+                  >
+                    <IconComp size={22} />
+                  </div>
+                  <div>
+                    <span
+                      style={{
+                        fontSize: '0.65rem',
+                        fontWeight: 800,
+                        color: qa.color,
+                        letterSpacing: 0.5,
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {qa.badge}
+                    </span>
+                    <div style={{ fontWeight: 800, fontSize: '0.98rem', color: '#2A2421' }}>{qa.title}</div>
+                    <div style={{ fontSize: '0.78rem', color: '#756D69' }}>{qa.subtitle}</div>
+                  </div>
+                </div>
+                <ArrowRight size={16} color="#A59D96" />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Top Banner Stats Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20, marginBottom: 28 }}>
-        {/* Shop Status Card */}
+        {/* Operating Status Card */}
         <div className="card shop-status-card">
           <div className="status-header">
             <div>
-              <div className="status-title">Shop Operating Status</div>
+              <div className="status-title">Platform Gateway Status</div>
               <div className="status-indicator" style={{ marginTop: 4 }}>
                 <span className={shopStatus ? 'green-dot' : 'grey-dot'}></span>
-                <span>{shopStatus ? 'Accepting Orders' : 'Shop Closed'}</span>
+                <span>{shopStatus ? 'System Operational' : 'Maintenance Mode'}</span>
               </div>
             </div>
 
@@ -64,80 +212,80 @@ export default function DashboardPage({
 
           <div className="hours-box">
             <div className="clock-icon-bg">
-              <Clock size={18} />
+              <Clock size={18} color="#6E5616" />
             </div>
             <div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Today's Hours</div>
-              <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                8:00 AM - 6:00 PM
+              <div style={{ fontSize: '0.7rem', color: '#756D69' }}>Console Hours</div>
+              <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#2A2421' }}>
+                24/7 Real-Time Sync
               </div>
             </div>
           </div>
         </div>
 
-        {/* New Orders Stats Widget */}
+        {/* New Orders Widget */}
         <div className="card new-orders-card">
           <div className="stats-top">
             <div className="pink-icon-bg">
-              <ShieldCheck size={22} />
+              <ShieldCheck size={22} color="white" />
             </div>
-            <span className="badge-tag">+3 New</span>
+            <span className="badge-tag" style={{ backgroundColor: '#FFECEB', color: '#8C4A3E' }}>+3 New</span>
           </div>
 
           <div>
-            <div className="stat-number">12</div>
-            <div className="stat-label">New Orders Waiting</div>
+            <div className="stat-number" style={{ color: '#2A2421' }}>12</div>
+            <div className="stat-label">Pending Milling Requests</div>
           </div>
         </div>
 
-        {/* Today's Sales Revenue */}
+        {/* Today's Platform Revenue */}
         <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Today's Sales</span>
+            <span style={{ fontSize: '0.85rem', color: '#756D69', fontWeight: 600 }}>Today's Revenue</span>
             <span style={{ backgroundColor: '#E8F8F0', color: '#1E8449', fontSize: '0.75rem', fontWeight: 800, padding: '4px 10px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <ArrowUpRight size={14} />
               +18.4%
             </span>
           </div>
           <div>
-            <div style={{ fontSize: '2.4rem', fontWeight: 800, fontFamily: 'Playfair Display, serif' }}>$482.50</div>
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>24 Orders Processed</div>
+            <div className="serif-heading" style={{ fontSize: '2.2rem', fontWeight: 800, color: '#8C4A3E' }}>₹42,850</div>
+            <div style={{ fontSize: '0.85rem', color: '#756D69' }}>24 Orders Fulfilled</div>
           </div>
         </div>
 
-        {/* Delivery Partner Status Card */}
+        {/* Active Dispatch Fleet */}
         <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Dispatch Partners</span>
-            <span style={{ backgroundColor: 'var(--surface-cream)', color: 'var(--mustard-dark)', fontSize: '0.75rem', fontWeight: 800, padding: '4px 10px', borderRadius: 12 }}>
-              4 Online
+            <span style={{ fontSize: '0.85rem', color: '#756D69', fontWeight: 600 }}>Delivery Fleet</span>
+            <span style={{ backgroundColor: '#EFE6D2', color: '#6E5616', fontSize: '0.75rem', fontWeight: 800, padding: '4px 10px', borderRadius: 12 }}>
+              14 Online
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
-            <div style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: 'var(--soft-pink)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-terracotta)' }}>
+            <div style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: '#FFECEB', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8C4A3E' }}>
               <Truck size={22} />
             </div>
             <div>
-              <div style={{ fontWeight: 800, fontSize: '1rem' }}>Bin Pickup Active</div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Bin A-1 to Bin A-8</div>
+              <div style={{ fontWeight: 800, fontSize: '1rem', color: '#2A2421' }}>Express Delivery Active</div>
+              <div style={{ fontSize: '0.8rem', color: '#756D69' }}>Bins A-1 to Bin A-8</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Desktop Web Operations Data Table */}
+      {/* Active Processing Queue & Orders Table */}
       <div className="table-card-container">
         <div className="desktop-table-header">
           <div>
             <h2 className="serif-heading" style={{ fontSize: '1.35rem', fontWeight: 800 }}>
               Active Processing Queue & Orders
             </h2>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 2 }}>
+            <div style={{ fontSize: '0.8rem', color: '#756D69', marginTop: 2 }}>
               Real-time milling & delivery status control table.
             </div>
           </div>
-          <button className="btn-outline" onClick={() => onNavigateTab(1)}>
-            <span>View Full Control Center</span>
+          <button className="btn-outline" onClick={() => onNavigateTab(5)}>
+            <span>View Orders Console</span>
             <ChevronRight size={16} />
           </button>
         </div>
@@ -156,12 +304,12 @@ export default function DashboardPage({
           <tbody>
             {orders.map((ord) => (
               <tr key={ord.id}>
-                <td style={{ fontWeight: 800, fontFamily: 'Playfair Display, serif', fontSize: '1.05rem', color: 'var(--primary-terracotta)' }}>
+                <td style={{ fontWeight: 800, fontFamily: 'Playfair Display, serif', fontSize: '1.05rem', color: '#8C4A3E' }}>
                   {ord.id}
                 </td>
                 <td>
                   <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>{ord.customerName}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Bin: {ord.binLocation || 'Bin A-4'}</div>
+                  <div style={{ fontSize: '0.75rem', color: '#756D69' }}>Bin: {ord.binLocation || 'Bin A-4'}</div>
                 </td>
                 <td>
                   <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{ord.itemsSummary}</div>
@@ -177,7 +325,7 @@ export default function DashboardPage({
                     {ord.statusTag}
                   </span>
                 </td>
-                <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                <td style={{ fontSize: '0.85rem', color: '#756D69' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <Clock size={14} />
                     <span>{ord.timeAgo}</span>
@@ -208,7 +356,7 @@ export default function DashboardPage({
             <h2 className="serif-heading" style={{ fontSize: '1.35rem', fontWeight: 800 }}>
               Incoming Customer Requests
             </h2>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 2 }}>
+            <div style={{ fontSize: '0.8rem', color: '#756D69', marginTop: 2 }}>
               Customer custom grain milling & order inquiries.
             </div>
           </div>
@@ -228,7 +376,7 @@ export default function DashboardPage({
           <tbody>
             {pendingRequests.map((req) => (
               <tr key={req.id}>
-                <td style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{req.id}</td>
+                <td style={{ fontWeight: 800, fontSize: '0.9rem', color: '#756D69' }}>{req.id}</td>
                 <td style={{ fontWeight: 800, fontFamily: 'Playfair Display, serif', fontSize: '1.05rem' }}>
                   {req.customerName}
                 </td>
