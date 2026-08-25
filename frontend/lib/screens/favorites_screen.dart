@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import '../models/app_models.dart';
+import '../services/customer_api_service.dart';
 import 'mill_detail_screen.dart';
 import 'profile_screen.dart';
 
@@ -20,9 +21,29 @@ class FavoritesScreen extends StatefulWidget {
 }
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
+  bool _isLoading = false;
+  List<FlourMill>? _favorites;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchFavorites();
+  }
+
+  Future<void> _fetchFavorites() async {
+    if (mounted) setState(() => _isLoading = true);
+    final favs = await CustomerApiService.instance.getFavorites();
+    if (mounted) {
+      setState(() {
+        _favorites = favs ?? MockData.mills.where((m) => MockData.favoriteMillIds.contains(m.id)).toList();
+        _isLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final favMills = MockData.mills.where((m) => MockData.favoriteMillIds.contains(m.id)).toList();
+    final favMills = _favorites ?? MockData.mills.where((m) => MockData.favoriteMillIds.contains(m.id)).toList();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -74,39 +95,48 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           ),
         ],
       ),
-      body: favMills.isEmpty
-          ? _buildEmptyState()
-          : SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Saved Flour Mills',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
+      body: RefreshIndicator(
+        onRefresh: _fetchFavorites,
+        color: AppTheme.primaryTerracotta,
+        child: _isLoading && _favorites == null
+            ? const Center(
+                child: CircularProgressIndicator(color: AppTheme.primaryTerracotta),
+              )
+            : favMills.isEmpty
+                ? _buildEmptyState()
+                : SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Saved Flour Mills',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ),
+                            Text(
+                              '${favMills.length} saved',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      Text(
-                        '${favMills.length} saved',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                    ],
+                        const SizedBox(height: 16),
+                        ...favMills.map((mill) => _buildMillCard(mill)),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  ...favMills.map((mill) => _buildMillCard(mill)),
-                ],
-              ),
-            ),
+      ),
     );
   }
 
@@ -147,10 +177,37 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                 top: 10,
                 right: 10,
                 child: GestureDetector(
-                  onTap: () {
+                  onTap: () async {
+                    final millId = mill.id;
                     setState(() {
-                      MockData.toggleFavorite(mill.id);
+                      _favorites?.removeWhere((m) => m.id == millId);
+                      MockData.toggleFavorite(millId);
                     });
+
+                    await CustomerApiService.instance.removeFavorite(millId);
+
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '${mill.name} removed from favorites',
+                          style: GoogleFonts.plusJakartaSans(),
+                        ),
+                        action: SnackBarAction(
+                          label: 'Undo',
+                          textColor: AppTheme.mustardGold,
+                          onPressed: () async {
+                            setState(() {
+                              _favorites?.add(mill);
+                              MockData.toggleFavorite(millId);
+                            });
+                            await CustomerApiService.instance.addFavorite(millId);
+                          },
+                        ),
+                        duration: const Duration(seconds: 3),
+                      ),
+                    );
                   },
                   child: Container(
                     padding: const EdgeInsets.all(8),

@@ -443,8 +443,8 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
               children: [
                 Text(
                   'Active Orders',
-                  style: GoogleFonts.playfairDisplay(
-                    fontSize: 22,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: AppTheme.textPrimary,
                   ),
@@ -541,8 +541,8 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                         children: [
                           Text(
                             'Order ${order.orderId}',
-                            style: GoogleFonts.playfairDisplay(
-                              fontSize: 17,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 16,
                               fontWeight: FontWeight.bold,
                               color: AppTheme.textPrimary,
                             ),

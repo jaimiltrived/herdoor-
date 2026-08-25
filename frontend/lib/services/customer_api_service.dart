@@ -136,11 +136,16 @@ class CustomerApiService {
   /// Place New Order on Backend
   Future<MerchantOrder?> placeOrder({
     required int millId,
-    required String grainTypeName,
-    required double quantityKg,
+    String? grainTypeName,
+    double? quantityKg,
+    List<Map<String, dynamic>>? items,
     String serviceType = 'GRINDING',
     String fulfillmentType = 'DELIVERY',
     double totalAmount = 105.0,
+    double pickupFee = 0.0,
+    double deliveryFee = 2.0,
+    String paymentMethod = 'UPI',
+    String? address,
   }) async {
     await ensureAuthenticated();
     try {
@@ -149,12 +154,16 @@ class CustomerApiService {
         headers: _headers,
         body: jsonEncode({
           'millId': millId,
-          'grainTypeName': grainTypeName,
-          'quantityKg': quantityKg,
+          'items': items,
+          'grainTypeName': grainTypeName ?? (items?.isNotEmpty == true ? items![0]['name'] : 'Wheat'),
+          'quantityKg': quantityKg ?? (items != null && items.isNotEmpty ? items.fold<double>(0.0, (s, i) => s + (i['quantity'] as num).toDouble()) : 1.0),
           'serviceType': serviceType,
           'fulfillmentType': fulfillmentType,
           'addressId': 25,
-          'paymentMethod': 'UPI',
+          'deliveryAddress': address ?? '456 Heritage Block, District 9, NY',
+          'pickupFee': pickupFee,
+          'deliveryFee': deliveryFee,
+          'paymentMethod': paymentMethod,
           'totalAmount': totalAmount,
         }),
       );
@@ -218,4 +227,102 @@ class CustomerApiService {
     }
     return null;
   }
+
+  /// Get Mill Readymade Products from Database
+  Future<List<Map<String, dynamic>>?> getMillProducts(int millId) async {
+    await ensureAuthenticated();
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/mills/$millId/products'),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        final list = body['data']?['products'] as List?;
+        if (list != null) {
+          return list.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+        }
+      }
+    } catch (e) {
+      debugPrint('Get Mill Products Error: $e');
+    }
+    return null;
+  }
+
+  /// Get Mill Custom Grains from Database
+  Future<List<Map<String, dynamic>>?> getMillGrains(int millId) async {
+    await ensureAuthenticated();
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/mills/$millId/grains'),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        final list = body['data']?['grains'] as List?;
+        if (list != null) {
+          return list.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+        }
+      }
+    } catch (e) {
+      debugPrint('Get Mill Grains Error: $e');
+    }
+    return null;
+  }
+
+  /// Get Saved / Favorite Mills
+  Future<List<FlourMill>?> getFavorites() async {
+    await ensureAuthenticated();
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/me/favorites'),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        final list = body['data']?['favorites'] as List?;
+        if (list != null) {
+          return list.map((json) => FlourMill.fromJson(json as Map<String, dynamic>)).toList();
+        }
+      }
+    } catch (e) {
+      debugPrint('Get Favorites Error: $e');
+    }
+    return null;
+  }
+
+  /// Add Mill to Favorites
+  Future<bool> addFavorite(String millId) async {
+    await ensureAuthenticated();
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/users/me/favorites/$millId'),
+        headers: _headers,
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      debugPrint('Add Favorite Error: $e');
+    }
+    return false;
+  }
+
+  /// Remove Mill from Favorites
+  Future<bool> removeFavorite(String millId) async {
+    await ensureAuthenticated();
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/users/me/favorites/$millId'),
+        headers: _headers,
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Remove Favorite Error: $e');
+    }
+    return false;
+  }
 }
+
+

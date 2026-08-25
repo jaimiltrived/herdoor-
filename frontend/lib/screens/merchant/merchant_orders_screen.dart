@@ -237,8 +237,8 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                           children: [
                             Text(
                               'Decline Order ${order.orderId}',
-                              style: GoogleFonts.playfairDisplay(
-                                fontSize: 18,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 16,
                                 fontWeight: FontWeight.bold,
                                 color: AppTheme.textPrimary,
                               ),
@@ -526,8 +526,8 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
           children: [
             Text(
               'Order Management',
-              style: GoogleFonts.playfairDisplay(
-                fontSize: 24,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.textPrimary,
               ),
@@ -848,8 +848,8 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                   const SizedBox(height: 8),
                   Text(
                     order.customerName,
-                    style: GoogleFonts.playfairDisplay(
-                      fontSize: 20,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: AppTheme.textPrimary,
                     ),
@@ -1158,8 +1158,8 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
             children: [
               Text(
                 'Set Completion Time',
-                style: GoogleFonts.playfairDisplay(
-                  fontSize: 20,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimary,
                 ),

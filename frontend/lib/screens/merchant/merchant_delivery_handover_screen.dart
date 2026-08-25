@@ -92,8 +92,8 @@ class _MerchantDeliveryHandoverScreenState extends State<MerchantDeliveryHandove
                           children: [
                             Text(
                               'Decline Handover ${widget.order.orderId}',
-                              style: GoogleFonts.playfairDisplay(
-                                fontSize: 18,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 16,
                                 fontWeight: FontWeight.bold,
                                 color: AppTheme.textPrimary,
                               ),
@@ -400,8 +400,8 @@ class _MerchantDeliveryHandoverScreenState extends State<MerchantDeliveryHandove
         ),
         title: Text(
           'Delivery Handover ${widget.order.orderId}',
-          style: GoogleFonts.playfairDisplay(
-            fontSize: 20,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 18,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
           ),
@@ -416,8 +416,8 @@ class _MerchantDeliveryHandoverScreenState extends State<MerchantDeliveryHandove
             children: [
               Text(
                 'Handover & User Approval',
-                style: GoogleFonts.playfairDisplay(
-                  fontSize: 24,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimary,
                 ),
@@ -492,7 +492,7 @@ class _MerchantDeliveryHandoverScreenState extends State<MerchantDeliveryHandove
                           const SizedBox(height: 4),
                           Text(
                             widget.order.customerName,
-                            style: GoogleFonts.playfairDisplay(
+                            style: GoogleFonts.plusJakartaSans(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: AppTheme.textPrimary,

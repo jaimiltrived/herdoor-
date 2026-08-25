@@ -125,8 +125,8 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
         ),
         title: Text(
           'Ready for Dispatch',
-          style: GoogleFonts.playfairDisplay(
-            fontSize: 20,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 18,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
           ),
@@ -145,8 +145,8 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
               children: [
                 Text(
                   'Live Delivery Handover',
-                  style: GoogleFonts.playfairDisplay(
-                    fontSize: 24,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 22,
                     fontWeight: FontWeight.bold,
                     color: AppTheme.textPrimary,
                   ),
@@ -335,8 +335,8 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
                 const SizedBox(height: 8),
                 Text(
                   order.customerName,
-                  style: GoogleFonts.playfairDisplay(
-                    fontSize: 20,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: AppTheme.textPrimary,
                   ),

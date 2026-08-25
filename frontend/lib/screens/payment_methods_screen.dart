@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
+import '../services/customer_api_service.dart';
 import 'invoice_screen.dart';
 
 class PaymentMethodsScreen extends StatefulWidget {
@@ -16,13 +17,13 @@ class PaymentMethodsScreen extends StatefulWidget {
   const PaymentMethodsScreen({
     super.key,
     this.cartItems = const [],
-    this.millName = 'Artisan Mill Co.',
+    this.millName = 'Shree Ganesh Flour Mill',
     this.subtotal = 0.0,
     this.pickupFee = 0.0,
     this.deliveryFee = 0.0,
     this.total = 0.0,
-    this.pickupTime = '10:00 AM Today',
-    this.address = 'Home',
+    this.pickupTime = 'Within 24 Hours',
+    this.address = '456 Heritage Block, District 9, NY',
   });
 
   @override
@@ -31,6 +32,7 @@ class PaymentMethodsScreen extends StatefulWidget {
 
 class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   int _selectedMethod = 0;
+  bool _isProcessing = false;
 
   final List<Map<String, dynamic>> _methods = [
     {
@@ -200,28 +202,46 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: ElevatedButton(
-            onPressed: () {
-              String paymentStr = _methods[_selectedMethod]['title'] == 'Visa Card'
-                  ? 'Visa Card (•••• 4242)'
-                  : _methods[_selectedMethod]['title'];
+            onPressed: _isProcessing
+                ? null
+                : () async {
+                    final navigator = Navigator.of(context);
+                    setState(() => _isProcessing = true);
+                    String paymentStr = _methods[_selectedMethod]['title'] == 'Visa Card'
+                        ? 'Visa Card (•••• 4242)'
+                        : _methods[_selectedMethod]['title'];
 
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => InvoiceScreen(
-                    cartItems: widget.cartItems,
-                    millName: widget.millName,
-                    subtotal: widget.subtotal,
-                    pickupFee: widget.pickupFee,
-                    deliveryFee: widget.deliveryFee,
-                    total: widget.total,
-                    pickupTime: widget.pickupTime,
-                    address: widget.address,
-                    paymentMethod: paymentStr,
-                  ),
-                ),
-              );
-            },
+                    // Call backend place order endpoint
+                    final placedOrder = await CustomerApiService.instance.placeOrder(
+                      millId: 101,
+                      items: widget.cartItems,
+                      grainTypeName: widget.cartItems.isNotEmpty ? widget.cartItems[0]['name'] : 'Wheat',
+                      totalAmount: widget.total,
+                      pickupFee: widget.pickupFee,
+                      deliveryFee: widget.deliveryFee,
+                      paymentMethod: paymentStr,
+                      address: widget.address,
+                    );
+
+                    if (!mounted) return;
+                    setState(() => _isProcessing = false);
+                    navigator.push(
+                      MaterialPageRoute(
+                        builder: (context) => InvoiceScreen(
+                          orderNumber: placedOrder?.orderId,
+                          cartItems: widget.cartItems,
+                          millName: widget.millName,
+                          subtotal: widget.subtotal,
+                          pickupFee: widget.pickupFee,
+                          deliveryFee: widget.deliveryFee,
+                          total: widget.total,
+                          pickupTime: widget.pickupTime,
+                          address: widget.address,
+                          paymentMethod: paymentStr,
+                        ),
+                      ),
+                    );
+                  },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primaryTerracotta,
               minimumSize: const Size(double.infinity, 54),
@@ -229,14 +249,20 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 borderRadius: BorderRadius.circular(27),
               ),
             ),
-            child: Text(
-              'Pay \$${widget.total.toStringAsFixed(2)}',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
+            child: _isProcessing
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                  )
+                : Text(
+                    'Pay \$${widget.total.toStringAsFixed(2)}',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
           ),
         ),
       ),

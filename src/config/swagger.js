@@ -5,7 +5,7 @@ const swaggerDefinition = {
   info: {
     title: 'HerDoor Flour Mill & Grain Processing REST API',
     version: '1.0.0',
-    description: 'Complete API documentation for Customer App, Shopkeeper Mill Dashboard, and Delivery Application.',
+    description: 'Complete multi-role REST API specification for Customer, Merchant / Mill Owner, Delivery Rider, and Admin Console.',
     contact: {
       name: 'HerDoor API Support',
       email: 'support@herdoor.com'
@@ -28,233 +28,355 @@ const swaggerDefinition = {
     }
   },
   tags: [
-    { name: 'Auth', description: 'Authentication & Session Management' },
-    { name: 'Users', description: 'Customer Profile & Addresses' },
-    { name: 'Mills', description: 'Geospatial Nearby Mill Locator & Details' },
-    { name: 'Grains', description: 'Grain Catalog & Grain Sources' },
-    { name: 'Orders', description: 'Customer Order Management & Tracking' },
-    { name: 'Payments', description: 'Payment Processing & Refunds' },
-    { name: 'Delivery', description: 'Delivery Agent Workflows' },
-    { name: 'Reviews', description: 'Mill Ratings & Reviews' },
-    { name: 'Notifications', description: 'User Alerts & Push Device Tokens' },
-    { name: 'Shopkeeper', description: 'Mill Dashboard, Inventory & State Machine' }
+    { name: '1. Auth', description: 'Authentication, Registration & Profile Session' },
+    { name: '2. Customer App', description: 'Nearby Mills, Custom Milling Orders & Tracking' },
+    { name: '3. Merchant App', description: 'Mill Owner Dashboard, Order Processing State Machine & Inventory' },
+    { name: '4. Delivery Partner App', description: 'Driver Available Trips, Pickup, Live GPS Tracking & Delivery' },
+    { name: '5. Admin Console', description: 'Platform Wide KPIs, Mill Registrations, Fleet & Security Logs' }
   ],
   paths: {
-    // ---------------- AUTH ----------------
+    // ---------------- 1. AUTH ----------------
     '/api/v1/auth/register': {
       post: {
-        tags: ['Auth'],
-        summary: 'Register new user',
+        tags: ['1. Auth'],
+        summary: 'Register new user account (Customer, Merchant, Delivery, Admin)',
         requestBody: {
           required: true,
-          content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string' }, email: { type: 'string' }, phone: { type: 'string' }, password: { type: 'string' }, role: { type: 'string', example: 'CUSTOMER' } } } } }
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string', example: 'Ramesh Patel' },
+                  email: { type: 'string', example: 'ramesh@example.com' },
+                  phone: { type: 'string', example: '+919876543210' },
+                  password: { type: 'string', example: 'Password123!' },
+                  role: { type: 'string', enum: ['CUSTOMER', 'SHOPKEEPER', 'DELIVERY', 'ADMIN'], example: 'CUSTOMER' }
+                }
+              }
+            }
+          }
         },
         responses: { 201: { description: 'Registered successfully' } }
       }
     },
     '/api/v1/auth/login': {
       post: {
-        tags: ['Auth'],
-        summary: 'User login',
+        tags: ['1. Auth'],
+        summary: 'User/Admin Login and JWT Token generation',
         requestBody: {
           required: true,
-          content: { 'application/json': { schema: { type: 'object', properties: { email: { type: 'string' }, phone: { type: 'string' }, password: { type: 'string' } } } } }
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  email: { type: 'string', example: 'ramesh@example.com' },
+                  phone: { type: 'string', example: '+919876543210' },
+                  password: { type: 'string', example: 'Password123!' }
+                }
+              }
+            }
+          }
         },
         responses: { 200: { description: 'Login successful' } }
       }
     },
-    '/api/v1/auth/logout': {
-      post: { tags: ['Auth'], summary: 'User logout', responses: { 200: { description: 'Logged out' } } }
-    },
-    '/api/v1/auth/refresh-token': {
-      post: { tags: ['Auth'], security: [{ BearerAuth: [] }], summary: 'Refresh JWT token', responses: { 200: { description: 'Token refreshed' } } }
-    },
-    '/api/v1/auth/forgot-password': {
-      post: {
-        tags: ['Auth'],
-        summary: 'Request password reset OTP',
-        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { email: { type: 'string' }, phone: { type: 'string' } } } } } },
-        responses: { 200: { description: 'OTP sent' } }
-      }
-    },
-    '/api/v1/auth/reset-password': {
-      post: {
-        tags: ['Auth'],
-        summary: 'Reset password with OTP',
-        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { otp: { type: 'string' }, newPassword: { type: 'string' } } } } } },
-        responses: { 200: { description: 'Password reset' } }
-      }
-    },
-    '/api/v1/auth/verify-otp': {
-      post: {
-        tags: ['Auth'],
-        summary: 'Verify OTP',
-        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { otp: { type: 'string' } } } } } },
-        responses: { 200: { description: 'OTP verified' } }
-      }
-    },
     '/api/v1/auth/me': {
-      get: { tags: ['Auth'], security: [{ BearerAuth: [] }], summary: 'Get current user profile', responses: { 200: { description: 'User profile data' } } }
-    },
-    '/api/v1/auth/change-password': {
-      put: {
-        tags: ['Auth'],
+      get: {
+        tags: ['1. Auth'],
         security: [{ BearerAuth: [] }],
-        summary: 'Change user password',
-        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { currentPassword: { type: 'string' }, newPassword: { type: 'string' } } } } } },
-        responses: { 200: { description: 'Password changed' } }
+        summary: 'Get currently authenticated user details',
+        responses: { 200: { description: 'Active user profile' } }
       }
     },
 
-    // ---------------- USERS ----------------
-    '/api/v1/users/me': {
-      get: { tags: ['Users'], security: [{ BearerAuth: [] }], summary: 'Get user details', responses: { 200: { description: 'User data' } } },
-      put: { tags: ['Users'], security: [{ BearerAuth: [] }], summary: 'Update profile', responses: { 200: { description: 'Profile updated' } } }
-    },
-    '/api/v1/users/me/addresses': {
-      get: { tags: ['Users'], security: [{ BearerAuth: [] }], summary: 'Get saved addresses', responses: { 200: { description: 'Addresses list' } } },
-      post: {
-        tags: ['Users'],
-        security: [{ BearerAuth: [] }],
-        summary: 'Add saved address',
-        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { addressLine1: { type: 'string' }, city: { type: 'string' }, pincode: { type: 'string' }, latitude: { type: 'number' }, longitude: { type: 'number' } } } } } },
-        responses: { 201: { description: 'Address added' } }
-      }
-    },
-    '/api/v1/users/me/addresses/{id}': {
-      put: { tags: ['Users'], security: [{ BearerAuth: [] }], summary: 'Update address', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Address updated' } } },
-      delete: { tags: ['Users'], security: [{ BearerAuth: [] }], summary: 'Delete address', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Address deleted' } } }
-    },
-    '/api/v1/users/me/addresses/{id}/default': {
-      put: { tags: ['Users'], security: [{ BearerAuth: [] }], summary: 'Set default address', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Default address set' } } }
-    },
-
-    // ---------------- MILLS ----------------
+    // ---------------- 2. CUSTOMER APP ----------------
     '/api/v1/mills/nearby': {
       get: {
-        tags: ['Mills'],
-        summary: 'Geospatial nearby mill locator',
+        tags: ['2. Customer App'],
+        summary: 'Geospatial nearby flour mills discovery',
         parameters: [
           { name: 'latitude', in: 'query', required: true, schema: { type: 'number', example: 23.0225 } },
           { name: 'longitude', in: 'query', required: true, schema: { type: 'number', example: 72.5714 } },
-          { name: 'radius', in: 'query', schema: { type: 'number', example: 5 } }
+          { name: 'radius', in: 'query', schema: { type: 'number', example: 10 } }
         ],
         responses: { 200: { description: 'Nearby mills list sorted by distance' } }
       }
     },
-    '/api/v1/mills': {
-      get: { tags: ['Mills'], summary: 'Search and filter mills', parameters: [{ name: 'search', in: 'query', schema: { type: 'string' } }, { name: 'isOpen', in: 'query', schema: { type: 'boolean' } }], responses: { 200: { description: 'Mills list' } } }
-    },
-    '/api/v1/mills/{millId}': {
-      get: { tags: ['Mills'], summary: 'Get mill details', parameters: [{ name: 'millId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Mill details' } } }
-    },
-    '/api/v1/mills/{millId}/services': {
-      get: { tags: ['Mills'], summary: 'Get mill services', parameters: [{ name: 'millId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Mill services list' } } }
-    },
-    '/api/v1/mills/{millId}/grains': {
-      get: { tags: ['Mills'], summary: 'Get mill available grains', parameters: [{ name: 'millId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Mill grains list' } } }
-    },
-    '/api/v1/mills/{millId}/availability': {
-      get: { tags: ['Mills'], summary: 'Get mill availability state', parameters: [{ name: 'millId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Availability details' } } }
-    },
-    '/api/v1/mills/{millId}/ratings': {
-      get: { tags: ['Mills'], summary: 'Get mill ratings & reviews', parameters: [{ name: 'millId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Ratings and reviews' } } }
-    },
-
-    // ---------------- GRAINS ----------------
-    '/api/v1/grain-sources': {
-      get: { tags: ['Grains'], summary: 'Get grain sources list', responses: { 200: { description: 'Grain sources list' } } }
-    },
     '/api/v1/grain-types': {
-      get: { tags: ['Grains'], summary: 'Get grain types catalog', responses: { 200: { description: 'Grain types list' } } }
+      get: {
+        tags: ['2. Customer App'],
+        summary: 'List available grain types and grinding fees',
+        responses: { 200: { description: 'Grain types list' } }
+      }
     },
-
-    // ---------------- ORDERS ----------------
     '/api/v1/orders': {
       post: {
-        tags: ['Orders'],
+        tags: ['2. Customer App'],
         security: [{ BearerAuth: [] }],
-        summary: 'Place order',
-        requestBody: { content: { 'application/json': { schema: { type: 'object', required: ['millId', 'grainTypeId', 'quantityKg'], properties: { millId: { type: 'integer', example: 101 }, grainSource: { type: 'string', example: 'CUSTOMER' }, grainTypeId: { type: 'integer', example: 1 }, quantityKg: { type: 'number', example: 10 }, serviceType: { type: 'string', example: 'GRINDING' }, fulfillmentType: { type: 'string', example: 'DELIVERY' }, addressId: { type: 'integer', example: 25 }, paymentMethod: { type: 'string', example: 'UPI' } } } } } },
-        responses: { 201: { description: 'Order created' } }
+        summary: 'Place customized grain milling / flour order',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['millId', 'grainTypeId', 'quantityKg'],
+                properties: {
+                  millId: { type: 'integer', example: 101 },
+                  grainSource: { type: 'string', enum: ['CUSTOMER', 'MILL', 'VENDOR'], example: 'CUSTOMER' },
+                  grainTypeId: { type: 'integer', example: 1 },
+                  quantityKg: { type: 'number', example: 10 },
+                  serviceType: { type: 'string', example: 'GRINDING' },
+                  fulfillmentType: { type: 'string', enum: ['DELIVERY', 'PICKUP'], example: 'DELIVERY' },
+                  addressId: { type: 'integer', example: 25 },
+                  paymentMethod: { type: 'string', example: 'UPI' }
+                }
+              }
+            }
+          }
+        },
+        responses: { 201: { description: 'Order placed successfully' } }
       },
-      get: { tags: ['Orders'], security: [{ BearerAuth: [] }], summary: 'Get customer orders list', responses: { 200: { description: 'Orders list' } } }
+      get: {
+        tags: ['2. Customer App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Get customer orders list with status filtering',
+        responses: { 200: { description: 'Orders list' } }
+      }
     },
-    '/api/v1/orders/active': {
-      get: { tags: ['Orders'], security: [{ BearerAuth: [] }], summary: 'Get active processing orders', responses: { 200: { description: 'Active orders' } } }
-    },
-    '/api/v1/orders/history': {
-      get: { tags: ['Orders'], security: [{ BearerAuth: [] }], summary: 'Get completed order history', responses: { 200: { description: 'Completed orders' } } }
-    },
-    '/api/v1/orders/{orderId}': {
-      get: { tags: ['Orders'], security: [{ BearerAuth: [] }], summary: 'Get order details', parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Order details' } } }
-    },
-    '/api/v1/orders/{orderId}/timeline': {
-      get: { tags: ['Orders'], security: [{ BearerAuth: [] }], summary: 'Get order status timeline', parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Order timeline' } } }
+    '/api/v1/orders/{orderId}/tracking': {
+      get: {
+        tags: ['2. Customer App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Live real-time order tracking & delivery location',
+        parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Live tracking timeline' } }
+      }
     },
     '/api/v1/orders/{orderId}/cancel': {
-      post: { tags: ['Orders'], security: [{ BearerAuth: [] }], summary: 'Cancel order', parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Order cancelled' } } }
+      post: {
+        tags: ['2. Customer App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Cancel order before processing/packing',
+        parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { reason: { type: 'string' } } } } } },
+        responses: { 200: { description: 'Order cancelled' } }
+      }
     },
-    '/api/v1/orders/{orderId}/repeat': {
-      post: { tags: ['Orders'], security: [{ BearerAuth: [] }], summary: 'Repeat previous order', parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 201: { description: 'New repeated order created' } } }
-    },
-
-    // ---------------- PAYMENTS ----------------
-    '/api/v1/payments/create': {
-      post: { tags: ['Payments'], security: [{ BearerAuth: [] }], summary: 'Create payment', responses: { 201: { description: 'Payment created' } } }
-    },
-    '/api/v1/payments/verify': {
-      post: { tags: ['Payments'], security: [{ BearerAuth: [] }], summary: 'Verify payment', responses: { 200: { description: 'Payment verified' } } }
-    },
-
-    // ---------------- DELIVERY ----------------
-    '/api/v1/delivery/auth/login': {
-      post: { tags: ['Delivery'], summary: 'Delivery agent login', responses: { 200: { description: 'Delivery agent authenticated' } } }
-    },
-    '/api/v1/delivery/orders': {
-      get: { tags: ['Delivery'], security: [{ BearerAuth: [] }], summary: 'Get delivery orders', responses: { 200: { description: 'Deliveries list' } } }
-    },
-    '/api/v1/delivery/orders/{orderId}/accept': {
-      post: { tags: ['Delivery'], security: [{ BearerAuth: [] }], summary: 'Accept delivery task', parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Delivery accepted' } } }
-    },
-    '/api/v1/delivery/orders/{orderId}/delivered': {
-      post: { tags: ['Delivery'], security: [{ BearerAuth: [] }], summary: 'Mark order delivered', parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Order delivered' } } }
-    },
-
-    // ---------------- REVIEWS ----------------
     '/api/v1/orders/{orderId}/review': {
-      post: { tags: ['Reviews'], security: [{ BearerAuth: [] }], summary: 'Submit review', parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 201: { description: 'Review submitted' } } }
+      post: {
+        tags: ['2. Customer App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Submit 5-star rating & review for completed order',
+        parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { rating: { type: 'integer', example: 5 }, review: { type: 'string', example: 'Fresh and fine!' } } } } } },
+        responses: { 201: { description: 'Review posted' } }
+      }
     },
 
-    // ---------------- NOTIFICATIONS ----------------
-    '/api/v1/notifications': {
-      get: { tags: ['Notifications'], security: [{ BearerAuth: [] }], summary: 'Get notifications', responses: { 200: { description: 'Notifications list' } } }
-    },
-    '/api/v1/devices/register': {
-      post: { tags: ['Notifications'], security: [{ BearerAuth: [] }], summary: 'Register FCM device token', responses: { 201: { description: 'Device token registered' } } }
-    },
-
-    // ---------------- SHOPKEEPER ----------------
+    // ---------------- 3. MERCHANT APP ----------------
     '/api/v1/shopkeeper/dashboard': {
-      get: { tags: ['Shopkeeper'], security: [{ BearerAuth: [] }], summary: 'Get shopkeeper dashboard metrics', responses: { 200: { description: 'Dashboard metrics' } } }
+      get: {
+        tags: ['3. Merchant App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Merchant real-time dashboard KPIs, queue counts, and daily revenue',
+        responses: { 200: { description: 'Dashboard metrics' } }
+      }
+    },
+    '/api/v1/shopkeeper/orders/pending': {
+      get: {
+        tags: ['3. Merchant App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Incoming pending order requests queue',
+        responses: { 200: { description: 'Pending orders list' } }
+      }
     },
     '/api/v1/shopkeeper/orders/{orderId}/accept': {
-      post: { tags: ['Shopkeeper'], security: [{ BearerAuth: [] }], summary: 'Accept order & set completion ETA', parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Order accepted' } } }
+      post: {
+        tags: ['3. Merchant App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Accept order and set estimated completion time (ETA)',
+        parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { estimatedCompletionMinutes: { type: 'integer', example: 30 } } } } } },
+        responses: { 200: { description: 'Order accepted' } }
+      }
     },
     '/api/v1/shopkeeper/orders/{orderId}/start': {
-      post: { tags: ['Shopkeeper'], security: [{ BearerAuth: [] }], summary: 'Start grinding processing', parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Processing started' } } }
+      post: {
+        tags: ['3. Merchant App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Start grinding / milling process',
+        parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Milling started' } }
+      }
+    },
+    '/api/v1/shopkeeper/orders/{orderId}/packing': {
+      post: {
+        tags: ['3. Merchant App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Start flour packing & packaging',
+        parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Packing started' } }
+      }
     },
     '/api/v1/shopkeeper/orders/{orderId}/ready': {
-      post: { tags: ['Shopkeeper'], security: [{ BearerAuth: [] }], summary: 'Mark order ready', parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Order ready' } } }
+      post: {
+        tags: ['3. Merchant App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Mark order ready for customer pickup / driver dispatch',
+        parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Order ready' } }
+      }
+    },
+    '/api/v1/shopkeeper/orders/{orderId}/handover': {
+      post: {
+        tags: ['3. Merchant App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Handover order to delivery driver with PIN verification',
+        parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { pin: { type: 'string', example: '4821' } } } } } },
+        responses: { 200: { description: 'Order handed over' } }
+      }
     },
     '/api/v1/shopkeeper/inventory': {
-      get: { tags: ['Shopkeeper'], security: [{ BearerAuth: [] }], summary: 'Get mill inventory items', responses: { 200: { description: 'Inventory list' } } }
-    },
-    '/api/v1/shopkeeper/inventory/{id}/stock-in': {
-      post: { tags: ['Shopkeeper'], security: [{ BearerAuth: [] }], summary: 'Add stock (stock-in)', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Stock updated' } } }
+      get: {
+        tags: ['3. Merchant App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Get flour & grain stock inventory',
+        responses: { 200: { description: 'Inventory items' } }
+      },
+      post: {
+        tags: ['3. Merchant App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Add new inventory product',
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string' }, productType: { type: 'string' }, stockKg: { type: 'number' }, pricePerKg: { type: 'number' } } } } } },
+        responses: { 201: { description: 'Item created' } }
+      }
     },
     '/api/v1/shopkeeper/availability': {
-      put: { tags: ['Shopkeeper'], security: [{ BearerAuth: [] }], summary: 'Toggle mill open/close availability', responses: { 200: { description: 'Availability updated' } } }
+      put: {
+        tags: ['3. Merchant App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Toggle mill open/close operational availability',
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { isOpen: { type: 'boolean', example: true } } } } } },
+        responses: { 200: { description: 'Availability updated' } }
+      }
+    },
+
+    // ---------------- 4. DELIVERY PARTNER APP ----------------
+    '/api/v1/delivery/auth/login': {
+      post: {
+        tags: ['4. Delivery Partner App'],
+        summary: 'Delivery partner / rider login',
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { email: { type: 'string', example: 'delivery@herdoor.com' }, password: { type: 'string', example: 'Password123!' } } } } } },
+        responses: { 200: { description: 'Rider authenticated' } }
+      }
+    },
+    '/api/v1/delivery/available-trips': {
+      get: {
+        tags: ['4. Delivery Partner App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'List available trips ready for driver pickup',
+        responses: { 200: { description: 'Available trips queue' } }
+      }
+    },
+    '/api/v1/delivery/orders/{orderId}/accept': {
+      post: {
+        tags: ['4. Delivery Partner App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Accept delivery trip task',
+        parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Trip assigned to rider' } }
+      }
+    },
+    '/api/v1/delivery/orders/{orderId}/pickup': {
+      post: {
+        tags: ['4. Delivery Partner App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Confirm pickup from mill with verification PIN',
+        parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { pin: { type: 'string', example: '4821' } } } } } },
+        responses: { 200: { description: 'Picked up from mill' } }
+      }
+    },
+    '/api/v1/delivery/orders/{orderId}/location': {
+      post: {
+        tags: ['4. Delivery Partner App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Stream live GPS location coordinates',
+        parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { latitude: { type: 'number', example: 23.0245 }, longitude: { type: 'number', example: 72.5708 } } } } } },
+        responses: { 200: { description: 'Location updated' } }
+      }
+    },
+    '/api/v1/delivery/orders/{orderId}/deliver': {
+      post: {
+        tags: ['4. Delivery Partner App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Complete delivery to customer with delivery OTP',
+        parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { otp: { type: 'string', example: '7391' } } } } } },
+        responses: { 200: { description: 'Delivery completed' } }
+      }
+    },
+    '/api/v1/delivery/earnings': {
+      get: {
+        tags: ['4. Delivery Partner App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Get rider daily and weekly earnings payout summary',
+        responses: { 200: { description: 'Earnings breakdown' } }
+      }
+    },
+
+    // ---------------- 5. ADMIN CONSOLE ----------------
+    '/api/v1/admin/dashboard': {
+      get: {
+        tags: ['5. Admin Console'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Platform-wide operational analytics & KPIs',
+        responses: { 200: { description: 'Platform metrics' } }
+      }
+    },
+    '/api/v1/admin/mills': {
+      get: {
+        tags: ['5. Admin Console'],
+        security: [{ BearerAuth: [] }],
+        summary: 'List all registered flour mills',
+        responses: { 200: { description: 'Mills master list' } }
+      },
+      post: {
+        tags: ['5. Admin Console'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Register new flour mill on platform',
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string' }, address: { type: 'string' }, phone: { type: 'string' } } } } } },
+        responses: { 201: { description: 'Mill registered' } }
+      }
+    },
+    '/api/v1/admin/riders': {
+      get: {
+        tags: ['5. Admin Console'],
+        security: [{ BearerAuth: [] }],
+        summary: 'List active delivery fleet partners',
+        responses: { 200: { description: 'Riders fleet list' } }
+      }
+    },
+    '/api/v1/admin/wholesalers': {
+      get: {
+        tags: ['5. Admin Console'],
+        security: [{ BearerAuth: [] }],
+        summary: 'List wholesale grain depots & stock tonnage',
+        responses: { 200: { description: 'Wholesalers list' } }
+      }
+    },
+    '/api/v1/admin/security': {
+      get: {
+        tags: ['5. Admin Console'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Platform security logs & access audits',
+        responses: { 200: { description: 'Security audit logs' } }
+      }
     }
   }
 };

@@ -1,59 +1,77 @@
 const store = require('../store/dataStore');
+const { query } = require('../config/database');
 const { ORDER_STATUS, FULFILLMENT_TYPES } = require('../constants/enums');
 
-exports.createOrder = (req, res) => {
+exports.createOrder = async (req, res) => {
   const {
     millId,
+    items,
     grainSource,
     grainTypeId,
+    grainTypeName,
     quantityKg,
     serviceType = 'GRINDING',
     fulfillmentType = FULFILLMENT_TYPES.DELIVERY,
     addressId,
-    paymentMethod = 'UPI'
+    paymentMethod = 'UPI',
+    totalAmount: passedTotal,
+    pickupFee = 0,
+    deliveryFee = 2.0
   } = req.body;
 
-  if (!millId || !grainTypeId || !quantityKg) {
-    return res.status(400).json({
-      status: 'error',
-      message: 'millId, grainTypeId, and quantityKg are required'
-    });
-  }
+  const mill = store.mills.find(m => m.id === parseInt(millId || 101)) || store.mills[0];
 
-  const mill = store.mills.find(m => m.id === parseInt(millId));
-  if (!mill) {
-    return res.status(404).json({ status: 'error', message: 'Mill not found' });
-  }
+  let resolvedGrainName = grainTypeName || 'Wheat (Gehun)';
+  let resolvedQuantity = quantityKg ? parseFloat(quantityKg) : 5.0;
+  let computedTotal = passedTotal;
 
-  const grainType = store.grainTypes.find(g => g.id === parseInt(grainTypeId));
-  if (!grainType) {
-    return res.status(404).json({ status: 'error', message: 'Grain type not found' });
+  if (items && Array.isArray(items) && items.length > 0) {
+    resolvedGrainName = items.map(i => i.name).join(', ');
+    resolvedQuantity = items.reduce((sum, i) => sum + (parseFloat(i.quantity) || 1), 0);
+    if (!computedTotal) {
+      const subtotal = items.reduce((sum, i) => sum + ((parseFloat(i.price) || 0) * (parseFloat(i.quantity) || 1)), 0);
+      computedTotal = subtotal + parseFloat(pickupFee) + parseFloat(deliveryFee);
+    }
+  } else if (!computedTotal) {
+    const grainType = store.grainTypes.find(g => g.id === parseInt(grainTypeId || 1)) || store.grainTypes[0];
+    resolvedGrainName = grainType ? grainType.name : 'Wheat (Gehun)';
+    const grindingCost = (grainType ? grainType.grindingFeePerKg : 5) * resolvedQuantity;
+    const grainCost = grainSource === 'MILL' ? (grainType ? grainType.pricePerKg : 35) * resolvedQuantity : 0;
+    computedTotal = grindingCost + grainCost + parseFloat(deliveryFee);
   }
-
-  const grindingCost = grainType.grindingFeePerKg * quantityKg;
-  const grainCost = grainSource === 'MILL' ? grainType.pricePerKg * quantityKg : 0;
-  const deliveryCost = fulfillmentType === FULFILLMENT_TYPES.DELIVERY ? 30 : 0;
-  const totalAmount = grindingCost + grainCost + deliveryCost;
 
   const orderId = 500 + store.orders.length + 1;
+  const orderNumber = req.body.orderNumber || `#HD-${Math.floor(1000 + Math.random() * 9000)}`;
+  const userId = req.user ? req.user.id : 1;
+  const custName = req.user ? req.user.name : 'Ramesh Patel';
+  const custPhone = req.user ? req.user.phone : '+919876543210';
+
   const newOrder = {
     id: orderId,
-    orderNumber: `ORD-2026-${1000 + store.orders.length + 1}`,
-    userId: req.user.id,
-    millId: parseInt(millId),
+    orderNumber,
+    userId,
+    customerName: custName,
+    customerPhone: custPhone,
+    millId: mill ? mill.id : 101,
+    millName: mill ? mill.name : 'Shree Ganesh Flour Mill',
     grainSource: grainSource || 'CUSTOMER',
-    grainTypeId: parseInt(grainTypeId),
-    grainTypeName: grainType.name,
-    quantityKg: parseFloat(quantityKg),
+    grainTypeId: grainTypeId ? parseInt(grainTypeId) : 1,
+    grainTypeName: resolvedGrainName,
+    quantityKg: resolvedQuantity,
+    items: items || [],
     serviceType,
     fulfillmentType,
-    addressId: addressId ? parseInt(addressId) : null,
+    addressId: addressId ? parseInt(addressId) : 25,
+    pickupAddress: req.body.pickupAddress || (mill ? mill.address : '12 Market Yard, Ellisbridge, Ahmedabad'),
+    deliveryAddress: req.body.deliveryAddress || '456 Heritage Block, District 9, NY',
+    pickupFee: parseFloat(pickupFee),
+    deliveryFee: parseFloat(deliveryFee),
     paymentMethod,
-    paymentStatus: 'PENDING',
+    paymentStatus: 'PAID',
     status: ORDER_STATUS.PLACED,
     estimatedMinutes: 30,
-    estimatedCompletionTime: null,
-    totalAmount,
+    estimatedCompletionTime: 'Within 24 Hours',
+    totalAmount: parseFloat(computedTotal),
     timeline: [
       {
         status: ORDER_STATUS.PLACED,
@@ -64,12 +82,61 @@ exports.createOrder = (req, res) => {
     createdAt: new Date().toISOString()
   };
 
-  store.orders.push(newOrder);
+  // Write directly into MySQL Database
+  try {
+    const insertSql = `
+      INSERT INTO orders (
+        order_number, user_id, customer_name, customer_phone,
+        mill_id, grain_source, grain_type_id, grain_type_name,
+        quantity_kg, service_type, fulfillment_type, address_id,
+        pickup_pin, delivery_otp, payment_method, payment_status,
+        status, estimated_minutes, estimated_completion_time, total_amount
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    const dbResult = await query(insertSql, [
+      newOrder.orderNumber || null,
+      newOrder.userId || 1,
+      newOrder.customerName || 'Customer',
+      newOrder.customerPhone || '+919876543210',
+      newOrder.millId || 101,
+      newOrder.grainSource || 'CUSTOMER',
+      newOrder.grainTypeId || 1,
+      newOrder.grainTypeName || 'Wheat (Gehun)',
+      newOrder.quantityKg || 5.0,
+      newOrder.serviceType || 'GRINDING',
+      newOrder.fulfillmentType || 'DELIVERY',
+      newOrder.addressId || null,
+      '4821',
+      '7391',
+      newOrder.paymentMethod || 'UPI',
+      'PAID',
+      'PLACED',
+      30,
+      'Within 24 Hours',
+      newOrder.totalAmount || 0.0
+    ]);
 
-  // Send notification to customer
+    if (dbResult && dbResult.insertId) {
+      newOrder.id = dbResult.insertId;
+      try {
+        await query(
+          'INSERT INTO order_timeline (order_id, status, note) VALUES (?, ?, ?)',
+          [newOrder.id, 'PLACED', 'Order placed by customer']
+        );
+      } catch (tlErr) {
+        console.warn('MySQL Timeline Insert Warning:', tlErr.message);
+      }
+    }
+  } catch (dbErr) {
+    console.warn('MySQL Orders Insert Warning:', dbErr.message);
+  }
+
+  store.orders.unshift(newOrder);
+
+  // Send notification to user
   store.notifications.push({
     id: store.notifications.length + 1,
-    userId: req.user.id,
+    userId: newOrder.userId,
     title: 'Order Placed',
     message: `Your order #${newOrder.orderNumber} has been placed successfully.`,
     read: false,
@@ -83,10 +150,56 @@ exports.createOrder = (req, res) => {
   });
 };
 
-exports.getOrders = (req, res) => {
+exports.getOrders = async (req, res) => {
   const { status, page = 1, limit = 20 } = req.query;
-  let userOrders = store.orders.filter(o => o.userId === req.user.id);
+  const userId = req.user ? req.user.id : 1;
 
+  try {
+    let sql = 'SELECT o.*, m.name as mill_name, m.address as mill_address FROM orders o LEFT JOIN mills m ON o.mill_id = m.id WHERE o.user_id = ?';
+    const params = [userId];
+    if (status) {
+      sql += ' AND o.status = ?';
+      params.push(status);
+    }
+    sql += ' ORDER BY o.id DESC';
+    const dbOrders = await query(sql, params);
+
+    if (dbOrders && dbOrders.length > 0) {
+      const mapped = dbOrders.map(row => ({
+        id: row.id,
+        orderNumber: row.order_number,
+        userId: row.user_id,
+        customerName: row.customer_name,
+        customerPhone: row.customer_phone,
+        millId: row.mill_id,
+        millName: row.mill_name || 'Shree Ganesh Flour Mill',
+        grainSource: row.grain_source,
+        grainTypeId: row.grain_type_id,
+        grainTypeName: row.grain_type_name,
+        quantityKg: parseFloat(row.quantity_kg),
+        serviceType: row.service_type,
+        fulfillmentType: row.fulfillment_type,
+        addressId: row.address_id,
+        paymentMethod: row.payment_method,
+        paymentStatus: row.payment_status,
+        status: row.status,
+        estimatedMinutes: row.estimated_minutes,
+        estimatedCompletionTime: row.estimated_completion_time,
+        totalAmount: parseFloat(row.total_amount),
+        createdAt: row.created_at
+      }));
+
+      return res.json({
+        status: 'success',
+        count: mapped.length,
+        data: { orders: mapped }
+      });
+    }
+  } catch (err) {
+    console.warn('MySQL getOrders fallback:', err.message);
+  }
+
+  let userOrders = store.orders.filter(o => o.userId === userId);
   if (status) {
     userOrders = userOrders.filter(o => o.status === status);
   }

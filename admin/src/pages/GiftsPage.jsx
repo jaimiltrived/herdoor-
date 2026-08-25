@@ -107,70 +107,70 @@ export default function GiftsPage() {
       </div>
 
       {/* 4 Metric Cards */}
-      <div className="metrics-grid-4" style={{ marginBottom: '28px' }}>
-        <div className="metric-card">
-          <div className="metric-header-row">
-            <span className="metric-label">ACTIVE VOUCHERS</span>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: '28px' }}>
+        <div className="card" style={{ padding: 22 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#756D69', letterSpacing: 0.5, textTransform: 'uppercase' }}>ACTIVE VOUCHERS</span>
             <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#FFECEB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Gift size={16} color="#8C4A3E" />
             </div>
           </div>
-          <div className="metric-value-row">
-            <span className="metric-value">{vouchers.filter(v => v.status === 'Active').length} Promos</span>
+          <div style={{ fontSize: '2.3rem', fontWeight: 800, color: '#2A2421', fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: '-0.5px', marginTop: 4 }}>
+            {vouchers.filter(v => v.status === 'Active').length} Promos
           </div>
-          <div className="metric-footer-row">
-            <span className="trend-badge positive" style={{ fontSize: '0.78rem' }}>
+          <div style={{ marginTop: 6 }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1E8449', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               ↑ +4 active this month
             </span>
           </div>
         </div>
 
-        <div className="metric-card">
-          <div className="metric-header-row">
-            <span className="metric-label">TOTAL GIFT VALUE</span>
+        <div className="card" style={{ padding: 22 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#756D69', letterSpacing: 0.5, textTransform: 'uppercase' }}>TOTAL GIFT VALUE</span>
             <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#EFE6D2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Tag size={16} color="#6E5616" />
             </div>
           </div>
-          <div className="metric-value-row">
-            <span className="metric-value">₹125,000</span>
+          <div style={{ fontSize: '2.3rem', fontWeight: 800, color: '#2A2421', fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: '-0.5px', marginTop: 4 }}>
+            ₹125,000
           </div>
-          <div className="metric-footer-row">
-            <span style={{ fontSize: '0.78rem', color: '#756D69' }}>
+          <div style={{ marginTop: 6 }}>
+            <span style={{ fontSize: '0.82rem', color: '#756D69', fontWeight: 600 }}>
               Allocated for rewards
             </span>
           </div>
         </div>
 
-        <div className="metric-card">
-          <div className="metric-header-row">
-            <span className="metric-label">REDEEMED VALUE</span>
+        <div className="card" style={{ padding: 22 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#756D69', letterSpacing: 0.5, textTransform: 'uppercase' }}>REDEEMED VALUE</span>
             <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#E8F8F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Award size={16} color="#1E8449" />
             </div>
           </div>
-          <div className="metric-value-row">
-            <span className="metric-value">₹98,400</span>
+          <div style={{ fontSize: '2.3rem', fontWeight: 800, color: '#2A2421', fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: '-0.5px', marginTop: 4 }}>
+            ₹98,400
           </div>
-          <div className="metric-footer-row">
-            <span className="trend-badge positive" style={{ fontSize: '0.78rem' }}>
+          <div style={{ marginTop: 6 }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1E8449', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               1,401 Redemptions
             </span>
           </div>
         </div>
 
-        <div className="metric-card">
-          <div className="metric-header-row">
-            <span className="metric-label">REDEMPTION RATE</span>
+        <div className="card" style={{ padding: 22 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#756D69', letterSpacing: 0.5, textTransform: 'uppercase' }}>REDEMPTION RATE</span>
             <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#F7F2EB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Percent size={16} color="#756D69" />
             </div>
           </div>
-          <div className="metric-value-row">
-            <span className="metric-value">84.2%</span>
+          <div style={{ fontSize: '2.3rem', fontWeight: 800, color: '#2A2421', fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: '-0.5px', marginTop: 4 }}>
+            84.2%
           </div>
-          <div className="metric-footer-row">
-            <span className="trend-badge positive" style={{ fontSize: '0.78rem' }}>
+          <div style={{ marginTop: 6 }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1E8449', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               High Engagement
             </span>
           </div>

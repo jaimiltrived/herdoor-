@@ -38,8 +38,8 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
         ),
         title: Text(
           'Order ${_displayOrder.orderId}',
-          style: GoogleFonts.playfairDisplay(
-            fontSize: 20,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 18,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
           ),
@@ -64,8 +64,8 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
             children: [
               Text(
                 'Process History',
-                style: GoogleFonts.playfairDisplay(
-                  fontSize: 26,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimary,
                 ),
@@ -110,8 +110,8 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
                             const SizedBox(height: 4),
                             Text(
                               _displayOrder.customerName,
-                              style: GoogleFonts.playfairDisplay(
-                                fontSize: 22,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 20,
                                 fontWeight: FontWeight.bold,
                                 color: AppTheme.textPrimary,
                               ),

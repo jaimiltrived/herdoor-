@@ -125,6 +125,8 @@ class MerchantOrder {
   final String? deliveryDriverPhone;
   final String? deliveryDriverVehicle;
   final List<MerchantProcessStep> timelineSteps;
+  final double totalPrice;
+  final String millName;
 
   MerchantOrder({
     this.numericId,
@@ -142,6 +144,8 @@ class MerchantOrder {
     this.deliveryDriverPhone,
     this.deliveryDriverVehicle,
     required this.timelineSteps,
+    this.totalPrice = 90.0,
+    this.millName = 'Artisan Mill Co.',
   });
 
   factory MerchantOrder.fromJson(Map<String, dynamic> json) {
@@ -157,7 +161,7 @@ class MerchantOrder {
 
     if (rawStatus == 'PLACED') {
       mappedTag = 'NEW';
-      mappedColor = const Color(0xFFFF8A80);
+      mappedColor = const Color(0xFF81C784);
     } else if (rawStatus == 'ACCEPTED' || rawStatus == 'PROCESSING') {
       mappedTag = 'IN PROGRESS';
       mappedColor = const Color(0xFFCBA034);
@@ -166,7 +170,7 @@ class MerchantOrder {
       mappedColor = const Color(0xFFCBA034);
     } else if (rawStatus == 'READY' || rawStatus == 'READY_FOR_PICKUP') {
       mappedTag = 'READY FOR PICKUP';
-      mappedColor = const Color(0xFF2ECC71);
+      mappedColor = const Color(0xFFCBA034);
     } else if (rawStatus == 'OUT_FOR_DELIVERY') {
       mappedTag = 'OUT FOR DELIVERY';
       mappedColor = const Color(0xFF3498DB);
@@ -184,6 +188,9 @@ class MerchantOrder {
     final String created = json['createdAt'] != null && json['createdAt'].toString().length >= 16
         ? 'Ordered at ${json['createdAt'].toString().substring(11, 16)}'
         : 'Recently';
+
+    final double price = (json['totalAmount'] as num?)?.toDouble() ?? 90.0;
+    final String resolvedMill = json['millName'] ?? 'Artisan Mill Co.';
 
     final String? estTime = json['estimatedCompletionTime'] ??
         (json['estimatedMinutes'] != null ? '${json['estimatedMinutes']} Mins' : null);
@@ -211,6 +218,8 @@ class MerchantOrder {
       deliveryDriverPhone: json['deliveryDriverPhone'],
       deliveryDriverVehicle: json['deliveryDriverVehicle'],
       timelineSteps: steps,
+      totalPrice: price,
+      millName: resolvedMill,
     );
   }
 }

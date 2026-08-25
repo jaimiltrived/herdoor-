@@ -7,6 +7,10 @@ const { ROLES } = require('../constants/enums');
 router.use(authenticateToken);
 router.use(authorizeRoles(ROLES.SHOPKEEPER, ROLES.ADMIN));
 
+// Profile & Mill Details
+router.get('/profile', shopkeeperController.getProfile);
+router.put('/profile', shopkeeperController.updateProfile);
+
 // Dashboard & Revenue
 router.get('/dashboard', shopkeeperController.getDashboard);
 router.get('/orders/today', shopkeeperController.getTodayOrders);
@@ -23,6 +27,7 @@ router.put('/orders/:orderId/completion-time', shopkeeperController.setCompletio
 
 // Processing State Machine Transitions
 router.post('/orders/:orderId/start', shopkeeperController.startProcessing);
+router.post('/orders/:orderId/processing', shopkeeperController.startProcessing);
 router.post('/orders/:orderId/packing', shopkeeperController.startPacking);
 router.post('/orders/:orderId/ready', shopkeeperController.markReady);
 router.post('/orders/:orderId/handover', shopkeeperController.handoverDelivery);
@@ -40,6 +45,7 @@ router.post('/inventory/:id/stock-out', shopkeeperController.stockOut);
 
 // Service & Mill Availability
 router.get('/services', shopkeeperController.getServices);
+router.put('/services', shopkeeperController.updateServices);
 router.put('/services/:serviceId', shopkeeperController.updateServices);
 router.get('/availability', shopkeeperController.getAvailability);
 router.put('/availability', shopkeeperController.updateAvailability);

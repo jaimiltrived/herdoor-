@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../models/app_models.dart';
 import 'cart_screen.dart';
 import 'mill_map_screen.dart';
+import '../services/customer_api_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class MillDetailScreen extends StatefulWidget {
@@ -29,7 +30,36 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
   late bool _isFavorite;
   
   // Cart State
-  List<Map<String, dynamic>> _cartItems = [];
+  final List<Map<String, dynamic>> _cartItems = [];
+
+  List<Map<String, dynamic>> _readymadeProducts = [
+    {
+      'title': 'Pre-packed Wheat',
+      'desc': '1kg Pack • Stone ground flour',
+      'imageUrl': 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&w=400&q=80',
+      'price': 2.50,
+    },
+    {
+      'title': 'Masala Mix',
+      'desc': '500g Pack • Premium blend spices',
+      'imageUrl': 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=400&q=80',
+      'price': 3.00,
+    },
+    {
+      'title': 'Organic Multigrain Flour',
+      'desc': '1kg Pack • 7 Grain high fiber mix',
+      'imageUrl': 'https://images.unsplash.com/photo-1586444248902-2f64eddc13df?auto=format&fit=crop&w=400&q=80',
+      'price': 3.50,
+    },
+    {
+      'title': 'Pure Besan (Gram Flour)',
+      'desc': '500g Pack • Fine ground chana dal',
+      'imageUrl': 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80',
+      'price': 2.20,
+    },
+  ];
+
+  List<GrainProduct> _grainProducts = MockData.popularGrains;
 
   double get _cartTotal {
     return _cartItems.fold(0.0, (total, item) => total + (item['price'] * item['quantity']));
@@ -39,6 +69,37 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
   void initState() {
     super.initState();
     _isFavorite = MockData.isFavorite(widget.mill.id);
+    _fetchDbData();
+  }
+
+  Future<void> _fetchDbData() async {
+    final millId = int.tryParse(widget.mill.id) ?? 101;
+    final products = await CustomerApiService.instance.getMillProducts(millId);
+    if (products != null && products.isNotEmpty && mounted) {
+      setState(() {
+        _readymadeProducts = products.map((p) => {
+          'title': p['name'] ?? 'Product',
+          'desc': p['subtitle'] ?? 'Fresh from mill',
+          'imageUrl': p['imageUrl'] ?? 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&w=400&q=80',
+          'price': (p['price'] as num?)?.toDouble() ?? 2.50,
+        }).toList();
+      });
+    }
+
+    final grains = await CustomerApiService.instance.getMillGrains(millId);
+    if (grains != null && grains.isNotEmpty && mounted) {
+      setState(() {
+        _grainProducts = grains.map((g) => GrainProduct(
+          id: g['id']?.toString() ?? 'g1',
+          name: g['name'] ?? 'Wheat',
+          description: g['category'] ?? 'Grain',
+          pricePerKg: (g['pricePerKg'] as num?)?.toDouble() ?? 35.0,
+          imageUrl: (g['name'].toString().toLowerCase().contains('wheat'))
+              ? 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&w=400&q=80'
+              : 'https://images.unsplash.com/photo-1586444248902-2f64eddc13df?auto=format&fit=crop&w=400&q=80',
+        )).toList();
+      });
+    }
   }
 
   @override
@@ -85,7 +146,15 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                               backgroundColor: Colors.white.withValues(alpha: 0.85),
                               child: IconButton(
                                 icon: const Icon(Icons.share_outlined, color: AppTheme.textPrimary, size: 20),
-                                onPressed: () {},
+                                onPressed: () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Link copied for ${widget.mill.name}'),
+                                      duration: const Duration(seconds: 2),
+                                      backgroundColor: AppTheme.primaryTerracotta,
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                           ],
@@ -131,7 +200,7 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: AppTheme.surfaceCream,
+                                color: widget.mill.isOpen ? AppTheme.surfaceCream : Colors.grey.shade200,
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(color: AppTheme.borderLight),
                               ),
@@ -140,18 +209,18 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                                   Container(
                                     width: 8,
                                     height: 8,
-                                    decoration: const BoxDecoration(
-                                      color: AppTheme.mustardDark,
+                                    decoration: BoxDecoration(
+                                      color: widget.mill.isOpen ? AppTheme.mustardDark : Colors.grey,
                                       shape: BoxShape.circle,
                                     ),
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
-                                    'Open now',
+                                    widget.mill.statusText,
                                     style: GoogleFonts.plusJakartaSans(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
-                                      color: AppTheme.textPrimary,
+                                      color: widget.mill.isOpen ? AppTheme.textPrimary : Colors.grey.shade700,
                                     ),
                                   ),
                                 ],
@@ -274,19 +343,85 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                                     color: AppTheme.textPrimary,
                                   ),
                                 ),
-                                Row(
-                                  children: [
-                                    Text(
-                                      'Full Schedule',
-                                      style: GoogleFonts.plusJakartaSans(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppTheme.primaryTerracotta,
+                                GestureDetector(
+                                  onTap: () {
+                                    showModalBottomSheet(
+                                      context: context,
+                                      backgroundColor: Colors.white,
+                                      shape: const RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                                       ),
-                                    ),
-                                    const SizedBox(width: 2),
-                                    const Icon(Icons.chevron_right, size: 18, color: AppTheme.primaryTerracotta),
-                                  ],
+                                      builder: (context) => Padding(
+                                        padding: const EdgeInsets.all(24.0),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Center(
+                                              child: Container(
+                                                width: 40,
+                                                height: 4,
+                                                decoration: BoxDecoration(
+                                                  color: AppTheme.borderLight,
+                                                  borderRadius: BorderRadius.circular(2),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 16),
+                                            Text(
+                                              '${widget.mill.name} Timings',
+                                              style: GoogleFonts.playfairDisplay(
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.bold,
+                                                color: AppTheme.textPrimary,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 16),
+                                            ...['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(
+                                              (day) => Padding(
+                                                padding: const EdgeInsets.symmetric(vertical: 6.0),
+                                                child: Row(
+                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                  children: [
+                                                    Text(
+                                                      day,
+                                                      style: GoogleFonts.plusJakartaSans(
+                                                        fontSize: 14,
+                                                        fontWeight: day == 'Today' ? FontWeight.bold : FontWeight.w500,
+                                                        color: AppTheme.textPrimary,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      day == 'Sunday' ? '10:00 AM - 2:00 PM' : '10:00 AM - 12:00 PM, 4:00 PM - 9:00 PM',
+                                                      style: GoogleFonts.plusJakartaSans(
+                                                        fontSize: 13,
+                                                        color: AppTheme.textSecondary,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 20),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        'Full Schedule',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppTheme.primaryTerracotta,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 2),
+                                      const Icon(Icons.chevron_right, size: 18, color: AppTheme.primaryTerracotta),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
@@ -340,7 +475,7 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                             MaterialPageRoute(
                               builder: (context) => MillMapScreen(
                                 mill: widget.mill,
-                                address: '123 Stone Mill Road, Heritage District, NY 10001',
+                                address: widget.mill.address,
                               ),
                             ),
                           );
@@ -361,7 +496,7 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      '123 Stone Mill Road, Heritage District, NY 10001',
+                                      widget.mill.address,
                                       style: GoogleFonts.plusJakartaSans(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600,
@@ -532,7 +667,7 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                         ),
                         const SizedBox(height: 14),
                         Column(
-                          children: MockData.popularGrains.map((product) {
+                          children: _grainProducts.map((product) {
                             return _CustomMillingItemCard(
                               product: product,
                               onAddToCart: (item) {
@@ -575,12 +710,12 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                         ),
                         const SizedBox(height: 10),
                         Column(
-                          children: [
-                            _ReadymadeItemCard(
-                              title: 'Pre-packed Wheat',
-                              desc: '1kg Pack • Stone ground flour',
-                              imageUrl: 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&w=400&q=80',
-                              price: 2.50,
+                          children: _readymadeProducts.map((prod) {
+                            return _ReadymadeItemCard(
+                              title: prod['title'] ?? 'Product',
+                              desc: prod['desc'] ?? '',
+                              imageUrl: prod['imageUrl'] ?? 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&w=400&q=80',
+                              price: (prod['price'] as num?)?.toDouble() ?? 2.50,
                               onAddToCart: (item) {
                                 setState(() {
                                   _cartItems.add(item);
@@ -591,24 +726,8 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                                   behavior: SnackBarBehavior.floating,
                                 ));
                               },
-                            ),
-                            _ReadymadeItemCard(
-                              title: 'Masala Mix',
-                              desc: '500g Pack • Premium blend spices',
-                              imageUrl: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=400&q=80',
-                              price: 3.00,
-                              onAddToCart: (item) {
-                                setState(() {
-                                  _cartItems.add(item);
-                                });
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                  content: Text('${item['name']} added to cart!'),
-                                  duration: const Duration(seconds: 1),
-                                  behavior: SnackBarBehavior.floating,
-                                ));
-                              },
-                            ),
-                          ],
+                            );
+                          }).toList(),
                         ),
                       ],
                     ],

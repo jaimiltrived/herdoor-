@@ -11,6 +11,7 @@ import ConsoleSectionPage from './pages/ConsoleSectionPage';
 import DashboardPage from './pages/DashboardPage';
 import OrdersPage from './pages/OrdersPage';
 import GiftsPage from './pages/GiftsPage';
+import MillsPage from './pages/MillsPage';
 
 import { initialOrders } from './data/mockData';
 import './styles/admin.css';
@@ -22,21 +23,6 @@ export default function App() {
 
   // Mock data for console section pages
   const sectionConfigs = {
-    1: {
-      title: 'Flour Mills',
-      description: 'Manage registered artisan mill partners, operational capacity, and milling rates.',
-      stats: [
-        { label: 'ACTIVE MILLS', value: '48', change: '↑ +3 this month', isPositive: true },
-        { label: 'TOTAL CAPACITY', value: '18,500 kg', change: '88% utilized', isPositive: true },
-        { label: 'AVG MILLING TIME', value: '24 mins', change: '-4 mins faster', isPositive: true },
-      ],
-      tableHeaders: ['Mill Name', 'Location', 'Daily Output', 'Status', 'Rating'],
-      tableData: [
-        { name: 'Sunrise Flour Mill', loc: 'North District', output: '450 kg', status: 'Active', rating: '★ 4.9' },
-        { name: 'Artisan Mill Co.', loc: 'East Valley', output: '620 kg', status: 'Active', rating: '★ 4.8' },
-        { name: 'Valley Grain Hub', loc: 'Central Market', output: '310 kg', status: 'Maintenance', rating: '★ 4.7' },
-      ],
-    },
     3: {
       title: 'Delivery Partners',
       description: 'Track fleet delivery partners, active riders, and payout schedules.',
@@ -170,6 +156,7 @@ export default function App() {
 
         <div className="desktop-content-body">
           {activeTab === 0 && <DashboardPage orders={orders} onNavigateTab={setActiveTab} />}
+          {activeTab === 1 && <MillsPage />}
           {activeTab === 2 && <CitizensPage />}
           {activeTab === 5 && <OrdersPage />}
           {activeTab === 8 && <CommissionsPage />}

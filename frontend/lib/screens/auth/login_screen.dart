@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
 import '../../models/merchant_models.dart';
+import '../../services/auth_api_service.dart';
 import 'register_screen.dart';
 import 'forgot_password_screen.dart';
 
@@ -18,11 +19,58 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _phoneController = TextEditingController(text: '+1 (555) 234-5678');
-  final _passwordController = TextEditingController(text: '••••••••');
+  final _phoneController = TextEditingController(text: 'shop@shreeganesh.com');
+  final _passwordController = TextEditingController(text: 'Password123!');
   bool _rememberMe = true;
   bool _obscurePassword = true;
-  UserRole _selectedRole = UserRole.merchant; // Default to Merchant to match prompt emphasis
+  bool _isLoading = false;
+  UserRole _selectedRole = UserRole.merchant; // Default to Merchant
+
+  void _onRoleChanged(UserRole role) {
+    setState(() {
+      _selectedRole = role;
+      if (role == UserRole.merchant) {
+        _phoneController.text = 'shop@shreeganesh.com';
+      } else {
+        _phoneController.text = 'ramesh@example.com';
+      }
+      _passwordController.text = 'Password123!';
+    });
+  }
+
+  Future<void> _handleLogin() async {
+    final identifier = _phoneController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (identifier.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your email/phone and password')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    final result = await AuthApiService.instance.login(
+      identifier: identifier,
+      password: password,
+      role: _selectedRole,
+    );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (result['success'] == true || result['offline'] == true) {
+      widget.onLoginSuccess(_selectedRole);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'Login failed. Please check credentials.'),
+          backgroundColor: AppTheme.primaryTerracotta,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -96,7 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     Expanded(
                       child: GestureDetector(
-                        onTap: () => setState(() => _selectedRole = UserRole.customer),
+                        onTap: () => _onRoleChanged(UserRole.customer),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -143,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     Expanded(
                       child: GestureDetector(
-                        onTap: () => setState(() => _selectedRole = UserRole.merchant),
+                        onTap: () => _onRoleChanged(UserRole.merchant),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -209,7 +257,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   prefixIcon: const Icon(Icons.phone_outlined, color: AppTheme.primaryTerracotta),
                   filled: true,
                   fillColor: Colors.white,
-                  hintText: 'Enter your phone number',
+                  hintText: 'Enter your email or phone',
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -301,23 +349,29 @@ class _LoginScreenState extends State<LoginScreen> {
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: () => widget.onLoginSuccess(_selectedRole),
+                  onPressed: _isLoading ? null : _handleLogin,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _selectedRole == UserRole.merchant
                         ? const Color(0xFF6E5616)
                         : AppTheme.primaryTerracotta,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
                   ),
-                  child: Text(
-                    _selectedRole == UserRole.merchant
-                        ? 'Sign In as Merchant'
-                        : 'Sign In as Customer',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                        )
+                      : Text(
+                          _selectedRole == UserRole.merchant
+                              ? 'Sign In as Merchant'
+                              : 'Sign In as Customer',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 24),

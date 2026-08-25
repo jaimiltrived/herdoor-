@@ -35,7 +35,7 @@ export default function CommissionsPage() {
               <div>
                 <span className="card-label-sub">Revenue Over Time</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
-                  <span style={{ fontSize: '2rem', fontWeight: 800, fontFamily: 'Playfair Display' }}>Rs.42,850.00</span>
+                  <span style={{ fontSize: '2rem', fontWeight: 800, fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif", letterSpacing: '-0.5px' }}>Rs.42,850.00</span>
                   <span className="trend-badge positive" style={{ fontSize: '0.8rem' }}>
                     <TrendingUp size={12} /> +12.5%
                   </span>

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import '../models/app_models.dart';
+import '../models/merchant_models.dart';
+import '../services/customer_api_service.dart';
 import 'order_tracking_screen.dart';
 import 'cart_screen.dart';
 import 'profile_screen.dart';
@@ -16,11 +18,79 @@ class OrdersListScreen extends StatefulWidget {
 
 class _OrdersListScreenState extends State<OrdersListScreen> {
   bool _showActiveOrders = true;
+  bool _isLoading = false;
+  List<MerchantOrder>? _apiOrders;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchOrders();
+  }
+
+  Future<void> _fetchOrders() async {
+    if (mounted) setState(() => _isLoading = true);
+    final orders = await CustomerApiService.instance.getCustomerOrders();
+    if (mounted) {
+      setState(() {
+        _apiOrders = orders;
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final activeOrders = MockData.orders.where((o) => o.isActive).toList();
-    final pastOrders = MockData.orders.where((o) => !o.isActive).toList();
+    // Map dynamic orders to OrderModel if available
+    List<OrderModel> dynamicActive = [];
+    List<OrderModel> dynamicPast = [];
+
+    if (_apiOrders != null && _apiOrders!.isNotEmpty) {
+      for (final o in _apiOrders!) {
+        final s = o.statusTag.toUpperCase();
+        final isActive = [
+          'NEW',
+          'PLACED',
+          'ACCEPTED',
+          'PROCESSING',
+          'PACKING',
+          'READY',
+          'READY FOR PICKUP',
+          'READY_FOR_PICKUP',
+          'OUT FOR DELIVERY',
+          'OUT_FOR_DELIVERY',
+          'IN PROGRESS'
+        ].contains(s);
+
+        final mapped = OrderModel(
+          orderId: o.orderId,
+          millName: o.millName.isNotEmpty ? o.millName : 'Artisan Mill Co.',
+          itemSummary: o.itemsSummary,
+          quantityKg: o.quantityText,
+          estimatedDelivery: 'Within 20 minutes',
+          statusStep: o.statusTag,
+          totalPrice: o.totalPrice,
+          isActive: isActive,
+          date: o.timeAgo,
+          selectedGrain: o.grainType,
+          trackingSteps: [
+            TrackingStep(title: 'Order Placed', subtitle: 'Received at mill', timeText: '10:00 AM', isCompleted: true),
+            TrackingStep(title: 'Grain Cleaning', subtitle: 'Moisture checked', timeText: '10:15 AM', isCompleted: true),
+            TrackingStep(title: 'Milling in Progress', subtitle: 'Stone chakki grinding', timeText: '10:30 AM', isCurrent: isActive),
+            TrackingStep(title: 'Out for Delivery', subtitle: 'Assigned to driver', timeText: 'Pending'),
+            TrackingStep(title: 'Delivered', subtitle: 'Doorstep handover', timeText: 'Pending'),
+          ],
+        );
+
+        if (isActive) {
+          dynamicActive.add(mapped);
+        } else {
+          dynamicPast.add(mapped);
+        }
+      }
+    }
+
+    final activeOrders = dynamicActive.isNotEmpty ? dynamicActive : MockData.orders.where((o) => o.isActive).toList();
+    final pastOrders = dynamicPast.isNotEmpty ? dynamicPast : MockData.orders.where((o) => !o.isActive).toList();
     
     final displayOrders = _showActiveOrders ? activeOrders : pastOrders;
 
@@ -69,90 +139,124 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Order History',
-              style: GoogleFonts.playfairDisplay(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 24),
-            
-            // Toggle Switch
-            Container(
-              height: 50,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(25),
-                border: Border.all(color: AppTheme.borderLight),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _showActiveOrders = true),
-                      child: Container(
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: _showActiveOrders ? AppTheme.primaryTerracotta : Colors.transparent,
-                          borderRadius: BorderRadius.circular(25),
-                        ),
-                        child: Text(
-                          'Current',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontWeight: FontWeight.bold,
-                            color: _showActiveOrders ? Colors.white : AppTheme.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _showActiveOrders = false),
-                      child: Container(
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: !_showActiveOrders ? AppTheme.primaryTerracotta : Colors.transparent,
-                          borderRadius: BorderRadius.circular(25),
-                        ),
-                        child: Text(
-                          'Previous',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontWeight: FontWeight.bold,
-                            color: !_showActiveOrders ? Colors.white : AppTheme.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            
-            if (displayOrders.isEmpty)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 40.0),
-                  child: Text(
-                    'No ${_showActiveOrders ? 'current' : 'previous'} orders.',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 16,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
+      body: RefreshIndicator(
+        onRefresh: _fetchOrders,
+        color: AppTheme.primaryTerracotta,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Order History',
+                style: GoogleFonts.playfairDisplay(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textPrimary,
                 ),
-              )
-            else
-              ...displayOrders.asMap().entries.map((entry) => _buildOrderCard(context, entry.value, entry.key)),
-          ],
+              ),
+              const SizedBox(height: 24),
+              
+              // Toggle Switch
+              Container(
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(25),
+                  border: Border.all(color: AppTheme.borderLight),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _showActiveOrders = true),
+                        child: Container(
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: _showActiveOrders ? AppTheme.primaryTerracotta : Colors.transparent,
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          child: Text(
+                            'Current',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.bold,
+                              color: _showActiveOrders ? Colors.white : AppTheme.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _showActiveOrders = false),
+                        child: Container(
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: !_showActiveOrders ? AppTheme.primaryTerracotta : Colors.transparent,
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          child: Text(
+                            'Previous',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.bold,
+                              color: !_showActiveOrders ? Colors.white : AppTheme.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              if (_isLoading && _apiOrders == null)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 60.0),
+                    child: CircularProgressIndicator(color: AppTheme.primaryTerracotta),
+                  ),
+                )
+              else if (displayOrders.isEmpty)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 40.0),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.receipt_long_outlined,
+                          size: 56,
+                          color: AppTheme.textSecondary.withValues(alpha: 0.4),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No ${_showActiveOrders ? 'current' : 'previous'} orders.',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _showActiveOrders
+                              ? 'Any new orders will appear here in real-time.'
+                              : 'Your completed order receipts will show here.',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13,
+                            color: AppTheme.textSecondary,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                ...displayOrders.asMap().entries.map((entry) => _buildOrderCard(context, entry.value, entry.key)),
+            ],
+          ),
         ),
       ),
     );
@@ -181,6 +285,24 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                 builder: (context) => OrderTrackingScreen(order: order),
               ),
             );
+          } else {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CartScreen(
+                  cartItems: [
+                    {
+                      'name': order.itemSummary,
+                      'type': 'milling',
+                      'source': 'Own Grain',
+                      'quantity': 5,
+                      'price': 0.50,
+                    }
+                  ],
+                  millName: order.millName,
+                ),
+              ),
+            );
           }
         },
         child: Container(
@@ -207,17 +329,12 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                   Text(
                     order.orderId,
                     style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                       color: AppTheme.primaryTerracotta,
                     ),
                   ),
-                  Text(
-                    order.date,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 12,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
+                  _buildStatusBadge(order.statusStep),
                 ],
               ),
               const SizedBox(height: 12),
@@ -237,97 +354,29 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                   color: AppTheme.textSecondary,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
+              const Divider(color: AppTheme.borderLight, height: 1),
+              const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: order.isActive 
-                          ? AppTheme.mustardGold.withValues(alpha: 0.2)
-                          : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      order.statusStep,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: order.isActive 
-                            ? AppTheme.mustardDark 
-                            : Colors.grey.shade700,
-                      ),
+                  Text(
+                    order.date,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      color: AppTheme.textMuted,
                     ),
                   ),
                   Text(
-                    '\$${order.totalPrice.toStringAsFixed(2)}',
+                    '₹${order.totalPrice.toStringAsFixed(2)}',
                     style: GoogleFonts.plusJakartaSans(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: AppTheme.textPrimary,
                     ),
                   ),
                 ],
               ),
-              if (order.isActive) ...[
-                const SizedBox(height: 16),
-                const Divider(color: AppTheme.borderLight, height: 1),
-                const SizedBox(height: 14),
-                Center(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Tap to Track Order',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primaryTerracotta,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: AppTheme.primaryTerracotta),
-                    ],
-                  ),
-                ),
-              ] else ...[
-                const SizedBox(height: 16),
-                const Divider(color: AppTheme.borderLight, height: 1),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryTerracotta,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () {
-                      final cartItems = _createCartItemsFromOrder(order);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => CartScreen(
-                            cartItems: cartItems,
-                            millName: order.millName,
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.repeat_rounded, size: 18),
-                    label: Text(
-                      'Repeat Order',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
             ],
           ),
         ),
@@ -335,43 +384,40 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
     );
   }
 
-  List<Map<String, dynamic>> _createCartItemsFromOrder(OrderModel order) {
-    if (order.items.isNotEmpty) {
-      return List<Map<String, dynamic>>.from(
-        order.items.map((item) => Map<String, dynamic>.from(item)),
-      );
+  Widget _buildStatusBadge(String status) {
+    final s = status.toUpperCase();
+    Color bgColor;
+    Color textColor;
+
+    if (s.contains('NEW') || s.contains('PLACED') || s.contains('COMPLETED') || s.contains('DELIVERED')) {
+      bgColor = const Color(0xFFE8F5E9); // soft green
+      textColor = const Color(0xFF43A047);
+    } else if (s.contains('PROGRESS') || s.contains('PROCESS') || s.contains('PACK') || s.contains('READY') || s.contains('PICKUP')) {
+      bgColor = const Color(0xFFFFF8E1); // soft mustard amber
+      textColor = const Color(0xFF8D6E1F);
+    } else if (s.contains('OUT') || s.contains('DELIVERY') || s.contains('ASSIGNED')) {
+      bgColor = const Color(0xFFE1F5FE); // soft blue
+      textColor = const Color(0xFF0288D1);
+    } else {
+      bgColor = const Color(0xFFF5F5F5);
+      textColor = AppTheme.textSecondary;
     }
-    List<Map<String, dynamic>> items = [];
-    final names = order.itemSummary.split(', ');
-    for (var name in names) {
-      final cleanName = name.trim();
-      if (cleanName.isEmpty) continue;
-      if (cleanName.toLowerCase().contains('milling')) {
-        items.add({
-          'name': cleanName,
-          'type': 'milling',
-          'source': 'Own Grain',
-          'quantity': 5,
-          'price': 0.50,
-        });
-      } else {
-        items.add({
-          'name': cleanName,
-          'type': 'readymade',
-          'quantity': 1,
-          'price': cleanName.toLowerCase().contains('masala') ? 3.00 : 2.50,
-        });
-      }
-    }
-    if (items.isEmpty) {
-      items.add({
-        'name': order.selectedGrain.isNotEmpty ? order.selectedGrain : 'Whole Wheat (Milling)',
-        'type': 'milling',
-        'source': 'Own Grain',
-        'quantity': 5,
-        'price': 0.50,
-      });
-    }
-    return items;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        status,
+        style: GoogleFonts.plusJakartaSans(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: textColor,
+        ),
+      ),
+    );
   }
 }
+

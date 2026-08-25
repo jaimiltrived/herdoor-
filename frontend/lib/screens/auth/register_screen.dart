@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
+import '../../services/auth_api_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   final VoidCallback onRegisterSuccess;
@@ -19,6 +20,57 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   bool _agreeTerms = true;
   bool _obscurePassword = true;
+  bool _isLoading = false;
+
+  Future<void> _handleRegister() async {
+    final name = _nameController.text.trim();
+    final phone = _phoneController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (name.isEmpty || phone.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in your name, phone number, and password')),
+      );
+      return;
+    }
+
+    if (password.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password must be at least 6 characters long')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    final result = await AuthApiService.instance.register(
+      name: name,
+      phone: phone,
+      email: email.isNotEmpty ? email : null,
+      password: password,
+    );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (result['success'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Account created successfully!'),
+          backgroundColor: AppTheme.oliveGreen,
+        ),
+      );
+      Navigator.pop(context);
+      widget.onRegisterSuccess();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'Registration failed'),
+          backgroundColor: AppTheme.primaryTerracotta,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,13 +117,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
               _buildTextField(_nameController, Icons.person_outline, 'e.g. Sarah Jenkins'),
               const SizedBox(height: 16),
               _buildLabel('Phone Number'),
-              _buildTextField(_phoneController, Icons.phone_outlined, '+1 (555) 000-0000'),
+              _buildTextField(_phoneController, Icons.phone_outlined, '+91 98765 43210'),
               const SizedBox(height: 16),
-              _buildLabel('Email Address'),
+              _buildLabel('Email Address (Optional)'),
               _buildTextField(_emailController, Icons.email_outlined, 'sarah@example.com'),
               const SizedBox(height: 16),
               _buildLabel('Delivery Address'),
-              _buildTextField(_addressController, Icons.location_on_outlined, '124 Heritage Way, Apt 4B'),
+              _buildTextField(_addressController, Icons.location_on_outlined, 'Flat 402, Shivalik Towers, Ahmedabad'),
               const SizedBox(height: 16),
               _buildLabel('Password'),
               _buildPasswordField(),
@@ -101,22 +153,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    widget.onRegisterSuccess();
-                  },
+                  onPressed: _isLoading ? null : _handleRegister,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryTerracotta,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
                   ),
-                  child: Text(
-                    'Register Account',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                        )
+                      : Text(
+                          'Register Account',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 24),

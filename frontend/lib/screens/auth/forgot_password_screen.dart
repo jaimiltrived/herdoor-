@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
+import '../../services/auth_api_service.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -11,13 +12,113 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   int _currentStep = 1; // 1: Email Input, 2: OTP Entry, 3: New Password, 4: Success
-  final _emailController = TextEditingController(text: 'sarah.jenkins@example.com');
+  final _emailController = TextEditingController(text: 'ramesh@example.com');
   final _otpControllers = List.generate(4, (_) => TextEditingController());
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
   bool _obscureNewPass = true;
   bool _obscureConfirmPass = true;
+  bool _isLoading = false;
+
+  String get _enteredOtp => _otpControllers.map((c) => c.text).join();
+
+  Future<void> _handleSendOtp() async {
+    final identifier = _emailController.text.trim();
+    if (identifier.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your email or phone number')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    final result = await AuthApiService.instance.forgotPassword(identifier);
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (result['success'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'OTP Sent successfully (Code: 123456)'),
+          backgroundColor: AppTheme.primaryTerracotta,
+        ),
+      );
+      setState(() => _currentStep = 2);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'Unable to send OTP'),
+          backgroundColor: AppTheme.primaryTerracotta,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleVerifyOtp() async {
+    final otp = _enteredOtp;
+    if (otp.length < 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter the full 4-digit OTP code')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    final result = await AuthApiService.instance.verifyOtp(_emailController.text.trim(), otp);
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (result['verified'] == true || result['success'] == true) {
+      setState(() => _currentStep = 3);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'Invalid OTP code. Use 1234 or 123456.'),
+          backgroundColor: AppTheme.primaryTerracotta,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleResetPassword() async {
+    final newPass = _newPasswordController.text.trim();
+    final confirmPass = _confirmPasswordController.text.trim();
+
+    if (newPass.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password must be at least 6 characters long')),
+      );
+      return;
+    }
+
+    if (newPass != confirmPass) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Passwords do not match')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    final result = await AuthApiService.instance.resetPassword(
+      identifier: _emailController.text.trim(),
+      otp: _enteredOtp.isEmpty ? '123456' : _enteredOtp,
+      newPassword: newPass,
+    );
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (result['success'] == true) {
+      setState(() => _currentStep = 4);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'Failed to reset password'),
+          backgroundColor: AppTheme.primaryTerracotta,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -77,7 +178,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           child: Container(
             width: 80,
             height: 80,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: AppTheme.surfaceWarm,
               shape: BoxShape.circle,
             ),
@@ -145,23 +246,21 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           width: double.infinity,
           height: 54,
           child: ElevatedButton(
-            onPressed: () {
-              if (_emailController.text.trim().isNotEmpty) {
-                setState(() => _currentStep = 2);
-              }
-            },
+            onPressed: _isLoading ? null : _handleSendOtp,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primaryTerracotta,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
             ),
-            child: Text(
-              'Send Reset Code',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
+            child: _isLoading
+                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                : Text(
+                    'Send Reset Code',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
           ),
         ),
       ],
@@ -178,7 +277,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           child: Container(
             width: 80,
             height: 80,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: AppTheme.surfaceWarm,
               shape: BoxShape.circle,
             ),
@@ -256,25 +355,27 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           width: double.infinity,
           height: 54,
           child: ElevatedButton(
-            onPressed: () => setState(() => _currentStep = 3),
+            onPressed: _isLoading ? null : _handleVerifyOtp,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primaryTerracotta,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
             ),
-            child: Text(
-              'Verify Code',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
+            child: _isLoading
+                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                : Text(
+                    'Verify Code',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
           ),
         ),
         const SizedBox(height: 20),
         Center(
           child: TextButton(
-            onPressed: () {},
+            onPressed: () => AuthApiService.instance.resendOtp(_emailController.text.trim()),
             child: Text(
               "Didn't receive code? Resend",
               style: GoogleFonts.plusJakartaSans(
@@ -299,7 +400,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           child: Container(
             width: 80,
             height: 80,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: AppTheme.surfaceWarm,
               shape: BoxShape.circle,
             ),
@@ -324,7 +425,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         const SizedBox(height: 8),
         Center(
           child: Text(
-            'Your new password must be at least 8 characters.',
+            'Your new password must be at least 6 characters.',
             style: GoogleFonts.plusJakartaSans(
               fontSize: 14,
               color: AppTheme.textSecondary,
@@ -410,19 +511,21 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           width: double.infinity,
           height: 54,
           child: ElevatedButton(
-            onPressed: () => setState(() => _currentStep = 4),
+            onPressed: _isLoading ? null : _handleResetPassword,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primaryTerracotta,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
             ),
-            child: Text(
-              'Reset Password',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
+            child: _isLoading
+                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                : Text(
+                    'Reset Password',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
           ),
         ),
       ],

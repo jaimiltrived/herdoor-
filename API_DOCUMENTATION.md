@@ -1,155 +1,142 @@
-# HerDoor API Documentation Reference
+# HerDoor Multi-Role API Documentation Reference
 
-Complete REST API specification for HerDoor - Flour Mill & Grain Processing platform.
+Complete REST API specification for HerDoor - Flour Mill & Grain Processing platform supporting:
+1. 👤 **Customer / Consumer** (Flutter Mobile App)
+2. 🏪 **Merchant / Mill Owner** (Flutter Mobile & Tablet App)
+3. 🛵 **Delivery Partner / Rider** (Flutter Mobile App)
+4. 🛡️ **Admin Web Console** (React / Vite Admin Dashboard)
 
 - **Base URL**: `http://localhost:5000/api/v1`
 - **Interactive Swagger UI**: [http://localhost:5000/api-docs](http://localhost:5000/api-docs)
-- **Authentication**: JWT Token via HTTP Header `Authorization: Bearer <token>`
+- **OpenAPI JSON Spec**: `http://localhost:5000/api-docs.json`
+- **Authentication**: JWT Bearer Token via HTTP Header `Authorization: Bearer <token>`
 
 ---
 
 ## 🔐 1. Authentication APIs (`/api/v1/auth`)
 
+| Method | Endpoint | Auth | Role | Purpose | Request Body |
+|---|---|---|---|---|---|
+| `POST` | `/api/v1/auth/register` | None | Any | Register user account | `{ "name", "email", "phone", "password", "role" }` |
+| `POST` | `/api/v1/auth/login` | None | Any | User/Admin login & token | `{ "email" / "phone", "password" }` |
+| `GET` | `/api/v1/auth/me` | Bearer | Any | Get current session profile | None |
+| `POST` | `/api/v1/auth/forgot-password` | None | Any | Request reset OTP | `{ "email" / "phone" }` |
+| `POST` | `/api/v1/auth/reset-password` | None | Any | Reset password with OTP | `{ "otp", "newPassword" }` |
+| `PUT` | `/api/v1/auth/change-password` | Bearer | Any | Update password | `{ "currentPassword", "newPassword" }` |
+
+---
+
+## 👤 2. Customer / Consumer APIs (`/api/v1/orders`, `/api/v1/mills`, `/api/v1/users`)
+
+| Method | Endpoint | Auth | Purpose | Request Body / Query |
+|---|---|---|---|---|
+| `GET` | `/api/v1/mills/nearby` | None | Geospatial mill discovery | `?latitude=23.0225&longitude=72.5714&radius=10` |
+| `GET` | `/api/v1/grain-types` | None | List available grain types | None |
+| `GET` | `/api/v1/grain-sources` | None | List grain source options | None |
+| `POST` | `/api/v1/orders` | Bearer | Place custom milling order | `{ "millId": 101, "grainSource": "CUSTOMER", "grainTypeId": 1, "quantityKg": 10, "serviceType": "GRINDING", "fulfillmentType": "DELIVERY", "addressId": 25, "paymentMethod": "UPI" }` |
+| `GET` | `/api/v1/orders` | Bearer | List customer's orders | `?page=1&limit=20&status=PROCESSING` |
+| `GET` | `/api/v1/orders/active` | Bearer | List active orders | None |
+| `GET` | `/api/v1/orders/completed` | Bearer | List order history | None |
+| `GET` | `/api/v1/orders/{orderId}` | Bearer | Order detail breakdown | None |
+| `GET` | `/api/v1/orders/{orderId}/tracking` | Bearer | Live tracking timeline & ETA | None |
+| `POST` | `/api/v1/orders/{orderId}/cancel` | Bearer | Cancel order before packing | `{ "reason": "Customer cancellation" }` |
+| `POST` | `/api/v1/orders/{orderId}/repeat` | Bearer | 1-Tap repeat re-order | None |
+| `POST` | `/api/v1/orders/{orderId}/confirm-receipt` | Bearer | Confirm delivery receipt | None |
+| `POST` | `/api/v1/orders/{orderId}/review` | Bearer | Submit 5-star rating & review | `{ "rating": 5, "review": "Fresh and fine!" }` |
+| `GET` | `/api/v1/users/me/addresses` | Bearer | Get saved addresses | None |
+| `POST` | `/api/v1/users/me/addresses` | Bearer | Save new address | `{ "addressLine1", "city", "pincode", "latitude", "longitude" }` |
+
+---
+
+## 🏪 3. Merchant / Mill Owner APIs (`/api/v1/shopkeeper`)
+
 | Method | Endpoint | Auth | Purpose | Request Body |
 |---|---|---|---|---|
-| `POST` | `/api/v1/auth/register` | None | Register new user | `{ "name", "email", "phone", "password", "role" }` |
-| `POST` | `/api/v1/auth/login` | None | User login & token retrieval | `{ "email" / "phone", "password" }` |
-| `POST` | `/api/v1/auth/logout` | None | Invalidate session | None |
-| `POST` | `/api/v1/auth/refresh-token` | Bearer | Refresh JWT token | None |
-| `POST` | `/api/v1/auth/forgot-password` | None | Request OTP for password reset | `{ "email" / "phone" }` |
-| `POST` | `/api/v1/auth/reset-password` | None | Reset password with OTP | `{ "otp", "newPassword" }` |
-| `POST` | `/api/v1/auth/verify-otp` | None | Verify OTP code | `{ "otp" }` |
-| `POST` | `/api/v1/auth/resend-otp` | None | Resend OTP code | `{ "phone" }` |
-| `GET` | `/api/v1/auth/me` | Bearer | Get current logged-in user profile | None |
-| `PUT` | `/api/v1/auth/change-password` | Bearer | Change current password | `{ "currentPassword", "newPassword" }` |
+| `GET` | `/api/v1/shopkeeper/dashboard` | Bearer | Real-time KPIs & daily revenue | None |
+| `GET` | `/api/v1/shopkeeper/profile` | Bearer | Get mill & owner details | None |
+| `PUT` | `/api/v1/shopkeeper/profile` | Bearer | Update mill & owner profile | `{ "name", "phone", "address", "services" }` |
+| `GET` | `/api/v1/shopkeeper/orders/pending` | Bearer | Incoming orders queue | None |
+| `GET` | `/api/v1/shopkeeper/orders/active` | Bearer | Active milling jobs | None |
+| `GET` | `/api/v1/shopkeeper/orders/completed` | Bearer | Completed orders | None |
+| `POST` | `/api/v1/shopkeeper/orders/{id}/accept` | Bearer | Accept order & set completion ETA | `{ "estimatedCompletionMinutes": 30 }` |
+| `POST` | `/api/v1/shopkeeper/orders/{id}/reject` | Bearer | Decline order with reason | `{ "reason": "Store busy" }` |
+| `PUT` | `/api/v1/shopkeeper/orders/{id}/completion-time` | Bearer | Adjust completion time | `{ "estimatedCompletionMinutes": 40 }` |
+| `POST` | `/api/v1/shopkeeper/orders/{id}/start` | Bearer | Start milling / grinding | None |
+| `POST` | `/api/v1/shopkeeper/orders/{id}/packing` | Bearer | Start flour packing | None |
+| `POST` | `/api/v1/shopkeeper/orders/{id}/ready` | Bearer | Mark ready for pickup / delivery | None |
+| `POST` | `/api/v1/shopkeeper/orders/{id}/handover` | Bearer | Handover order to driver with PIN | `{ "pin": "4821" }` |
+| `POST` | `/api/v1/shopkeeper/orders/{id}/complete` | Bearer | Complete self-pickup order | None |
+| `GET` | `/api/v1/shopkeeper/inventory` | Bearer | List grain & flour stock items | None |
+| `GET` | `/api/v1/shopkeeper/inventory/low-stock` | Bearer | Get low-stock items | None |
+| `POST` | `/api/v1/shopkeeper/inventory` | Bearer | Add new inventory item | `{ "name", "productType", "stockKg", "minimumStockKg", "pricePerKg" }` |
+| `PUT` | `/api/v1/shopkeeper/inventory/{id}` | Bearer | Update inventory item | Inventory fields |
+| `DELETE` | `/api/v1/shopkeeper/inventory/{id}` | Bearer | Remove inventory item | None |
+| `POST` | `/api/v1/shopkeeper/inventory/{id}/stock-in` | Bearer | Add stock in kg | `{ "kg": 50 }` |
+| `POST` | `/api/v1/shopkeeper/inventory/{id}/stock-out` | Bearer | Deduct stock in kg | `{ "kg": 20 }` |
+| `GET` | `/api/v1/shopkeeper/availability` | Bearer | Get Open/Closed status | None |
+| `PUT` | `/api/v1/shopkeeper/availability` | Bearer | Toggle Open/Closed status | `{ "isOpen": true }` |
+| `PUT` | `/api/v1/shopkeeper/working-hours` | Bearer | Update mill working hours | `{ "workingHours": "08:00 AM - 08:00 PM" }` |
 
 ---
 
-## 👤 2. Main User / Customer Profile APIs (`/api/v1/users`)
+## 🛵 4. Delivery Partner / Rider APIs (`/api/v1/delivery`)
 
 | Method | Endpoint | Auth | Purpose | Request Body |
 |---|---|---|---|---|
-| `GET` | `/api/v1/users/me` | Bearer | Get user profile details | None |
-| `PUT` | `/api/v1/users/me` | Bearer | Update user profile details | `{ "name", "phone" }` |
-| `POST` | `/api/v1/users/me/profile-image` | Bearer | Upload/update profile image | `{ "imageUrl" }` |
-| `GET` | `/api/v1/users/me/addresses` | Bearer | Get all saved addresses | None |
-| `POST` | `/api/v1/users/me/addresses` | Bearer | Add new delivery address | `{ "addressLine1", "city", "pincode", "latitude", "longitude" }` |
-| `PUT` | `/api/v1/users/me/addresses/{id}` | Bearer | Update saved address | Address fields |
-| `DELETE` | `/api/v1/users/me/addresses/{id}` | Bearer | Delete address | None |
-| `PUT` | `/api/v1/users/me/addresses/{id}/default` | Bearer | Set default delivery address | None |
+| `POST` | `/api/v1/delivery/auth/login` | None | Rider login | `{ "email" / "phone", "password" }` |
+| `GET` | `/api/v1/delivery/profile` | Bearer | Get rider vehicle & ratings | None |
+| `PUT` | `/api/v1/delivery/status` | Bearer | Toggle online/offline status | `{ "isOnline": true }` |
+| `GET` | `/api/v1/delivery/available-trips` | Bearer | List orders waiting for pickup | None |
+| `GET` | `/api/v1/delivery/assigned` | Bearer | Current active assigned trips | None |
+| `GET` | `/api/v1/delivery/completed` | Bearer | Rider delivered trip history | None |
+| `POST` | `/api/v1/delivery/orders/{id}/accept` | Bearer | Accept delivery task | None |
+| `POST` | `/api/v1/delivery/orders/{id}/pickup` | Bearer | Confirm pickup from mill | `{ "pin": "4821" }` |
+| `POST` | `/api/v1/delivery/orders/{id}/out-for-delivery` | Bearer | En route to customer | None |
+| `POST` | `/api/v1/delivery/orders/{id}/location` | Bearer | Stream live GPS coordinates | `{ "latitude": 23.0245, "longitude": 72.5708 }` |
+| `POST` | `/api/v1/delivery/orders/{id}/deliver` | Bearer | Complete delivery with OTP | `{ "otp": "7391" }` |
+| `GET` | `/api/v1/delivery/earnings` | Bearer | Daily & weekly earnings summary | None |
 
 ---
 
-## 🌾 3. Nearby Mill APIs (`/api/v1/mills`)
+## 🛡️ 5. Admin Web Console APIs (`/api/v1/admin`)
 
-| Method | Endpoint | Auth | Purpose | Query / Request |
+| Method | Endpoint | Auth | Purpose | Request Body / Query |
 |---|---|---|---|---|
-| `GET` | `/api/v1/mills/nearby` | None | Geospatial nearby mill locator | `?latitude=23.0225&longitude=72.5714&radius=5` |
-| `GET` | `/api/v1/mills` | None | Search & filter mills | `?search=Ganesh&isOpen=true` |
-| `GET` | `/api/v1/mills/{millId}` | None | Get specific mill details | None |
-| `GET` | `/api/v1/mills/{millId}/services` | None | List available mill services | None |
-| `GET` | `/api/v1/mills/{millId}/grains` | None | List available grain types | None |
-| `GET` | `/api/v1/mills/{millId}/availability` | None | Check mill open/close state | None |
-| `GET` | `/api/v1/mills/{millId}/working-hours` | None | Get mill working hours | None |
-| `GET` | `/api/v1/mills/{millId}/ratings` | None | Get mill ratings & reviews | None |
+| `GET` | `/api/v1/admin/dashboard` | Bearer | Platform wide KPIs & active fleets | None |
+| `GET` | `/api/v1/admin/mills` | Bearer | Master flour mills list | None |
+| `POST` | `/api/v1/admin/mills` | Bearer | Register new mill on platform | `{ "name", "address", "phone", "capacityKgPerDay" }` |
+| `PUT` | `/api/v1/admin/mills/{id}` | Bearer | Update mill information | Mill fields |
+| `DELETE` | `/api/v1/admin/mills/{id}` | Bearer | Remove/deactivate mill | None |
+| `GET` | `/api/v1/admin/riders` | Bearer | List delivery fleet partners | None |
+| `PUT` | `/api/v1/admin/riders/{id}/status` | Bearer | Activate/suspend driver | `{ "isOnline": true }` |
+| `GET` | `/api/v1/admin/wholesalers` | Bearer | List grain wholesalers & stock | None |
+| `POST` | `/api/v1/admin/wholesalers` | Bearer | Register grain supplier | `{ "name", "phone", "city", "grainsSupplied" }` |
+| `GET` | `/api/v1/admin/orders` | Bearer | Master orders ledger | `?status=PROCESSING&millId=101` |
+| `PUT` | `/api/v1/admin/orders/{id}/status` | Bearer | Superadmin override order status | `{ "status": "COMPLETED", "note": "Admin override" }` |
+| `GET` | `/api/v1/admin/security` | Bearer | Platform security & audit logs | None |
+| `GET` | `/api/v1/admin/fraud` | Bearer | Fraud monitor alerts | None |
+| `GET` | `/api/v1/admin/withdrawals` | Bearer | Merchant/Rider payout records | None |
+| `GET` | `/api/v1/admin/refunds` | Bearer | Customer refund requests | None |
 
 ---
 
-## 🌽 4. Grain Catalog APIs (`/api/v1`)
+## 🔔 6. Notifications & FCM Devices (`/api/v1/notifications`)
 
-| Method | Endpoint | Auth | Purpose |
+| Method | Endpoint | Auth | Purpose | Request Body |
+|---|---|---|---|---|
+| `GET` | `/api/v1/notifications` | Bearer | Get user notifications | None |
+| `GET` | `/api/v1/notifications/unread` | Bearer | Get unread notification count | None |
+| `PUT` | `/api/v1/notifications/{id}/read` | Bearer | Mark notification as read | None |
+| `PUT` | `/api/v1/notifications/read-all` | Bearer | Mark all notifications as read | None |
+| `POST` | `/api/v1/notifications/devices/register` | Bearer | Register mobile FCM token | `{ "fcmToken", "deviceType": "ANDROID" }` |
+
+---
+
+## 🧪 Quick Test Credentials
+
+| Role | Email | Password | Phone |
 |---|---|---|---|
-| `GET` | `/api/v1/grain-sources` | None | List grain sources (`CUSTOMER`, `MILL`, `VENDOR`) |
-| `GET` | `/api/v1/grain-sources/{id}` | None | Get specific grain source details |
-| `GET` | `/api/v1/grain-types` | None | List all grain types (Wheat, Rice, Bajra, etc.) |
-| `GET` | `/api/v1/grain-types/{id}` | None | Get specific grain type details |
-
----
-
-## 📦 5. Customer Order APIs (`/api/v1/orders`)
-
-| Method | Endpoint | Auth | Purpose | Request Body |
-|---|---|---|---|---|
-| `POST` | `/api/v1/orders` | Bearer | Place a new order | `{ "millId": 101, "grainSource": "CUSTOMER", "grainTypeId": 1, "quantityKg": 10, "serviceType": "GRINDING", "fulfillmentType": "DELIVERY", "addressId": 25, "paymentMethod": "UPI" }` |
-| `GET` | `/api/v1/orders` | Bearer | Get customer orders | `?page=1&limit=20&status=COMPLETED` |
-| `GET` | `/api/v1/orders/active` | Bearer | Get active processing orders | None |
-| `GET` | `/api/v1/orders/history` | Bearer | Get completed orders history | None |
-| `GET` | `/api/v1/orders/cancelled` | Bearer | Get cancelled orders | None |
-| `GET` | `/api/v1/orders/{orderId}` | Bearer | Get specific order details | None |
-| `GET` | `/api/v1/orders/{orderId}/status` | Bearer | Get current order status | None |
-| `GET` | `/api/v1/orders/{orderId}/timeline` | Bearer | Get full status history timeline | None |
-| `GET` | `/api/v1/orders/{orderId}/estimated-time` | Bearer | Get estimated completion time | None |
-| `GET` | `/api/v1/orders/{orderId}/tracking` | Bearer | Get real-time delivery tracking | None |
-| `POST` | `/api/v1/orders/{orderId}/cancel` | Bearer | Cancel order (if before packing) | `{ "reason": "Changed mind" }` |
-| `POST` | `/api/v1/orders/{orderId}/confirm-receipt` | Bearer | Confirm order received | None |
-| `POST` | `/api/v1/orders/{orderId}/repeat` | Bearer | Reorder previous order | None |
-
----
-
-## 💳 6. Payment APIs (`/api/v1/payments`)
-
-| Method | Endpoint | Auth | Purpose | Request Body |
-|---|---|---|---|---|
-| `POST` | `/api/v1/payments/create` | Bearer | Create payment transaction | `{ "orderId": 501, "amount": 90, "paymentMethod": "UPI" }` |
-| `POST` | `/api/v1/payments/verify` | Bearer | Verify payment gateway callback | `{ "paymentId": "PAY-1001", "transactionId": "TXN_123" }` |
-| `GET` | `/api/v1/payments/{paymentId}` | Bearer | Get payment status details | None |
-| `GET` | `/api/v1/payments/order/{orderId}` | Bearer | Get payment details for order | None |
-| `POST` | `/api/v1/payments/{paymentId}/refund` | Bearer | Request payment refund | None |
-
----
-
-## 🛵 7. Delivery Person APIs (`/api/v1/delivery`)
-
-| Method | Endpoint | Auth | Purpose | Request Body |
-|---|---|---|---|---|
-| `POST` | `/api/v1/delivery/auth/login` | None | Delivery person login | `{ "email" / "phone", "password" }` |
-| `GET` | `/api/v1/delivery/orders` | Bearer | List delivery orders | None |
-| `GET` | `/api/v1/delivery/orders/assigned` | Bearer | Get assigned orders for logged agent | None |
-| `POST` | `/api/v1/delivery/orders/{orderId}/accept` | Bearer | Accept delivery task | None |
-| `POST` | `/api/v1/delivery/orders/{orderId}/picked-up` | Bearer | Mark picked up from mill | None |
-| `POST` | `/api/v1/delivery/orders/{orderId}/out-for-delivery` | Bearer | Mark out for delivery | None |
-| `POST` | `/api/v1/delivery/orders/{orderId}/delivered` | Bearer | Mark order delivered to customer | None |
-
----
-
-## ⭐ 8. Ratings & Review APIs (`/api/v1`)
-
-| Method | Endpoint | Auth | Purpose | Request Body |
-|---|---|---|---|---|
-| `POST` | `/api/v1/orders/{orderId}/review` | Bearer | Submit review for completed order | `{ "rating": 5, "review": "Great quality!" }` |
-| `GET` | `/api/v1/orders/{orderId}/review` | Bearer | Get review for specific order | None |
-| `PUT` | `/api/v1/reviews/{reviewId}` | Bearer | Update review | `{ "rating", "review" }` |
-| `DELETE` | `/api/v1/reviews/{reviewId}` | Bearer | Delete review | None |
-
----
-
-## 🔔 9. Notification APIs (`/api/v1`)
-
-| Method | Endpoint | Auth | Purpose |
-|---|---|---|---|
-| `GET` | `/api/v1/notifications` | Bearer | List all notifications |
-| `GET` | `/api/v1/notifications/unread` | Bearer | List unread notifications |
-| `PUT` | `/api/v1/notifications/{id}/read` | Bearer | Mark notification as read |
-| `PUT` | `/api/v1/notifications/read-all` | Bearer | Mark all notifications read |
-| `POST` | `/api/v1/devices/register` | Bearer | Register FCM push notification token |
-
----
-
-## 🏪 10. Shopkeeper / Mill Dashboard APIs (`/api/v1/shopkeeper`)
-
-| Method | Endpoint | Auth | Purpose | Request Body |
-|---|---|---|---|---|
-| `GET` | `/api/v1/shopkeeper/dashboard` | Bearer | Get dashboard metrics | None |
-| `GET` | `/api/v1/shopkeeper/orders/pending` | Bearer | List new pending orders | None |
-| `GET` | `/api/v1/shopkeeper/orders/active` | Bearer | List active processing orders | None |
-| `GET` | `/api/v1/shopkeeper/revenue` | Bearer | Get total mill revenue | None |
-| `POST` | `/api/v1/shopkeeper/orders/{orderId}/accept` | Bearer | Accept order & set completion ETA | `{ "estimatedCompletionMinutes": 45 }` |
-| `POST` | `/api/v1/shopkeeper/orders/{orderId}/reject` | Bearer | Reject order | `{ "reason": "Machine maintenance" }` |
-| `POST` | `/api/v1/shopkeeper/orders/{orderId}/start` | Bearer | Start grinding processing | None |
-| `POST` | `/api/v1/shopkeeper/orders/{orderId}/packing` | Bearer | Start packing order | None |
-| `POST` | `/api/v1/shopkeeper/orders/{orderId}/ready` | Bearer | Mark order ready for delivery/pickup | None |
-| `POST` | `/api/v1/shopkeeper/orders/{orderId}/handover` | Bearer | Handover order to delivery agent | None |
-| `GET` | `/api/v1/shopkeeper/inventory` | Bearer | Get flour & grain inventory | None |
-| `POST` | `/api/v1/shopkeeper/inventory/{id}/stock-in` | Bearer | Add stock quantity | `{ "kg": 50 }` |
-| `POST` | `/api/v1/shopkeeper/inventory/{id}/stock-out` | Bearer | Deduct stock quantity | `{ "kg": 20 }` |
-| `PUT` | `/api/v1/shopkeeper/availability` | Bearer | Toggle mill open/close state | `{ "isOpen": true }` |
+| **Customer** | `ramesh@example.com` | `Password123!` | `+919876543210` |
+| **Merchant** | `shop@shreeganesh.com` | `Password123!` | `+919876543211` |
+| **Delivery Rider** | `delivery@herdoor.com` | `Password123!` | `+919876543212` |
+| **Admin** | `admin@herdoor.com` | `Password123!` | `+919876543200` |

@@ -26,6 +26,34 @@ class FlourMill {
     required this.address,
     required this.story,
   });
+
+  factory FlourMill.fromJson(Map<String, dynamic> json) {
+    final rawId = json['id']?.toString() ?? '101';
+    final name = json['name']?.toString() ?? 'Flour Mill';
+    final rating = (json['rating'] as num?)?.toDouble() ?? 4.9;
+    final reviewCount = (json['reviewCount'] ?? json['review_count'] as num?)?.toInt() ?? 128;
+    final distanceKm = (json['distanceKm'] ?? json['distance_km'] as num?)?.toDouble() ?? 0.8;
+    final specialty = json['specialty']?.toString() ?? 'Specialist in Stone Grounding';
+    final statusText = json['statusText'] ?? (json['isOpen'] == false ? 'Closed' : 'Open • Busy (25m wait)');
+    final isOpen = json['isOpen'] is bool ? json['isOpen'] : (json['is_active'] != 0);
+    final imageUrl = json['imageUrl'] ?? json['image_url'] ?? 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=600&q=80';
+    final address = json['address']?.toString() ?? '12 Market Yard, Ellisbridge, Ahmedabad';
+    final story = json['story']?.toString() ?? 'Crafting pure, stone-ground flour since 1982.';
+
+    return FlourMill(
+      id: rawId,
+      name: name,
+      rating: rating,
+      reviewCount: reviewCount,
+      distanceKm: distanceKm,
+      specialty: specialty,
+      statusText: statusText,
+      isOpen: isOpen,
+      imageUrl: imageUrl,
+      address: address,
+      story: story,
+    );
+  }
 }
 
 class GrainProduct {
@@ -132,14 +160,15 @@ class MockData {
     },
   ];
 
-  static final Set<String> favoriteMillIds = {'m1', 'm2'};
+  static final Set<String> favoriteMillIds = {'101'};
 
-  static bool isFavorite(String millId) => favoriteMillIds.contains(millId);
+  static bool isFavorite(String millId) => favoriteMillIds.contains(millId.toString());
   static void toggleFavorite(String millId) {
-    if (favoriteMillIds.contains(millId)) {
-      favoriteMillIds.remove(millId);
+    final strId = millId.toString();
+    if (favoriteMillIds.contains(strId)) {
+      favoriteMillIds.remove(strId);
     } else {
-      favoriteMillIds.add(millId);
+      favoriteMillIds.add(strId);
     }
   }
 
@@ -204,16 +233,16 @@ class MockData {
 
   static final List<OrderModel> orders = [
     OrderModel(
-      orderId: '#HD-8472',
+      orderId: 'ORD-2026-1004',
       millName: 'Artisan Mill Co.',
-      itemSummary: 'Premium Sharbati',
-      quantityKg: '10 kg',
+      itemSummary: '5kg Wheat (Gehun)',
+      quantityKg: '5 kg',
       estimatedDelivery: 'Within 20 minutes',
-      statusStep: 'Milling in Progress',
-      totalPrice: 14.00,
+      statusStep: 'READY FOR PICKUP',
+      totalPrice: 90.00,
       isActive: true,
-      date: 'Today, 11:15 AM',
-      selectedGrain: 'Premium Wheat',
+      date: 'Ordered at 13:00',
+      selectedGrain: 'Wheat (Gehun)',
       grainSource: 1,
       pickupAddress: 'Home - 124 Heritage Way',
       deliveryAddress: 'Home - 124 Heritage Way',
@@ -224,33 +253,66 @@ class MockData {
         TrackingStep(
           title: 'Order Placed',
           subtitle: 'We received your order.',
-          timeText: '10:00 AM',
+          timeText: '13:00',
           isCompleted: true,
         ),
         TrackingStep(
           title: 'Order Pickup',
-          subtitle: 'Picked up by Rahul Sharma (Pickup Agent)',
-          timeText: '10:20 AM',
+          subtitle: 'Picked up by Rahul Sharma',
+          timeText: '13:15',
           isCompleted: true,
         ),
         TrackingStep(
-          title: 'Order Processing',
-          subtitle: 'Milling & quality packaging in progress at mill.',
-          timeText: 'In 20 mins',
-          isCompleted: false,
+          title: 'Ready for Pickup',
+          subtitle: 'Milled and ready for delivery/pickup.',
+          timeText: '13:30',
+          isCompleted: true,
           isCurrent: true,
         ),
         TrackingStep(
           title: 'Out for Delivery',
-          subtitle: 'Delivery partner on the way to your door.',
-          timeText: '',
+          subtitle: 'Delivery partner assigned.',
+          timeText: 'Pending',
           isCompleted: false,
         ),
         TrackingStep(
           title: 'Delivered',
           subtitle: 'Fresh flour delivered at your door.',
-          timeText: '',
+          timeText: 'Pending',
           isCompleted: false,
+        ),
+      ],
+    ),
+    OrderModel(
+      orderId: 'ORD-2026-1001',
+      millName: 'Artisan Mill Co.',
+      itemSummary: '10kg Wheat (Gehun)',
+      quantityKg: '10 kg',
+      estimatedDelivery: 'Within 30 minutes',
+      statusStep: 'IN PROGRESS',
+      totalPrice: 90.00,
+      isActive: true,
+      date: 'Ordered at 10:00',
+      selectedGrain: 'Wheat (Gehun)',
+      grainSource: 1,
+      pickupAddress: 'Home - 124 Heritage Way',
+      deliveryAddress: 'Home - 124 Heritage Way',
+      paymentMethod: 'Visa Card (•••• 4242)',
+      millingFee: 4.00,
+      deliveryFee: 2.00,
+      trackingSteps: [
+        TrackingStep(
+          title: 'Order Placed',
+          subtitle: 'We received your order.',
+          timeText: '10:00',
+          isCompleted: true,
+        ),
+        TrackingStep(
+          title: 'Milling in Progress',
+          subtitle: 'Stone chakki grinding.',
+          timeText: '10:20',
+          isCompleted: false,
+          isCurrent: true,
         ),
       ],
     ),

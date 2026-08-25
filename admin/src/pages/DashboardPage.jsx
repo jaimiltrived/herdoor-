@@ -145,26 +145,29 @@ export default function DashboardPage({
                   boxShadow: '0 4px 16px rgba(140, 74, 62, 0.04)',
                   display: 'flex',
                   alignItems: 'center',
-                  justify: 'space-between',
+                  justifyContent: 'space-between',
+                  gap: 14,
                 }}
                 className="quick-access-tile"
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1, minWidth: 0 }}>
                   <div
                     style={{
-                      width: 44,
-                      height: 44,
+                      width: 46,
+                      height: 46,
                       borderRadius: 14,
                       backgroundColor: qa.bg,
                       display: 'flex',
                       alignItems: 'center',
-                      justify: 'center',
+                      justifyContent: 'center',
                       color: qa.color,
+                      flexShrink: 0,
+                      alignSelf: 'center',
                     }}
                   >
                     <IconComp size={22} />
                   </div>
-                  <div>
+                  <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0, flex: 1 }}>
                     <span
                       style={{
                         fontSize: '0.65rem',
@@ -172,15 +175,16 @@ export default function DashboardPage({
                         color: qa.color,
                         letterSpacing: 0.5,
                         textTransform: 'uppercase',
+                        marginBottom: 2,
                       }}
                     >
                       {qa.badge}
                     </span>
-                    <div style={{ fontWeight: 800, fontSize: '0.98rem', color: '#2A2421' }}>{qa.title}</div>
-                    <div style={{ fontSize: '0.78rem', color: '#756D69' }}>{qa.subtitle}</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.98rem', color: '#2A2421', lineHeight: 1.25 }}>{qa.title}</div>
+                    <div style={{ fontSize: '0.78rem', color: '#756D69', marginTop: 2, lineHeight: 1.3 }}>{qa.subtitle}</div>
                   </div>
                 </div>
-                <ArrowRight size={16} color="#A59D96" />
+                <ArrowRight size={16} color="#A59D96" style={{ flexShrink: 0, alignSelf: 'center' }} />
               </div>
             );
           })}
@@ -304,7 +308,7 @@ export default function DashboardPage({
           <tbody>
             {orders.map((ord) => (
               <tr key={ord.id}>
-                <td style={{ fontWeight: 800, fontFamily: 'Playfair Display, serif', fontSize: '1.05rem', color: '#8C4A3E' }}>
+                <td style={{ fontWeight: 800, fontSize: '0.95rem', color: '#8C4A3E' }}>
                   {ord.id}
                 </td>
                 <td>
@@ -377,7 +381,7 @@ export default function DashboardPage({
             {pendingRequests.map((req) => (
               <tr key={req.id}>
                 <td style={{ fontWeight: 800, fontSize: '0.9rem', color: '#756D69' }}>{req.id}</td>
-                <td style={{ fontWeight: 800, fontFamily: 'Playfair Display, serif', fontSize: '1.05rem' }}>
+                <td style={{ fontWeight: 800, fontSize: '0.95rem' }}>
                   {req.customerName}
                 </td>
                 <td style={{ fontWeight: 700, fontSize: '0.9rem' }}>{req.grainType}</td>

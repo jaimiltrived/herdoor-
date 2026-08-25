@@ -12,15 +12,15 @@ class MerchantApiService {
   // Dynamic host determination (10.0.2.2 for Android emulator, localhost elsewhere).
   String get baseUrl {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:3000/api/v1';
+      return 'http://10.0.2.2:5000/api/v1';
     }
-    return 'http://localhost:3000/api/v1';
+    return 'http://localhost:5000/api/v1';
   }
 
   String? _authToken;
   bool _isOfflineMode = false;
   DateTime? _lastOfflineCheck;
-  static const Duration _timeout = Duration(milliseconds: 500);
+  static const Duration _timeout = Duration(seconds: 4);
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',

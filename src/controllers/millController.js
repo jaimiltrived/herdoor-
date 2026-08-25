@@ -96,6 +96,16 @@ exports.getMillGrains = (req, res) => {
   res.json({ status: 'success', data: { grains: store.grainTypes } });
 };
 
+exports.getMillProducts = (req, res) => {
+  const millId = parseInt(req.params.millId);
+  const products = store.readymadeProducts || [];
+  res.json({
+    status: 'success',
+    count: products.length,
+    data: { products }
+  });
+};
+
 exports.getMillAvailability = (req, res) => {
   const millId = parseInt(req.params.millId);
   const mill = store.mills.find(m => m.id === millId);

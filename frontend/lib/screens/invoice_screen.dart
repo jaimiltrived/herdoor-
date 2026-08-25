@@ -16,18 +16,20 @@ class InvoiceScreen extends StatefulWidget {
   final String pickupTime; // Doubles as delivery time for readymade
   final String address;
   final String paymentMethod;
+  final String? orderNumber;
 
   const InvoiceScreen({
     super.key,
     this.cartItems = const [],
-    this.millName = 'Artisan Mill Co.',
+    this.millName = 'Shree Ganesh Flour Mill',
     this.subtotal = 0.0,
     this.pickupFee = 0.0,
     this.deliveryFee = 0.0,
     this.total = 0.0,
-    this.pickupTime = '10:00 AM Today',
-    this.address = 'Home',
+    this.pickupTime = 'Within 24 Hours',
+    this.address = '456 Heritage Block, District 9, NY',
     this.paymentMethod = 'Visa Card',
+    this.orderNumber,
   });
 
   @override
@@ -37,13 +39,13 @@ class InvoiceScreen extends StatefulWidget {
 class _InvoiceScreenState extends State<InvoiceScreen> {
   late String _receiptId;
   late OrderModel _order;
-  int _secondsRemaining = 5;
+  int _secondsRemaining = 3;
   Timer? _autoRedirectTimer;
 
   @override
   void initState() {
     super.initState();
-    _receiptId = '#HD-${1000 + Random().nextInt(8999)}';
+    _receiptId = widget.orderNumber ?? '#HD-${6000 + Random().nextInt(899)}';
 
     _order = OrderModel(
       orderId: _receiptId,
@@ -239,7 +241,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            '456 Heritage Block, District 9, NY',
+                            widget.address.isNotEmpty ? widget.address : '456 Heritage Block, District 9, NY',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 13,
                               color: AppTheme.textSecondary,

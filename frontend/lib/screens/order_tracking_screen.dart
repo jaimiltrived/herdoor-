@@ -15,15 +15,159 @@ class OrderTrackingScreen extends StatefulWidget {
 class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   int _viewMode = 0; // 0 = Stepper View (Image 1), 1 = Map & Details View (Image 5)
   Timer? _uiRefreshTimer;
+  late OrderModel _order;
 
   @override
   void initState() {
     super.initState();
-    _uiRefreshTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+    _order = widget.order;
+    _ensureTrackingSteps();
+    _uiRefreshTimer = Timer.periodic(const Duration(seconds: 2), (t) {
       if (mounted) {
         setState(() {});
       }
     });
+  }
+
+  void _ensureTrackingSteps() {
+    if (_order.trackingSteps.isEmpty) {
+      final s = _order.statusStep.toUpperCase();
+      final isDelivered = s == 'DELIVERED' || s == 'COMPLETED';
+      final isOut = s == 'OUT FOR DELIVERY' || s == 'OUT_FOR_DELIVERY';
+      final isReady = s == 'READY' || s == 'READY FOR PICKUP' || s == 'READY_FOR_PICKUP' || s == 'PACKING';
+      final isMilling = s == 'IN PROGRESS' || s == 'PROCESSING' || s == 'MILLING' || s == 'ACCEPTED';
+
+      _order.trackingSteps.addAll([
+        TrackingStep(
+          title: 'Order Placed',
+          subtitle: 'Received at mill',
+          timeText: '10:00 AM',
+          isCompleted: true,
+          isCurrent: false,
+        ),
+        TrackingStep(
+          title: 'Grain Cleaning',
+          subtitle: 'Moisture checked',
+          timeText: (isMilling || isReady || isOut || isDelivered) ? '10:15 AM' : '',
+          isCompleted: (isMilling || isReady || isOut || isDelivered),
+          isCurrent: !isMilling && !isReady && !isOut && !isDelivered,
+        ),
+        TrackingStep(
+          title: 'Milling in Progress',
+          subtitle: 'Stone chakki grinding',
+          timeText: (isReady || isOut || isDelivered) ? '10:30 AM' : (isMilling ? 'In progress' : 'Pending'),
+          isCompleted: (isReady || isOut || isDelivered),
+          isCurrent: isMilling,
+        ),
+        TrackingStep(
+          title: 'Out for Delivery',
+          subtitle: 'Assigned to driver',
+          timeText: isDelivered ? '11:00 AM' : (isOut ? 'On the way' : 'Pending'),
+          isCompleted: isDelivered,
+          isCurrent: isOut,
+        ),
+        TrackingStep(
+          title: 'Delivered',
+          subtitle: 'Doorstep handover',
+          timeText: isDelivered ? '11:15 AM' : 'Pending',
+          isCompleted: isDelivered,
+          isCurrent: false,
+        ),
+      ]);
+    }
+  }
+
+  void _advanceStep() {
+    setState(() {
+      final steps = _order.trackingSteps;
+      if (steps.isEmpty) return;
+
+      int cur = steps.indexWhere((s) => s.isCurrent);
+      if (cur == -1) {
+        cur = steps.indexWhere((s) => !s.isCompleted);
+      }
+
+      if (cur != -1 && cur < steps.length) {
+        final now = DateTime.now();
+        final hour = now.hour > 12 ? now.hour - 12 : (now.hour == 0 ? 12 : now.hour);
+        final period = now.hour >= 12 ? 'PM' : 'AM';
+        final minute = now.minute.toString().padLeft(2, '0');
+        final timeStr = '$hour:$minute $period';
+
+        steps[cur] = TrackingStep(
+          title: steps[cur].title,
+          subtitle: steps[cur].subtitle,
+          timeText: (steps[cur].timeText.isEmpty || steps[cur].timeText == 'Pending' || steps[cur].timeText == 'In progress')
+              ? timeStr
+              : steps[cur].timeText,
+          isCompleted: true,
+          isCurrent: false,
+        );
+
+        final next = cur + 1;
+        if (next < steps.length) {
+          final isLast = next == steps.length - 1;
+          steps[next] = TrackingStep(
+            title: steps[next].title,
+            subtitle: steps[next].subtitle,
+            timeText: isLast ? 'Delivered' : 'In progress',
+            isCompleted: isLast,
+            isCurrent: !isLast,
+          );
+          _order.statusStep = steps[next].title;
+          if (isLast) {
+            _order.isActive = false;
+          }
+        } else {
+          _order.statusStep = 'Delivered';
+          _order.isActive = false;
+        }
+      }
+    });
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Order status advanced to: ${_order.statusStep}',
+          style: GoogleFonts.plusJakartaSans(),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _getOrderItems() {
+    if (_order.items.isNotEmpty) {
+      return _order.items;
+    }
+
+    final summary = _order.itemSummary;
+    final qtyNumber = int.tryParse(_order.quantityKg.replaceAll(RegExp(r'[^0-9]'), '')) ?? 5;
+    final total = _order.totalPrice > 0 ? _order.totalPrice : 14.0;
+
+    if (summary.contains(',')) {
+      final parts = summary.split(',');
+      final itemPrice = total / parts.length;
+      return parts.map((part) {
+        final name = part.trim();
+        return {
+          'name': name,
+          'type': name.toLowerCase().contains('pack') || name.toLowerCase().contains('mix') ? 'readymade' : 'milling',
+          'quantity': 1,
+          'price': itemPrice,
+        };
+      }).toList();
+    }
+
+    return [
+      {
+        'name': summary.isNotEmpty ? summary : 'Stone Ground Flour',
+        'type': 'milling',
+        'quantity': qtyNumber,
+        'price': total,
+      }
+    ];
   }
 
   @override
@@ -42,7 +186,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'HerDoor Flour Mill',
+          _order.millName.isNotEmpty ? _order.millName : 'HerDoor Flour Mill',
           style: GoogleFonts.playfairDisplay(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -128,7 +272,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   // --- IMAGE 1 UI VIEW ---
   Widget _buildImage1StepperView() {
-    final activeOrder = widget.order;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -154,7 +297,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Order ${activeOrder.orderId}',
+                    'Order ${_order.orderId}',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -168,7 +311,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Text(
-                      activeOrder.quantityKg,
+                      _order.quantityKg,
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
@@ -178,13 +321,14 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Text(
-                activeOrder.itemSummary,
+                _order.itemSummary,
                 style: GoogleFonts.playfairDisplay(
-                  fontSize: 24,
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimary,
+                  height: 1.25,
                 ),
               ),
               const SizedBox(height: 16),
@@ -217,7 +361,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                           ),
                         ),
                         Text(
-                          activeOrder.estimatedDelivery,
+                          _order.estimatedDelivery,
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
@@ -238,10 +382,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: activeOrder.trackingSteps.length,
+          itemCount: _order.trackingSteps.length,
           itemBuilder: (context, index) {
-            final step = activeOrder.trackingSteps[index];
-            final isLast = index == activeOrder.trackingSteps.length - 1;
+            final step = _order.trackingSteps[index];
+            final isLast = index == _order.trackingSteps.length - 1;
             return IntrinsicHeight(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -309,7 +453,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           },
         ),
 
-        if (activeOrder.isActive && activeOrder.trackingSteps.isNotEmpty) ...[
+        if (_order.isActive && _order.trackingSteps.isNotEmpty) ...[
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(12),
@@ -340,11 +484,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   ),
                 ),
                 TextButton(
-                  onPressed: () {
-                    setState(() {
-                      MockData.advanceOrderStep(activeOrder);
-                    });
-                  },
+                  onPressed: _advanceStep,
                   child: Text(
                     'Skip Next >',
                     style: GoogleFonts.plusJakartaSans(
@@ -410,6 +550,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   // --- IMAGE 5 MAP & RECEIPT VIEW ---
   Widget _buildImage5MapView() {
+    final items = _getOrderItems();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -417,7 +558,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           child: Column(
             children: [
               Text(
-                'Order ${widget.order.orderId}',
+                'Order ${_order.orderId}',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -426,7 +567,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Estimated completion: ${widget.order.estimatedDelivery}',
+                'Estimated completion: ${_order.estimatedDelivery}',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 14,
                   color: AppTheme.textSecondary,
@@ -437,7 +578,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         ),
         const SizedBox(height: 24),
 
-        // Tracking Process Card (Image 5 style)
+        // Tracking Process Card (Dynamic)
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -457,16 +598,20 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 ),
               ),
               const SizedBox(height: 18),
-              _buildSimpleStep(true, 'Order Placed', '10:00 AM', false),
-              _buildSimpleStep(true, 'Order Pickup', 'Picked up by Rahul Sharma', false),
-              _buildSimpleStep(
-                false,
-                'Order Processing',
-                'In Progress • In 20 mins',
-                true,
-              ),
-              _buildSimpleStep(false, 'Out for Delivery', 'Driver on the way', false),
-              _buildSimpleStep(false, 'Delivered', 'At your door', false, isLast: true),
+              ..._order.trackingSteps.asMap().entries.map((entry) {
+                final idx = entry.key;
+                final step = entry.value;
+                final isLast = idx == _order.trackingSteps.length - 1;
+                return _buildSimpleStep(
+                  step.isCompleted,
+                  step.title,
+                  step.isCurrent
+                      ? '${step.subtitle} • ${step.timeText}'
+                      : (step.timeText.isNotEmpty ? step.timeText : step.subtitle),
+                  step.isCurrent,
+                  isLast: isLast,
+                );
+              }),
             ],
           ),
         ),
@@ -495,15 +640,16 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 child: Column(
                   children: [
                     Text(
-                      'Artisan Mill Co.',
+                      _order.millName.isNotEmpty ? _order.millName : 'Artisan Mill Co.',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: AppTheme.textPrimary,
                       ),
                     ),
+                    const SizedBox(height: 4),
                     Text(
-                      '124 Heritage Way, Grain District',
+                      _order.deliveryAddress.isNotEmpty ? _order.deliveryAddress : '124 Heritage Way, Grain District',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 13,
                         color: AppTheme.textSecondary,
@@ -511,7 +657,14 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     ),
                     const SizedBox(height: 12),
                     ElevatedButton.icon(
-                      onPressed: () {},
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Contacting ${_order.millName}...'),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.surfaceCream,
                         foregroundColor: AppTheme.textPrimary,
@@ -520,7 +673,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       ),
                       icon: const Icon(Icons.phone_outlined, size: 18),
                       label: Text(
-                        'Contact',
+                        'Contact Mill',
                         style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -532,7 +685,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         ),
         const SizedBox(height: 20),
 
-        // Items Summary Box
+        // Items Summary Box (Dynamic)
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -544,7 +697,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Items',
+                'Items Summary',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -552,66 +705,77 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
+              ...items.map((item) {
+                final name = item['name']?.toString() ?? 'Flour Item';
+                final qty = item['quantity'] ?? 1;
+                final price = (item['price'] is num) ? (item['price'] as num).toDouble() : 5.0;
+                final isWheat = name.toLowerCase().contains('wheat');
+                final badgeColor = isWheat ? const Color(0xFFB5B782) : AppTheme.mustardGold;
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFB5B782),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'Whole\nWheat',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
                         children: [
-                          Text(
-                            'Stone Ground Flour',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.textPrimary,
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: badgeColor,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              name.length > 8 ? '${name.substring(0, 6)}..' : name,
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
-                          Text(
-                            '(2kg)',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 13,
-                              color: AppTheme.textSecondary,
-                            ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                'Qty: $qty',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 12,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
+                      Text(
+                        '\$${(price * (qty is int ? qty : 1)).toStringAsFixed(2)}',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
                     ],
                   ),
-                  Text(
-                    '\$14.00',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-              const Divider(height: 32, color: AppTheme.borderLight),
+                );
+              }),
+              const Divider(height: 24, color: AppTheme.borderLight),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Total',
+                    'Total Paid',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
@@ -619,11 +783,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     ),
                   ),
                   Text(
-                    '\$14.00',
+                    '\$${_order.totalPrice.toStringAsFixed(2)}',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimary,
+                      color: AppTheme.primaryTerracotta,
                     ),
                   ),
                 ],
