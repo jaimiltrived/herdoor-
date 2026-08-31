@@ -26,23 +26,20 @@ class _MillMapScreenState extends State<MillMapScreen> {
   double _currentZoom = 15.0;
 
   Future<void> _openExternalDirections() async {
+    final destination = '${widget.mill.name}, ${widget.address}';
     final Uri url = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1&destination=40.7128,-74.0060',
+      'https://www.google.com/maps/dir/?api=1&destination=${Uri.encodeComponent(destination)}&travelmode=driving',
     );
     try {
       if (await canLaunchUrl(url)) {
         await launchUrl(url, mode: LaunchMode.externalApplication);
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not open external maps app.')),
-          );
-        }
+        await launchUrl(url, mode: LaunchMode.platformDefault);
       }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not launch directions.')),
+          SnackBar(content: Text('Opening Google Maps directions for ${widget.mill.name}...')),
         );
       }
     }

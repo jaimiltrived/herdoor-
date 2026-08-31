@@ -187,3 +187,127 @@ exports.setDefaultAddress = (req, res) => {
 
   res.json({ status: 'success', message: 'Default address updated', data: { address: targetAddress } });
 };
+
+/**
+ * @desc Apply to become a Shopkeeper / Merchant
+ * @route POST /api/v1/users/apply-merchant
+ */
+exports.applyMerchant = async (req, res) => {
+  const userId = req.user ? req.user.id : 1;
+  const user = store.users.find(u => u.id === userId);
+
+  const {
+    storeName,
+    phone,
+    email,
+    address,
+    city,
+    state,
+    pincode,
+    latitude,
+    longitude,
+    capacityKgPerDay,
+    deliveryRadiusKm,
+    workingHours,
+    services,
+    specialty,
+    storeImage,
+    licenseDocument,
+    licenseNumber
+  } = req.body;
+
+  if (!storeName || !address) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Store name and address are required'
+    });
+  }
+
+  // Ensure merchantApplications list exists
+  if (!store.merchantApplications) {
+    store.merchantApplications = [];
+  }
+
+  // Check if existing pending application exists
+  const existingApp = store.merchantApplications.find(
+    app => app.userId === userId && app.status === 'PENDING'
+  );
+  if (existingApp) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'You already have a pending merchant application under review.',
+      data: { application: existingApp }
+    });
+  }
+
+  // Cloudinary upload helper
+  const { uploadToCloudinary } = require('../config/cloudinary');
+  let finalStoreImage = storeImage || 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=600&q=80';
+  let finalLicenseDoc = licenseDocument || 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80';
+
+  if (storeImage && (storeImage.startsWith('data:') || storeImage.startsWith('file:') || storeImage.length > 200)) {
+    const resImg = await uploadToCloudinary(storeImage, 'herdoor/stores');
+    finalStoreImage = resImg.url;
+  }
+  if (licenseDocument && (licenseDocument.startsWith('data:') || licenseDocument.startsWith('file:') || licenseDocument.length > 200)) {
+    const resDoc = await uploadToCloudinary(licenseDocument, 'herdoor/licenses');
+    finalLicenseDoc = resDoc.url;
+  }
+
+  const newApp = {
+    id: `APP-${Date.now()}`,
+    userId,
+    applicantName: user ? user.name : 'Applicant',
+    applicantPhone: phone || (user ? user.phone : '+919876543210'),
+    applicantEmail: email || (user ? user.email : 'applicant@herdoor.com'),
+    storeName,
+    phone: phone || (user ? user.phone : '+919876543210'),
+    address,
+    city: city || 'Ahmedabad',
+    state: state || 'Gujarat',
+    pincode: pincode || '380015',
+    latitude: parseFloat(latitude) || 23.0225,
+    longitude: parseFloat(longitude) || 72.5714,
+    capacityKgPerDay: parseFloat(capacityKgPerDay) || 500,
+    deliveryRadiusKm: parseFloat(deliveryRadiusKm) || 5.0,
+    workingHours: workingHours || '08:00 AM - 08:00 PM',
+    services: Array.isArray(services) && services.length > 0 ? services : ['Flour Grinding', 'Packing', 'Home Delivery'],
+    specialty: specialty || 'Fresh Whole Grain Flour & Custom Milling',
+    storeImage: finalStoreImage,
+    licenseDocument: finalLicenseDoc,
+    licenseNumber: licenseNumber || `FSSAI-${Math.floor(10000000 + Math.random() * 90000000)}`,
+    status: 'PENDING',
+    adminNotes: 'Application submitted and queued for verification.',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  store.merchantApplications.unshift(newApp);
+
+  res.status(201).json({
+    status: 'success',
+    message: 'Merchant application submitted successfully! It is currently under review by admin.',
+    data: { application: newApp }
+  });
+};
+
+/**
+ * @desc Get User's Latest Merchant Application Status
+ * @route GET /api/v1/users/my-merchant-application
+ */
+exports.getMyMerchantApplication = (req, res) => {
+  const userId = req.user ? req.user.id : 1;
+  const applications = (store.merchantApplications || []).filter(app => app.userId === userId);
+  
+  const latestApp = applications.length > 0 ? applications[0] : null;
+
+  res.json({
+    status: 'success',
+    data: {
+      hasApplied: !!latestApp,
+      application: latestApp,
+      isShopkeeper: req.user?.role === 'SHOPKEEPER' || (store.users.find(u => u.id === userId)?.role === 'SHOPKEEPER')
+    }
+  });
+};
+

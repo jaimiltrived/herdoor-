@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
@@ -8,11 +9,7 @@ import 'merchant_active_driver_pickup_screen.dart';
 
 class MerchantDashboardScreen extends StatefulWidget {
   final Function(int) onNavigateTab;
-
-  const MerchantDashboardScreen({
-    super.key,
-    required this.onNavigateTab,
-  });
+  const MerchantDashboardScreen({super.key, required this.onNavigateTab});
 
   @override
   State<MerchantDashboardScreen> createState() => _MerchantDashboardScreenState();
@@ -21,48 +18,87 @@ class MerchantDashboardScreen extends StatefulWidget {
 class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
   bool _isAcceptingOrders = true;
   bool _isLoading = false;
-  int _readyForDispatchCount = 3;
+  int _readyForDispatchCount = 0;
+  Timer? _pollingTimer;
   MerchantDashboardMetrics _metrics = MerchantDashboardMetrics(
-    pendingOrders: 3,
-    activeOrders: 3,
-    completedOrders: 9,
-    totalRevenue: 90.0,
+    pendingOrders: 0,
+    activeOrders: 0,
+    completedOrders: 0,
+    totalRevenue: 0.0,
   );
-  List<MerchantOrder> _activeOrders = MerchantMockData.activeOrders;
+  List<MerchantOrder> _activeOrders = [];
 
   @override
   void initState() {
     super.initState();
-    _loadDashboardData();
+    _loadDashboardData(showLoading: true);
+    // Real-time automatic background polling every 3 seconds
+    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _loadDashboardData(showLoading: false);
+    });
   }
 
-  Future<void> _loadDashboardData() async {
-    // Fetch availability state
-    final bool? availability = await MerchantApiService.instance.getShopAvailability();
-    if (availability != null && mounted) {
-      _isAcceptingOrders = availability;
-    }
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
+  }
 
-    // Fetch dashboard metrics
-    final metrics = await MerchantApiService.instance.getDashboardMetrics();
-    if (metrics != null && mounted) {
-      _metrics = metrics;
-    }
+  Future<void> _loadDashboardData({bool showLoading = false}) async {
+    if (!mounted) return;
+    if (showLoading) setState(() => _isLoading = true);
 
-    // Fetch real count for Ready for Dispatch orders
-    final completedOrders = await MerchantApiService.instance.getCompletedOrders();
-    if (completedOrders != null && completedOrders.isNotEmpty && mounted) {
-      _readyForDispatchCount = completedOrders.length;
-    }
+    try {
+      // Fetch availability state
+      final bool? availability = await MerchantApiService.instance.getShopAvailability();
+      if (availability != null && mounted) {
+        _isAcceptingOrders = availability;
+      }
 
-    // Fetch active processing orders
-    final activeOrders = await MerchantApiService.instance.getActiveOrders();
-    if (activeOrders != null && activeOrders.isNotEmpty && mounted) {
-      _activeOrders = activeOrders;
-    }
+      // Fetch dashboard metrics
+      final metrics = await MerchantApiService.instance.getDashboardMetrics();
+      if (metrics != null && mounted) {
+        _metrics = metrics;
+        _readyForDispatchCount = metrics.readyForDispatchOrders;
+      }
 
-    if (mounted) {
-      setState(() => _isLoading = false);
+      // Fetch live orders (both new incoming and active processing)
+      final newOrdersFuture = MerchantApiService.instance.getNewOrders();
+      final activeOrdersFuture = MerchantApiService.instance.getActiveOrders();
+      final readyOrdersFuture = MerchantApiService.instance.getReadyOrders();
+
+      final results = await Future.wait([newOrdersFuture, activeOrdersFuture, readyOrdersFuture]);
+
+      final newOrders = results[0];
+      final activeOrders = results[1];
+      final readyOrders = results[2];
+
+      if (mounted) {
+        if (readyOrders != null) {
+          _readyForDispatchCount = readyOrders.length;
+        }
+
+        final List<MerchantOrder> combined = [];
+        if (newOrders != null && newOrders.isNotEmpty) {
+          combined.addAll(newOrders);
+        }
+        if (activeOrders != null && activeOrders.isNotEmpty) {
+          for (var o in activeOrders) {
+            if (!combined.any((x) => x.orderId == o.orderId)) {
+              combined.add(o);
+            }
+          }
+        }
+
+        setState(() {
+          if (combined.isNotEmpty) {
+            _activeOrders = combined;
+          }
+          if (showLoading) _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted && showLoading) setState(() => _isLoading = false);
     }
   }
 
@@ -84,6 +120,13 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
   }
 
   Future<void> _handleAcceptOrder(MerchantOrder order) async {
+    setState(() {
+      order.statusTag = 'IN PROGRESS';
+      order.statusColor = const Color(0xFFCBA034);
+      if (_metrics.pendingOrders > 0) _metrics.pendingOrders -= 1;
+      _metrics.activeOrders += 1;
+    });
+
     final orderId = order.numericId ?? 501;
     final success = await MerchantApiService.instance.acceptOrder(orderId, estimatedMinutes: 30);
     if (mounted) {
@@ -491,13 +534,14 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
 
   Widget _buildActiveOrderCard(BuildContext context, MerchantOrder order) {
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => MerchantOrderProcessDetailScreen(order: order),
           ),
         );
+        if (mounted) _loadDashboardData();
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 14),

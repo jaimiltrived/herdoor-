@@ -108,12 +108,26 @@ const store = {
       rating: 4.8,
       totalRatings: 128,
       isOpen: true,
+      statusMode: 0,
+      deliveryRadiusKm: 5.0,
+      expressDeliveryEnabled: true,
+      selfPickupEnabled: true,
       estimatedTime: '30-45 min',
       capacityKgPerDay: 600,
       currentLoadKg: 420,
       services: ['Flour Grinding', 'Packing', 'Home Delivery', 'Cleaning'],
       workingHours: '08:00 AM - 08:00 PM',
-      specialty: 'Fresh Stone Ground Flour'
+      specialty: 'Fresh Stone Ground Flour',
+      safetyAudit: {
+        chakkiSanitized: true,
+        moistureCheckPassed: true,
+        dustExtractorActive: true,
+        ecoPackagingVerified: true,
+        pestControlCertified: true,
+        safetyScore: 99,
+        lastAuditDate: new Date().toISOString(),
+        grade: 'A+'
+      }
     },
     {
       id: 102,
@@ -126,12 +140,26 @@ const store = {
       rating: 4.8,
       totalRatings: 94,
       isOpen: true,
+      statusMode: 0,
+      deliveryRadiusKm: 6.0,
+      expressDeliveryEnabled: true,
+      selfPickupEnabled: true,
       estimatedTime: '20-30 min',
       capacityKgPerDay: 500,
       currentLoadKg: 310,
       services: ['Flour Grinding', 'Home Delivery'],
       workingHours: '09:00 AM - 07:30 PM',
-      specialty: 'Organic Whole Wheat & Multigrain'
+      specialty: 'Organic Whole Wheat & Multigrain',
+      safetyAudit: {
+        chakkiSanitized: true,
+        moistureCheckPassed: true,
+        dustExtractorActive: true,
+        ecoPackagingVerified: true,
+        pestControlCertified: true,
+        safetyScore: 98,
+        lastAuditDate: new Date().toISOString(),
+        grade: 'A+'
+      }
     },
     {
       id: 103,
@@ -188,16 +216,17 @@ const store = {
       deliveryOtp: '7391',
       paymentMethod: 'UPI',
       paymentStatus: 'PAID',
-      status: ORDER_STATUS.PROCESSING,
+      status: ORDER_STATUS.READY_FOR_PICKUP,
       estimatedMinutes: 45,
       estimatedCompletionTime: '18:30',
       totalAmount: 90.0,
       timeline: [
-        { status: ORDER_STATUS.PLACED, timestamp: '2026-08-12T10:00:00Z', note: 'Order placed by customer' },
-        { status: ORDER_STATUS.ACCEPTED, timestamp: '2026-08-12T10:05:00Z', note: 'Accepted by shopkeeper' },
-        { status: ORDER_STATUS.PROCESSING, timestamp: '2026-08-12T10:15:00Z', note: 'Grinding started' }
+        { status: ORDER_STATUS.PLACED, timestamp: '2026-08-31T10:00:00Z', note: 'Order placed by customer' },
+        { status: ORDER_STATUS.ACCEPTED, timestamp: '2026-08-31T10:05:00Z', note: 'Accepted by shopkeeper' },
+        { status: ORDER_STATUS.PROCESSING, timestamp: '2026-08-31T10:15:00Z', note: 'Grinding finished, packed in bag' },
+        { status: ORDER_STATUS.READY_FOR_PICKUP, timestamp: '2026-08-31T10:45:00Z', note: 'Ready for delivery driver pickup' }
       ],
-      createdAt: '2026-08-12T10:00:00Z'
+      createdAt: '2026-08-31T10:00:00Z'
     },
     {
       id: 502,
@@ -217,71 +246,155 @@ const store = {
       deliveryOtp: '6543',
       paymentMethod: 'UPI',
       paymentStatus: 'PAID',
-      status: ORDER_STATUS.PLACED,
+      status: ORDER_STATUS.READY_FOR_PICKUP,
       estimatedMinutes: 30,
-      estimatedCompletionTime: null,
+      estimatedCompletionTime: '18:15',
       totalAmount: 175.0,
       timeline: [
-        { status: ORDER_STATUS.PLACED, timestamp: '2026-08-12T11:00:00Z', note: 'Order placed by customer' }
+        { status: ORDER_STATUS.PLACED, timestamp: '2026-08-31T11:00:00Z', note: 'Order placed by customer' },
+        { status: ORDER_STATUS.READY_FOR_PICKUP, timestamp: '2026-08-31T11:30:00Z', note: 'Freshly milled and sealed' }
       ],
-      createdAt: '2026-08-12T11:00:00Z'
+      createdAt: '2026-08-31T11:00:00Z'
     },
     {
       id: 503,
-      orderNumber: 'ORD-2026-1003',
-      userId: 1,
-      customerName: 'Marcus Chen',
-      customerPhone: '+919876543220',
-      millId: 101,
-      grainSource: GRAIN_SOURCES.MILL,
-      grainTypeId: 4,
-      grainTypeName: 'Jowar (Sorghum)',
-      quantityKg: 10,
-      serviceType: SERVICE_TYPES.GRINDING,
-      fulfillmentType: FULFILLMENT_TYPES.DELIVERY,
-      addressId: 25,
-      pickupPin: '8210',
-      deliveryOtp: '9120',
-      paymentMethod: 'UPI',
-      paymentStatus: 'PAID',
-      status: ORDER_STATUS.DELIVERED,
-      estimatedMinutes: 40,
-      estimatedCompletionTime: '12:40',
-      totalAmount: 380.0,
-      timeline: [
-        { status: ORDER_STATUS.PLACED, timestamp: '2026-08-11T09:00:00Z', note: 'Order placed' },
-        { status: ORDER_STATUS.COMPLETED, timestamp: '2026-08-11T12:40:00Z', note: 'Order delivered' }
-      ],
-      createdAt: '2026-08-11T09:00:00Z'
-    },
-    {
-      id: 504,
       orderNumber: 'ORD-2026-1004',
       userId: 1,
       customerName: 'Priya Sharma',
       customerPhone: '+919876543222',
       millId: 101,
-      grainSource: GRAIN_SOURCES.MILL,
+      grainSource: GRAIN_SOURCES.CUSTOMER,
       grainTypeId: 1,
       grainTypeName: 'Wheat (Gehun)',
       quantityKg: 5,
       serviceType: SERVICE_TYPES.GRINDING,
-      fulfillmentType: FULFILLMENT_TYPES.PICKUP,
-      addressId: null,
+      fulfillmentType: FULFILLMENT_TYPES.DELIVERY,
+      addressId: 25,
       pickupPin: '3321',
-      deliveryOtp: null,
-      paymentMethod: 'CASH',
-      paymentStatus: 'PENDING',
+      deliveryOtp: '7391',
+      paymentMethod: 'UPI',
+      paymentStatus: 'PAID',
       status: ORDER_STATUS.READY_FOR_PICKUP,
       estimatedMinutes: 25,
-      estimatedCompletionTime: '15:00',
-      totalAmount: 200.0,
+      estimatedCompletionTime: '17:45',
+      totalAmount: 120.0,
       timeline: [
-        { status: ORDER_STATUS.PLACED, timestamp: '2026-08-12T13:00:00Z', note: 'Self pickup order placed' },
-        { status: ORDER_STATUS.ACCEPTED, timestamp: '2026-08-12T13:05:00Z', note: 'Accepted' },
-        { status: ORDER_STATUS.READY_FOR_PICKUP, timestamp: '2026-08-12T13:30:00Z', note: 'Ready at counter' }
+        { status: ORDER_STATUS.PLACED, timestamp: '2026-08-31T12:00:00Z', note: 'Order placed' },
+        { status: ORDER_STATUS.READY_FOR_PICKUP, timestamp: '2026-08-31T12:30:00Z', note: 'Milling complete' }
       ],
-      createdAt: '2026-08-12T13:00:00Z'
+      createdAt: '2026-08-31T12:00:00Z'
+    },
+    {
+      id: 505,
+      orderNumber: 'ORD-2026-1005',
+      userId: 1,
+      customerName: 'Vikram Joshi',
+      customerPhone: '+919898012345',
+      millId: 101,
+      grainSource: GRAIN_SOURCES.CUSTOMER,
+      grainTypeId: 1,
+      grainTypeName: 'Desi Chana Besan & Multigrain',
+      quantityKg: 10,
+      serviceType: SERVICE_TYPES.GRINDING,
+      fulfillmentType: FULFILLMENT_TYPES.DELIVERY,
+      addressId: 25,
+      pickupPin: '4821',
+      deliveryOtp: '7741',
+      paymentMethod: 'UPI',
+      paymentStatus: 'PAID',
+      status: ORDER_STATUS.READY_FOR_PICKUP,
+      estimatedMinutes: 35,
+      estimatedCompletionTime: '18:00',
+      totalAmount: 220.0,
+      timeline: [
+        { status: ORDER_STATUS.PLACED, timestamp: '2026-08-31T12:15:00Z', note: 'Order placed' },
+        { status: ORDER_STATUS.READY_FOR_PICKUP, timestamp: '2026-08-31T12:50:00Z', note: 'Milled fine besan' }
+      ],
+      createdAt: '2026-08-31T12:15:00Z'
+    },
+    {
+      id: 506,
+      orderNumber: 'ORD-2026-1006',
+      userId: 1,
+      customerName: 'Meera Deshmukh',
+      customerPhone: '+919876549988',
+      millId: 101,
+      grainSource: GRAIN_SOURCES.CUSTOMER,
+      grainTypeId: 1,
+      grainTypeName: 'Sharbati Whole Wheat Atta',
+      quantityKg: 10,
+      serviceType: SERVICE_TYPES.GRINDING,
+      fulfillmentType: FULFILLMENT_TYPES.DELIVERY,
+      addressId: 25,
+      pickupPin: '4821',
+      deliveryOtp: '6182',
+      paymentMethod: 'UPI',
+      paymentStatus: 'PAID',
+      status: ORDER_STATUS.READY_FOR_PICKUP,
+      estimatedMinutes: 40,
+      estimatedCompletionTime: '18:10',
+      totalAmount: 240.0,
+      timeline: [
+        { status: ORDER_STATUS.PLACED, timestamp: '2026-08-31T12:30:00Z', note: 'Order placed' },
+        { status: ORDER_STATUS.READY_FOR_PICKUP, timestamp: '2026-08-31T13:10:00Z', note: 'Ready at mill desk' }
+      ],
+      createdAt: '2026-08-31T12:30:00Z'
+    },
+    {
+      id: 507,
+      orderNumber: 'ORD-2026-1007',
+      userId: 1,
+      customerName: 'Aarav Patel',
+      customerPhone: '+919825123456',
+      millId: 101,
+      grainSource: GRAIN_SOURCES.CUSTOMER,
+      grainTypeId: 4,
+      grainTypeName: 'Jowar (Sorghum) Stoneground Milling',
+      quantityKg: 5,
+      serviceType: SERVICE_TYPES.GRINDING,
+      fulfillmentType: FULFILLMENT_TYPES.DELIVERY,
+      addressId: 25,
+      pickupPin: '4821',
+      deliveryOtp: '4021',
+      paymentMethod: 'UPI',
+      paymentStatus: 'PAID',
+      status: ORDER_STATUS.READY_FOR_PICKUP,
+      estimatedMinutes: 25,
+      estimatedCompletionTime: '17:50',
+      totalAmount: 140.0,
+      timeline: [
+        { status: ORDER_STATUS.PLACED, timestamp: '2026-08-31T12:45:00Z', note: 'Order placed' },
+        { status: ORDER_STATUS.READY_FOR_PICKUP, timestamp: '2026-08-31T13:15:00Z', note: 'Ready for rider' }
+      ],
+      createdAt: '2026-08-31T12:45:00Z'
+    },
+    {
+      id: 508,
+      orderNumber: 'ORD-2026-1008',
+      userId: 1,
+      customerName: 'Rahul Shah',
+      customerPhone: '+919822334455',
+      millId: 101,
+      grainSource: GRAIN_SOURCES.CUSTOMER,
+      grainTypeId: 7,
+      grainTypeName: 'Sprouted Ragi & Jowar Flour',
+      quantityKg: 6,
+      serviceType: SERVICE_TYPES.GRINDING,
+      fulfillmentType: FULFILLMENT_TYPES.DELIVERY,
+      addressId: 25,
+      pickupPin: '7721',
+      deliveryOtp: '8831',
+      paymentMethod: 'UPI',
+      paymentStatus: 'PAID',
+      status: ORDER_STATUS.READY_FOR_PICKUP,
+      estimatedMinutes: 30,
+      estimatedCompletionTime: '18:20',
+      totalAmount: 180.0,
+      timeline: [
+        { status: ORDER_STATUS.PLACED, timestamp: '2026-08-31T13:00:00Z', note: 'Order placed' },
+        { status: ORDER_STATUS.READY_FOR_PICKUP, timestamp: '2026-08-31T13:30:00Z', note: 'Packed' }
+      ],
+      createdAt: '2026-08-31T13:00:00Z'
     }
   ],
 
@@ -502,6 +615,36 @@ const store = {
       userId: 2,
       fcmToken: 'token_sample_merchant_456',
       deviceType: 'ANDROID'
+    }
+  ],
+
+  merchantApplications: [
+    {
+      id: 'APP-101',
+      userId: 1,
+      applicantName: 'Ramesh Patel',
+      applicantPhone: '+919876543210',
+      applicantEmail: 'ramesh@example.com',
+      storeName: 'Patel Pure Chakki & Spices',
+      phone: '+919876543210',
+      address: 'Shop 14, Sunrise Arcade, Bodakdev, Ahmedabad',
+      city: 'Ahmedabad',
+      state: 'Gujarat',
+      pincode: '380054',
+      latitude: 23.0375,
+      longitude: 72.5125,
+      capacityKgPerDay: 500,
+      deliveryRadiusKm: 6.0,
+      workingHours: '08:30 AM - 08:30 PM',
+      services: ['Flour Grinding', 'Packing', 'Home Delivery', 'Cleaning'],
+      specialty: 'Pure Sharbati Gehun & Besan Grinding',
+      storeImage: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=600&q=80',
+      licenseDocument: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80',
+      licenseNumber: 'FSSAI-2026-99214482',
+      status: 'PENDING', // PENDING, APPROVED, REJECTED
+      adminNotes: 'Application under review for food hygiene certification.',
+      createdAt: '2026-08-28T14:30:00Z',
+      updatedAt: '2026-08-28T14:30:00Z'
     }
   ]
 };

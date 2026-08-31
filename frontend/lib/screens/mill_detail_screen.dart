@@ -251,7 +251,30 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                                 color: AppTheme.textSecondary,
                               ),
                             ),
-                            const Spacer(),
+                            GestureDetector(
+                              onTap: () async {
+                                final destination = '${widget.mill.name}, Ahmedabad';
+                                final Uri url = Uri.parse(
+                                  'https://www.google.com/maps/dir/?api=1&destination=${Uri.encodeComponent(destination)}&travelmode=driving',
+                                );
+                                try {
+                                  if (await canLaunchUrl(url)) {
+                                    await launchUrl(url, mode: LaunchMode.externalApplication);
+                                  } else {
+                                    await launchUrl(url, mode: LaunchMode.platformDefault);
+                                  }
+                                } catch (_) {}
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: const BoxDecoration(
+                                  color: AppTheme.surfaceCream,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.directions_outlined, size: 18, color: AppTheme.primaryTerracotta),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
                             GestureDetector(
                               onTap: () async {
                                 final Uri url = Uri.parse('tel:1234567890');
@@ -766,6 +789,7 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                       MaterialPageRoute(
                         builder: (context) => CartScreen(
                           millName: widget.mill.name,
+                          millId: int.tryParse(widget.mill.id) ?? (widget.mill.name.toLowerCase().contains('navrang') ? 102 : 101),
                           cartItems: _cartItems,
                         ),
                       ),

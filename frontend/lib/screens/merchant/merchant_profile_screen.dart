@@ -5,6 +5,7 @@ import '../../services/merchant_api_service.dart';
 import '../../models/merchant_models.dart';
 import 'service_availability_screen.dart';
 import 'mill_safety_screen.dart';
+import 'merchant_store_details_screen.dart';
 
 class MerchantProfileScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -26,6 +27,7 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
   final String _millName = 'Shree Ganesh Flour Mill';
   String _phone = '+91 98765 43211';
   String _email = 'shop@shreeganesh.com';
+  String? _profileImage;
   final double _rating = 4.6;
   final int _totalRatings = 128;
   bool _isOpen = true;
@@ -46,6 +48,7 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
       _ownerName = user['name'] ?? _ownerName;
       _email = user['email'] ?? _email;
       _phone = user['phone'] ?? _phone;
+      _profileImage = user['profile_image'] ?? user['profileImage'];
     }
 
     // Fetch metrics
@@ -210,8 +213,12 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(color: AppTheme.primaryTerracotta, width: 2),
-                          image: const DecorationImage(
-                            image: NetworkImage('https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80'),
+                          image: DecorationImage(
+                            image: NetworkImage(
+                              (_profileImage != null && _profileImage!.startsWith('http'))
+                                  ? _profileImage!
+                                  : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80',
+                            ),
                             fit: BoxFit.cover,
                           ),
                         ),
@@ -469,12 +476,13 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
             ),
             _buildSettingsTile(
               icon: Icons.storefront_rounded,
-              title: 'Store Location & Contact',
-              subtitle: '12 Market Yard, Ellisbridge • $_phone',
+              title: 'Store Details, Capacity & Photos',
+              subtitle: '12 Market Yard, Ellisbridge • Update address, hours & images',
               onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Store Location: 12 Market Yard, Ellisbridge (Contact: $_phone)')),
-                );
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const MerchantStoreDetailsScreen()),
+                ).then((_) => _loadProfileData());
               },
             ),
             _buildSettingsTile(

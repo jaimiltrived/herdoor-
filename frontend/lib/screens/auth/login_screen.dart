@@ -31,6 +31,8 @@ class _LoginScreenState extends State<LoginScreen> {
       _selectedRole = role;
       if (role == UserRole.merchant) {
         _phoneController.text = 'shop@shreeganesh.com';
+      } else if (role == UserRole.delivery) {
+        _phoneController.text = 'delivery@herdoor.com';
       } else {
         _phoneController.text = 'ramesh@example.com';
       }
@@ -94,7 +96,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Icon(
                     _selectedRole == UserRole.merchant
                         ? Icons.storefront_rounded
-                        : Icons.shopping_bag_outlined,
+                        : (_selectedRole == UserRole.delivery
+                            ? Icons.two_wheeler_rounded
+                            : Icons.shopping_bag_outlined),
                     size: 38,
                     color: AppTheme.primaryTerracotta,
                   ),
@@ -147,7 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         onTap: () => _onRoleChanged(UserRole.customer),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
                             color: _selectedRole == UserRole.customer
                                 ? Colors.white
@@ -163,7 +167,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ]
                                 : null,
                           ),
-                          child: Row(
+                          child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
@@ -173,11 +177,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ? AppTheme.primaryTerracotta
                                     : AppTheme.textSecondary,
                               ),
-                              const SizedBox(width: 8),
+                              const SizedBox(height: 2),
                               Text(
                                 'Customer',
                                 style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 14,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                   color: _selectedRole == UserRole.customer
                                       ? AppTheme.textPrimary
@@ -194,7 +198,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         onTap: () => _onRoleChanged(UserRole.merchant),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
                             color: _selectedRole == UserRole.merchant
                                 ? const Color(0xFF6E5616)
@@ -210,7 +214,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ]
                                 : null,
                           ),
-                          child: Row(
+                          child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
@@ -220,13 +224,60 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ? Colors.white
                                     : AppTheme.textSecondary,
                               ),
-                              const SizedBox(width: 8),
+                              const SizedBox(height: 2),
                               Text(
-                                'Merchant (Admin)',
+                                'Merchant',
                                 style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 14,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                   color: _selectedRole == UserRole.merchant
+                                      ? Colors.white
+                                      : AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _onRoleChanged(UserRole.delivery),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            color: _selectedRole == UserRole.delivery
+                                ? const Color(0xFF1E8449)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: _selectedRole == UserRole.delivery
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.08),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.two_wheeler_rounded,
+                                size: 18,
+                                color: _selectedRole == UserRole.delivery
+                                    ? Colors.white
+                                    : AppTheme.textSecondary,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Rider',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: _selectedRole == UserRole.delivery
                                       ? Colors.white
                                       : AppTheme.textSecondary,
                                 ),
@@ -353,7 +404,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _selectedRole == UserRole.merchant
                         ? const Color(0xFF6E5616)
-                        : AppTheme.primaryTerracotta,
+                        : (_selectedRole == UserRole.delivery
+                            ? const Color(0xFF1E8449)
+                            : AppTheme.primaryTerracotta),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
                   ),
                   child: _isLoading
@@ -365,7 +418,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       : Text(
                           _selectedRole == UserRole.merchant
                               ? 'Sign In as Merchant'
-                              : 'Sign In as Customer',
+                              : (_selectedRole == UserRole.delivery
+                                  ? 'Sign In as Delivery Partner'
+                                  : 'Sign In as Customer'),
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,

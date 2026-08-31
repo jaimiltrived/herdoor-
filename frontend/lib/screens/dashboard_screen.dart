@@ -419,12 +419,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       return GestureDetector(
                         onTap: () {
                           final cartItems = _createCartItemsFromOrder(rawOrder);
+                          int resolvedMillId = 101;
+                          if (millTitle.toLowerCase().contains('navrang')) {
+                            resolvedMillId = 102;
+                          }
                           Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) => CartScreen(
                                 cartItems: cartItems,
                                 millName: millTitle,
+                                millId: resolvedMillId,
                               ),
                             ),
                           );
@@ -579,7 +584,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               builder: (context) => MillDetailScreen(
                                 mill: mill,
                                 onStartOrder: widget.onStartNewOrder,
-                                heroTag: 'dashboard_mill_${mill.id}',
+                                heroTag: 'dashboard_mill_${mill.id}_$index',
                               ),
                             ),
                           );
@@ -594,7 +599,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           child: Row(
                             children: [
                               Hero(
-                                tag: 'dashboard_mill_${mill.id}',
+                                tag: 'dashboard_mill_${mill.id}_$index',
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(14),
                                   child: Image.network(

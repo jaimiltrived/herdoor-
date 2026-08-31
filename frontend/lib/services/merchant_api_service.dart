@@ -227,7 +227,7 @@ class MerchantApiService {
           if (response.statusCode == 200) {
             final body = jsonDecode(response.body);
             final list = body['data']?['orders'] as List?;
-            if (list != null && list.isNotEmpty) {
+            if (list != null) {
               return list.map((json) => MerchantOrder.fromJson(json as Map<String, dynamic>)).toList();
             }
           }
@@ -255,7 +255,7 @@ class MerchantApiService {
           if (response.statusCode == 200) {
             final body = jsonDecode(response.body);
             final list = body['data']?['orders'] as List?;
-            if (list != null && list.isNotEmpty) {
+            if (list != null) {
               return list.map((json) => MerchantOrder.fromJson(json as Map<String, dynamic>)).toList();
             }
           }
@@ -265,6 +265,36 @@ class MerchantApiService {
       }
     }
     return MerchantMockData.activeOrders;
+  }
+
+  /// Get Ready for Handover / Dispatch Orders
+  Future<List<MerchantOrder>?> getReadyOrders() async {
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse('$baseUrl/shopkeeper/orders/ready'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
+
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            final list = body['data']?['orders'] as List?;
+            if (list != null) {
+              return list.map((json) => MerchantOrder.fromJson(json as Map<String, dynamic>)).toList();
+            }
+          }
+        } catch (_) {
+          _markOffline();
+        }
+      }
+    }
+    return MerchantMockData.activeOrders
+        .where((o) => o.statusTag == 'READY FOR PICKUP' || o.statusTag == 'Ready for Pickup')
+        .toList();
   }
 
   /// Get Completed Orders
@@ -283,7 +313,7 @@ class MerchantApiService {
           if (response.statusCode == 200) {
             final body = jsonDecode(response.body);
             final list = body['data']?['orders'] as List?;
-            if (list != null && list.isNotEmpty) {
+            if (list != null) {
               return list.map((json) => MerchantOrder.fromJson(json as Map<String, dynamic>)).toList();
             }
           }
@@ -349,6 +379,12 @@ class MerchantApiService {
       order.statusTag = 'IN PROGRESS';
       order.statusColor = const Color(0xFFCBA034);
       MerchantMockData.activeOrders.insert(0, order);
+    } else {
+      final actIndex = MerchantMockData.activeOrders.indexWhere((o) => o.numericId == orderId);
+      if (actIndex != -1) {
+        MerchantMockData.activeOrders[actIndex].statusTag = 'IN PROGRESS';
+        MerchantMockData.activeOrders[actIndex].statusColor = const Color(0xFFCBA034);
+      }
     }
     return true;
   }
@@ -381,7 +417,7 @@ class MerchantApiService {
     return true;
   }
 
-  /// Order Processing State Transitions ('start', 'packing', 'ready', 'handover', 'complete')
+  /// Order Processing State Transitions ('start', 'processing', 'packing', 'ready', 'handover', 'complete')
   Future<bool> transitionOrderStatus(int orderId, String transition) async {
     if (!shouldSkipNetwork) {
       final authOk = await ensureAuthenticated();
@@ -404,10 +440,17 @@ class MerchantApiService {
     }
 
     // Update in-memory mock order tag instantly
-    final allOrders = [...MerchantMockData.activeOrders, ...MerchantMockData.pendingRequests];
+    final allOrders = [
+      ...MerchantMockData.activeOrders,
+      ...MerchantMockData.pendingRequests,
+      MerchantMockData.sampleOrderHD8829,
+    ];
     for (final order in allOrders) {
       if (order.numericId == orderId) {
-        if (transition == 'packing') {
+        if (transition == 'start' || transition == 'processing') {
+          order.statusTag = 'IN PROGRESS';
+          order.statusColor = const Color(0xFFCBA034);
+        } else if (transition == 'packing') {
           order.statusTag = 'PACKING';
           order.statusColor = const Color(0xFFCBA034);
         } else if (transition == 'ready') {
@@ -442,7 +485,7 @@ class MerchantApiService {
           if (response.statusCode == 200) {
             final body = jsonDecode(response.body);
             final list = body['data']?['inventory'] as List?;
-            if (list != null && list.isNotEmpty) {
+            if (list != null) {
               return list.map((json) => MerchantInventoryItem.fromJson(json as Map<String, dynamic>)).toList();
             }
           }
@@ -470,7 +513,7 @@ class MerchantApiService {
           if (response.statusCode == 200) {
             final body = jsonDecode(response.body);
             final list = body['data']?['inventory'] as List?;
-            if (list != null && list.isNotEmpty) {
+            if (list != null) {
               return list.map((json) => MerchantInventoryItem.fromJson(json as Map<String, dynamic>)).toList();
             }
           }
@@ -730,4 +773,328 @@ class MerchantApiService {
     }
     return true;
   }
+
+  /// Delete Notification
+  Future<bool> deleteNotification(int id) async {
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .delete(
+                Uri.parse('$baseUrl/notifications/$id'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
+
+          if (response.statusCode == 200) {
+            return true;
+          }
+        } catch (_) {
+          _markOffline();
+        }
+      }
+    }
+    return true;
+  }
+
+  /// Get Detailed Shop Availability & Settings
+  Future<Map<String, dynamic>?> getShopAvailabilityDetails() async {
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse('$baseUrl/shopkeeper/availability'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
+
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            return body['data'] as Map<String, dynamic>?;
+          }
+        } catch (_) {
+          _markOffline();
+        }
+      }
+    }
+    return {
+      'isOpen': true,
+      'statusMode': 0,
+      'deliveryRadiusKm': 5.0,
+      'expressDeliveryEnabled': true,
+      'selfPickupEnabled': true,
+      'workingHours': '08:00 AM - 08:00 PM',
+      'services': ['Flour Grinding', 'Packing', 'Home Delivery', 'Cleaning'],
+    };
+  }
+
+  /// Update Detailed Shop Availability & Settings
+  Future<bool> updateShopAvailabilityDetails({
+    required bool isOpen,
+    required int statusMode,
+    required double deliveryRadiusKm,
+    required bool expressDeliveryEnabled,
+    required bool selfPickupEnabled,
+    String? workingHours,
+    List<String>? services,
+  }) async {
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .put(
+                Uri.parse('$baseUrl/shopkeeper/availability'),
+                headers: _headers,
+                body: jsonEncode({
+                  'isOpen': isOpen,
+                  'statusMode': statusMode,
+                  'deliveryRadiusKm': deliveryRadiusKm,
+                  'expressDeliveryEnabled': expressDeliveryEnabled,
+                  'selfPickupEnabled': selfPickupEnabled,
+                  ...?workingHours != null ? {'workingHours': workingHours} : null,
+                  ...?services != null ? {'services': services} : null,
+                }),
+              )
+              .timeout(_timeout);
+
+          if (response.statusCode == 200) {
+            return true;
+          }
+        } catch (_) {
+          _markOffline();
+        }
+      }
+    }
+    return true;
+  }
+
+  /// Get Food Safety & Hygiene Audit
+  Future<Map<String, dynamic>?> getSafetyAudit() async {
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse('$baseUrl/shopkeeper/safety-audit'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
+
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            return body['data']?['safetyAudit'] as Map<String, dynamic>?;
+          }
+        } catch (_) {
+          _markOffline();
+        }
+      }
+    }
+    return {
+      'chakkiSanitized': true,
+      'moistureCheckPassed': true,
+      'dustExtractorActive': true,
+      'ecoPackagingVerified': true,
+      'pestControlCertified': true,
+      'safetyScore': 99,
+      'lastAuditDate': DateTime.now().toIso8601String(),
+      'grade': 'A+'
+    };
+  }
+
+  /// Update Food Safety & Hygiene Audit
+  Future<Map<String, dynamic>?> updateSafetyAudit({
+    required bool chakkiSanitized,
+    required bool moistureCheckPassed,
+    required bool dustExtractorActive,
+    required bool ecoPackagingVerified,
+    required bool pestControlCertified,
+  }) async {
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .put(
+                Uri.parse('$baseUrl/shopkeeper/safety-audit'),
+                headers: _headers,
+                body: jsonEncode({
+                  'chakkiSanitized': chakkiSanitized,
+                  'moistureCheckPassed': moistureCheckPassed,
+                  'dustExtractorActive': dustExtractorActive,
+                  'ecoPackagingVerified': ecoPackagingVerified,
+                  'pestControlCertified': pestControlCertified,
+                }),
+              )
+              .timeout(_timeout);
+
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            return body['data']?['safetyAudit'] as Map<String, dynamic>?;
+          }
+        } catch (_) {
+          _markOffline();
+        }
+      }
+    }
+    final checks = [chakkiSanitized, moistureCheckPassed, dustExtractorActive, ecoPackagingVerified, pestControlCertified];
+    final score = ((checks.where((c) => c).length / checks.length) * 100).round();
+    return {
+      'chakkiSanitized': chakkiSanitized,
+      'moistureCheckPassed': moistureCheckPassed,
+      'dustExtractorActive': dustExtractorActive,
+      'ecoPackagingVerified': ecoPackagingVerified,
+      'pestControlCertified': pestControlCertified,
+      'safetyScore': score,
+      'lastAuditDate': DateTime.now().toIso8601String(),
+      'grade': score >= 90 ? 'A+' : 'A',
+    };
+  }
+
+  /// Get Comprehensive Store / Mill Details
+  Future<Map<String, dynamic>?> getStoreDetails() async {
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse('$baseUrl/shopkeeper/profile'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
+
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            return body['data'] as Map<String, dynamic>?;
+          }
+        } catch (_) {
+          _markOffline();
+        }
+      }
+    }
+    return {
+      'user': {
+        'id': 2,
+        'name': 'Suresh Mill Owner',
+        'email': 'shop@shreeganesh.com',
+        'phone': '+919876543211',
+      },
+      'mill': {
+        'id': 101,
+        'name': 'Shree Ganesh Flour Mill',
+        'address': '12 Market Yard, Ellisbridge, Ahmedabad',
+        'phone': '+919876543211',
+        'isOpen': true,
+        'capacityKgPerDay': 600,
+        'deliveryRadiusKm': 5.0,
+        'services': ['Flour Grinding', 'Packing', 'Home Delivery', 'Cleaning'],
+        'workingHours': '08:00 AM - 08:00 PM',
+        'specialty': 'Fresh Stone Ground Flour',
+        'storeImage': 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=600&q=80',
+      }
+    };
+  }
+
+  /// Update Comprehensive Store / Mill Details
+  Future<bool> updateStoreDetails({
+    required String storeName,
+    String? ownerName,
+    String? phone,
+    String? email,
+    required String address,
+    String? city,
+    String? state,
+    String? pincode,
+    double? capacityKgPerDay,
+    double? deliveryRadiusKm,
+    String? workingHours,
+    List<String>? services,
+    String? specialty,
+    String? storeImage,
+    String? chakkiImage,
+    bool? isOpen,
+    bool? expressDeliveryEnabled,
+    bool? selfPickupEnabled,
+  }) async {
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .put(
+                Uri.parse('$baseUrl/shopkeeper/profile'),
+                headers: _headers,
+                body: jsonEncode({
+                  'name': storeName,
+                  if (ownerName != null) 'ownerName': ownerName,
+                  if (phone != null) 'phone': phone,
+                  if (email != null) 'email': email,
+                  'address': address,
+                  if (city != null) 'city': city,
+                  if (state != null) 'state': state,
+                  if (pincode != null) 'pincode': pincode,
+                  if (capacityKgPerDay != null) 'capacityKgPerDay': capacityKgPerDay,
+                  if (deliveryRadiusKm != null) 'deliveryRadiusKm': deliveryRadiusKm,
+                  if (workingHours != null) 'workingHours': workingHours,
+                  if (services != null) 'services': services,
+                  if (specialty != null) 'specialty': specialty,
+                  if (storeImage != null) 'storeImage': storeImage,
+                  if (chakkiImage != null) 'chakkiImage': chakkiImage,
+                  if (isOpen != null) 'isOpen': isOpen,
+                  if (expressDeliveryEnabled != null) 'expressDeliveryEnabled': expressDeliveryEnabled,
+                  if (selfPickupEnabled != null) 'selfPickupEnabled': selfPickupEnabled,
+                }),
+              )
+              .timeout(_timeout);
+
+          if (response.statusCode == 200) {
+            return true;
+          }
+        } catch (_) {
+          _markOffline();
+        }
+      }
+    }
+    return true;
+  }
+
+  /// Upload / Update Store Images
+  Future<bool> uploadStoreImages({
+    String? storeImage,
+    String? chakkiImage,
+    String? bannerImage,
+  }) async {
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .post(
+                Uri.parse('$baseUrl/shopkeeper/store-images'),
+                headers: _headers,
+                body: jsonEncode({
+                  if (storeImage != null) 'storeImage': storeImage,
+                  if (chakkiImage != null) 'chakkiImage': chakkiImage,
+                  if (bannerImage != null) 'bannerImage': bannerImage,
+                }),
+              )
+              .timeout(_timeout);
+
+          if (response.statusCode == 200) {
+            return true;
+          }
+        } catch (_) {
+          _markOffline();
+        }
+      }
+    }
+    return true;
+  }
 }
+
+

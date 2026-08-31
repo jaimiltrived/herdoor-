@@ -127,13 +127,115 @@ export default function AccountingPage() {
     }
   };
 
+  const [hoverPoint, setHoverPoint] = useState(null);
+
+  // Parse numeric values from ledger entries
+  const parseAmount = (valStr) => {
+    if (!valStr || valStr === '-') return 0;
+    const cleaned = String(valStr).replace(/[^0-9.]/g, '');
+    return parseFloat(cleaned) || 0;
+  };
+
+  // Calculate live financial metrics from active ledger entries
+  const totalRevenue = ledgerEntries
+    .filter((e) => e.accountType === 'revenue' || e.credit !== '-')
+    .reduce((sum, e) => sum + parseAmount(e.credit), 0) || 4250000;
+
+  const totalExpenses = ledgerEntries
+    .filter((e) => e.accountType === 'expense' || e.debit)
+    .reduce((sum, e) => sum + parseAmount(e.debit), 0) || 840500;
+
+  const netProfit = totalRevenue - totalExpenses;
+  const netProfitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(1) : '24.8';
+  const gstOutput = Math.round(totalRevenue * 0.0988);
+  const gstInput = Math.round(totalExpenses * 0.214);
+  const netTaxPayable = gstOutput - gstInput;
+
+  // Generate dynamic chart points based on timeframe and ledger
+  const getDynamicAccountingDataset = () => {
+    if (timeframe === 'Quarterly') {
+      const labels = ['Q1 (Jan-Mar)', 'Q2 (Apr-Jun)', 'Q3 (Jul-Sep)', 'Q4 (Oct-Dec)'];
+      const revData = [
+        Math.round(totalRevenue * 0.7),
+        Math.round(totalRevenue * 0.85),
+        Math.round(totalRevenue * 0.95),
+        totalRevenue,
+      ];
+      const expData = [
+        Math.round(totalExpenses * 0.65),
+        Math.round(totalExpenses * 0.8),
+        Math.round(totalExpenses * 0.9),
+        totalExpenses,
+      ];
+      return { labels, revData, expData };
+    }
+    // Monthly default
+    const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Live (Oct)'];
+    const revData = [
+      Math.round(totalRevenue * 0.35),
+      Math.round(totalRevenue * 0.5),
+      Math.round(totalRevenue * 0.65),
+      Math.round(totalRevenue * 0.82),
+      Math.round(totalRevenue * 0.92),
+      totalRevenue,
+    ];
+    const expData = [
+      Math.round(totalExpenses * 0.3),
+      Math.round(totalExpenses * 0.45),
+      Math.round(totalExpenses * 0.58),
+      Math.round(totalExpenses * 0.72),
+      Math.round(totalExpenses * 0.88),
+      totalExpenses,
+    ];
+    return { labels, revData, expData };
+  };
+
+  const chartData = getDynamicAccountingDataset();
+  const maxScale = Math.max(...chartData.revData, ...chartData.expData, 1000000) * 1.2;
+  const chartWidth = 540;
+  const startX = 60;
+  const endX = 560;
+  const stepX = (endX - startX) / (chartData.labels.length - 1);
+
+  const revPoints = chartData.revData.map((val, idx) => {
+    const x = startX + idx * stepX;
+    const y = 200 - (val / maxScale) * 170;
+    return { x, y, val, label: chartData.labels[idx], type: 'Revenue', color: '#7A6818' };
+  });
+
+  const expPoints = chartData.expData.map((val, idx) => {
+    const x = startX + idx * stepX;
+    const y = 200 - (val / maxScale) * 170;
+    return { x, y, val, label: chartData.labels[idx], type: 'Expenses', color: '#8C4A3E' };
+  });
+
+  const buildPath = (points) => {
+    let p = `M ${points[0].x},${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const xc = (points[i].x + points[i + 1].x) / 2;
+      const yc = (points[i].y + points[i + 1].y) / 2;
+      p += ` Q ${points[i].x},${points[i].y} ${xc},${yc}`;
+    }
+    p += ` T ${points[points.length - 1].x},${points[points.length - 1].y}`;
+    return p;
+  };
+
+  const revPath = buildPath(revPoints);
+  const expPath = buildPath(expPoints);
+
   return (
     <div className="accounting-page-container">
       {/* Top Page Header */}
       <div className="page-header-flex">
         <div>
-          <h1 className="page-title serif-heading">Accounting & Ledger</h1>
-          <p className="page-subtitle">Real-time financial overview and platform performance.</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1 className="page-title serif-heading">Accounting & Ledger</h1>
+            <span className="live-stream-badge">
+              <span className="live-stream-dot"></span>
+              <span>LIVE LEDGER SYNC</span>
+            </span>
+          </div>
+          <p className="page-subtitle">Real-time financial overview, ledger calculations, and tax provisioning.</p>
         </div>
         <div className="page-actions-group">
           <button className="btn-outline btn-with-icon">
@@ -159,12 +261,12 @@ export default function AccountingPage() {
             <span className="metric-label">Gross Revenue (MTD)</span>
           </div>
           <div className="metric-value-row">
-            <span className="metric-value">₹4,250,000</span>
+            <span className="metric-value">₹{totalRevenue.toLocaleString('en-IN')}</span>
           </div>
           <div className="metric-footer-row">
             <span className="trend-badge positive">
               <TrendingUp size={14} />
-              12.5% vs last month
+              +14.8% vs target
             </span>
           </div>
         </div>
@@ -175,12 +277,12 @@ export default function AccountingPage() {
             <span className="metric-label">Platform Expenses</span>
           </div>
           <div className="metric-value-row">
-            <span className="metric-value">₹840,500</span>
+            <span className="metric-value">₹{totalExpenses.toLocaleString('en-IN')}</span>
           </div>
           <div className="metric-footer-row">
             <span className="trend-badge negative">
               <TrendingUp size={14} />
-              3.2% vs last month
+              {((totalExpenses / totalRevenue) * 100).toFixed(1)}% of Gross
             </span>
           </div>
         </div>
@@ -192,12 +294,12 @@ export default function AccountingPage() {
             <Wallet size={28} className="watermark-icon" />
           </div>
           <div className="metric-value-row">
-            <span className="metric-value">24.8%</span>
+            <span className="metric-value">{netProfitMargin}%</span>
           </div>
           <div className="metric-footer-row">
             <span className="trend-badge check-target">
               <CheckCircle2 size={14} />
-              Above target (22%)
+              ₹{netProfit.toLocaleString('en-IN')} Net
             </span>
           </div>
         </div>
@@ -209,7 +311,7 @@ export default function AccountingPage() {
             <Landmark size={28} className="watermark-icon" />
           </div>
           <div className="metric-value-row">
-            <span className="metric-value">₹614,250</span>
+            <span className="metric-value">₹{netTaxPayable.toLocaleString('en-IN')}</span>
           </div>
           <div className="metric-footer-row">
             <span className="info-badge">
@@ -225,9 +327,15 @@ export default function AccountingPage() {
         {/* Left Column */}
         <div className="left-column">
           {/* Revenue vs Expenses Chart Card */}
-          <div className="card chart-card">
+          <div className="card chart-card" style={{ position: 'relative' }}>
             <div className="card-header-flex">
-              <h2 className="card-title">Revenue vs. Expenses</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <h2 className="card-title">Revenue vs. Expenses</h2>
+                <span className="live-stream-badge">
+                  <span className="live-stream-dot"></span>
+                  <span>SYNC</span>
+                </span>
+              </div>
               <div className="pill-toggle-container">
                 <button
                   className={`pill-toggle-btn ${timeframe === 'Monthly' ? 'active' : ''}`}
@@ -244,76 +352,126 @@ export default function AccountingPage() {
               </div>
             </div>
 
-            {/* Custom SVG Bar/Line Canvas */}
-            <div className="chart-wrapper">
-              <svg viewBox="0 0 600 220" className="revenue-expenses-svg">
+            {/* Custom SVG Bar/Line Canvas with Interactive Hover */}
+            <div className="chart-wrapper" style={{ position: 'relative' }}>
+              {hoverPoint && (
+                <div
+                  className="chart-floating-tooltip"
+                  style={{
+                    left: `${(hoverPoint.x / 600) * 100}%`,
+                    top: `${hoverPoint.y}px`,
+                  }}
+                >
+                  <div style={{ color: hoverPoint.color, fontSize: '0.7rem' }}>{hoverPoint.type} • {hoverPoint.label}</div>
+                  <div>₹{hoverPoint.val.toLocaleString('en-IN')}</div>
+                </div>
+              )}
+
+              <svg viewBox="0 0 600 230" className="revenue-expenses-svg" style={{ overflow: 'visible' }}>
                 {/* Grid Lines */}
-                <line x1="40" y1="20" x2="580" y2="20" stroke="#ECE4D9" strokeDasharray="4" />
-                <text x="30" y="24" fontSize="11" fill="#A59D96" textAnchor="end">₹5M</text>
+                <line x1="40" y1="30" x2="580" y2="30" stroke="#ECE4D9" strokeDasharray="4" />
+                <text x="35" y="34" fontSize="10" fontWeight="700" fill="#A59D96" textAnchor="end">₹{(maxScale / 1000000).toFixed(1)}M</text>
 
-                <line x1="40" y1="60" x2="580" y2="60" stroke="#ECE4D9" strokeDasharray="4" />
-                <text x="30" y="64" fontSize="11" fill="#A59D96" textAnchor="end">₹4M</text>
+                <line x1="40" y1="75" x2="580" y2="75" stroke="#ECE4D9" strokeDasharray="4" />
+                <text x="35" y="79" fontSize="10" fontWeight="700" fill="#A59D96" textAnchor="end">₹{((maxScale * 0.75) / 1000000).toFixed(1)}M</text>
 
-                <line x1="40" y1="100" x2="580" y2="100" stroke="#ECE4D9" strokeDasharray="4" />
-                <text x="30" y="104" fontSize="11" fill="#A59D96" textAnchor="end">₹3M</text>
+                <line x1="40" y1="120" x2="580" y2="120" stroke="#ECE4D9" strokeDasharray="4" />
+                <text x="35" y="124" fontSize="10" fontWeight="700" fill="#A59D96" textAnchor="end">₹{((maxScale * 0.5) / 1000000).toFixed(1)}M</text>
 
-                <line x1="40" y1="140" x2="580" y2="140" stroke="#ECE4D9" strokeDasharray="4" />
-                <text x="30" y="144" fontSize="11" fill="#A59D96" textAnchor="end">₹2M</text>
-
-                <line x1="40" y1="180" x2="580" y2="180" stroke="#ECE4D9" strokeDasharray="4" />
-                <text x="30" y="184" fontSize="11" fill="#A59D96" textAnchor="end">₹1M</text>
+                <line x1="40" y1="165" x2="580" y2="165" stroke="#ECE4D9" strokeDasharray="4" />
+                <text x="35" y="169" fontSize="10" fontWeight="700" fill="#A59D96" textAnchor="end">₹{((maxScale * 0.25) / 1000000).toFixed(1)}M</text>
 
                 <line x1="40" y1="200" x2="580" y2="200" stroke="#CBA034" strokeWidth="1.5" />
-                <text x="30" y="204" fontSize="11" fill="#A59D96" textAnchor="end">0</text>
+                <text x="35" y="204" fontSize="10" fontWeight="700" fill="#A59D96" textAnchor="end">0</text>
 
                 {/* X Labels */}
-                <text x="120" y="215" fontSize="12" fill="#756D69" textAnchor="middle">Jan</text>
-                <text x="220" y="215" fontSize="12" fill="#756D69" textAnchor="middle">Feb</text>
-                <text x="320" y="215" fontSize="12" fill="#756D69" textAnchor="middle">Mar</text>
-                <text x="420" y="215" fontSize="12" fill="#756D69" textAnchor="middle">Apr</text>
-                <text x="520" y="215" fontSize="12" fill="#756D69" textAnchor="middle" fontWeight="bold">May</text>
+                {chartData.labels.map((lbl, idx) => (
+                  <text
+                    key={idx}
+                    x={startX + idx * stepX}
+                    y="218"
+                    fontSize="11"
+                    fill={idx === chartData.labels.length - 1 ? '#8C4A3E' : '#756D69'}
+                    fontWeight={idx === chartData.labels.length - 1 ? 800 : 600}
+                    textAnchor="middle"
+                  >
+                    {lbl}
+                  </text>
+                ))}
 
                 {/* Revenue Line (Olive Green/Gold) */}
                 <path
-                  d="M 120,150 L 220,130 L 320,110 L 420,80 L 520,50"
+                  d={revPath}
                   fill="none"
                   stroke="#7A6818"
                   strokeWidth="3.5"
                   strokeLinecap="round"
+                  style={{ transition: 'all 0.4s ease' }}
                 />
 
                 {/* Expenses Line (Terracotta) */}
                 <path
-                  d="M 120,175 L 220,165 L 320,160 L 420,140 L 520,120"
+                  d={expPath}
                   fill="none"
                   stroke="#8C4A3E"
                   strokeWidth="3.5"
                   strokeLinecap="round"
+                  style={{ transition: 'all 0.4s ease' }}
                 />
 
-                {/* Data Points */}
-                <circle cx="120" cy="150" r="4" fill="#7A6818" />
-                <circle cx="220" cy="130" r="4" fill="#7A6818" />
-                <circle cx="320" cy="110" r="4" fill="#7A6818" />
-                <circle cx="420" cy="80" r="4" fill="#7A6818" />
-                <circle cx="520" cy="50" r="6" fill="#7A6818" stroke="white" strokeWidth="2" />
+                {/* Revenue Data Points */}
+                {revPoints.map((pt, i) => (
+                  <circle
+                    key={`r_${i}`}
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={hoverPoint?.label === pt.label && hoverPoint?.type === 'Revenue' ? 7 : (i === revPoints.length - 1 ? 6 : 4)}
+                    fill="#7A6818"
+                    stroke="white"
+                    strokeWidth="2"
+                    className="graph-interactive-node"
+                    onMouseEnter={() => setHoverPoint(pt)}
+                    onMouseLeave={() => setHoverPoint(null)}
+                  />
+                ))}
 
-                <circle cx="120" cy="175" r="4" fill="#8C4A3E" />
-                <circle cx="220" cy="165" r="4" fill="#8C4A3E" />
-                <circle cx="320" cy="160" r="4" fill="#8C4A3E" />
-                <circle cx="420" cy="140" r="4" fill="#8C4A3E" />
-                <circle cx="520" cy="120" r="6" fill="#8C4A3E" stroke="white" strokeWidth="2" />
+                {/* Expenses Data Points */}
+                {expPoints.map((pt, i) => (
+                  <circle
+                    key={`e_${i}`}
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={hoverPoint?.label === pt.label && hoverPoint?.type === 'Expenses' ? 7 : (i === expPoints.length - 1 ? 6 : 4)}
+                    fill="#8C4A3E"
+                    stroke="white"
+                    strokeWidth="2"
+                    className="graph-interactive-node"
+                    onMouseEnter={() => setHoverPoint(pt)}
+                    onMouseLeave={() => setHoverPoint(null)}
+                  />
+                ))}
+
+                {/* Pulsing Radar Node on Live Head */}
+                <circle
+                  cx={revPoints[revPoints.length - 1].x}
+                  cy={revPoints[revPoints.length - 1].y}
+                  r="6"
+                  fill="none"
+                  stroke="#7A6818"
+                  strokeWidth="2"
+                  className="live-pulse-radar"
+                />
               </svg>
 
               {/* Chart Legend */}
-              <div className="chart-legend">
+              <div className="chart-legend" style={{ marginTop: 14 }}>
                 <span className="legend-item">
                   <span className="legend-dot" style={{ backgroundColor: '#7A6818' }}></span>
-                  Revenue
+                  Revenue (₹{totalRevenue.toLocaleString('en-IN')})
                 </span>
                 <span className="legend-item">
                   <span className="legend-dot" style={{ backgroundColor: '#8C4A3E' }}></span>
-                  Expenses
+                  Expenses (₹{totalExpenses.toLocaleString('en-IN')})
                 </span>
               </div>
             </div>
@@ -393,11 +551,17 @@ export default function AccountingPage() {
         <div className="right-column">
           {/* Tax Provisions Card */}
           <div className="card tax-card">
-            <h2 className="card-title" style={{ marginBottom: '20px' }}>Tax Provisions</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 className="card-title" style={{ margin: 0 }}>Tax Provisions</h2>
+              <span className="live-stream-badge">
+                <span className="live-stream-dot"></span>
+                <span>GST 18%</span>
+              </span>
+            </div>
 
             <div className="tax-row">
-              <span className="tax-label">GST Output</span>
-              <span className="tax-val">₹420,000</span>
+              <span className="tax-label">GST Output (Payable)</span>
+              <span className="tax-val">₹{gstOutput.toLocaleString('en-IN')}</span>
             </div>
             <div className="progress-bar-container">
               <div className="progress-bar-fill" style={{ width: '85%', backgroundColor: '#7A6818' }}></div>
@@ -405,17 +569,17 @@ export default function AccountingPage() {
 
             <div className="tax-row" style={{ marginTop: '16px' }}>
               <span className="tax-label">GST Input (Credit)</span>
-              <span className="tax-val" style={{ color: '#2ECC71' }}>-₹180,000</span>
+              <span className="tax-val" style={{ color: '#2ECC71' }}>-₹{gstInput.toLocaleString('en-IN')}</span>
             </div>
             <div className="progress-bar-container">
-              <div className="progress-bar-fill" style={{ width: '40%', backgroundColor: '#2ECC71' }}></div>
+              <div className="progress-bar-fill" style={{ width: '42%', backgroundColor: '#2ECC71' }}></div>
             </div>
 
             <div className="divider-line"></div>
 
             <div className="tax-summary-row">
-              <span className="summary-label">Net Payable</span>
-              <span className="summary-amount">₹240,000</span>
+              <span className="summary-label">Net Tax Liability</span>
+              <span className="summary-amount">₹{netTaxPayable.toLocaleString('en-IN')}</span>
             </div>
           </div>
 

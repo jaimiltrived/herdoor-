@@ -783,9 +783,198 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
     );
   }
 
+  Future<void> _showProcureGrainModal(BuildContext context, {
+    required String title,
+    required String vendor,
+    required double pricePerKg,
+    required double minKg,
+  }) async {
+    final qtyCtrl = TextEditingController(text: minKg.toInt().toString());
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final double qty = double.tryParse(qtyCtrl.text) ?? minKg;
+          final double totalCost = qty * pricePerKg;
+
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 24,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Procure Bulk Raw Grain',
+                      style: GoogleFonts.playfairDisplay(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F8F0),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        'Verified Vendor',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF27AE60),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Order bulk grain from $vendor to restock your mill storage.',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF9F5EF),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE8DFC8)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Grain Type', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary)),
+                          const SizedBox(height: 2),
+                          Text(title, style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('Vendor Rate', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary)),
+                          const SizedBox(height: 2),
+                          Text('₹${pricePerKg.toStringAsFixed(2)}/kg', style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.primaryTerracotta)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: qtyCtrl,
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => setModalState(() {}),
+                  decoration: InputDecoration(
+                    labelText: 'Procurement Quantity (kg)',
+                    hintText: 'Minimum ${minKg.toInt()} kg',
+                    border: const OutlineInputBorder(),
+                    suffixText: 'kg',
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Total Estimated Cost:', style: GoogleFonts.plusJakartaSans(fontSize: 14, color: AppTheme.textSecondary)),
+                    Text('₹${totalCost.toStringAsFixed(2)}', style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF6E5616))),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final double finalQty = double.tryParse(qtyCtrl.text) ?? minKg;
+                      if (finalQty <= 0) return;
+
+                      final messenger = ScaffoldMessenger.of(context);
+                      final nav = Navigator.of(context);
+
+                      // Check if already in inventory
+                      final existing = _inventoryItems.where((i) => i.name.toLowerCase() == title.toLowerCase()).toList();
+                      if (existing.isNotEmpty && existing.first.numericId != null) {
+                        await MerchantApiService.instance.adjustStock(existing.first.numericId!, finalQty, true);
+                      } else {
+                        await MerchantApiService.instance.createInventoryItem(
+                          name: title,
+                          productType: 'GRAIN',
+                          stockKg: finalQty,
+                          minimumStockKg: 25,
+                          pricePerKg: pricePerKg + 6.0,
+                        );
+                      }
+
+                      nav.pop();
+                      messenger.showSnackBar(
+                        SnackBar(
+                          backgroundColor: const Color(0xFF2ECC71),
+                          behavior: SnackBarBehavior.floating,
+                          content: Text('✅ Procured ${finalQty.toInt()}kg $title from $vendor! Restocked to Inventory.'),
+                        ),
+                      );
+                      _loadInventory();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6E5616),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                    ),
+                    icon: const Icon(Icons.shopping_cart_checkout_rounded, color: Colors.white),
+                    label: Text(
+                      'Confirm Procurement (${qty.toInt()} kg)',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildRawGrainVendorHub(BuildContext context) {
+    final grainInventory = _inventoryItems.where((i) => i.productType == 'GRAIN').toList();
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Your Current Raw Grain Stock Section
+        if (grainInventory.isNotEmpty) ...[
+          Text(
+            'Your Current Raw Grain Stock (${grainInventory.length})',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...grainInventory.map((item) => _buildInventoryCard(context, item)),
+          const SizedBox(height: 20),
+        ],
+
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(22),
@@ -807,7 +996,7 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  'UPCOMING FEATURE',
+                  'ACTIVE VENDOR NETWORK',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
@@ -826,7 +1015,7 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Directly buy bulk raw wheat, barley, and organic grains from verified regional agricultural vendors & farmers.',
+                'Directly procure bulk raw wheat, barley, and organic grains from verified regional agricultural vendors & farmers into your mill stock.',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 13,
                   color: Colors.white70,
@@ -838,27 +1027,41 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
         ),
         const SizedBox(height: 20),
 
-        // Preview Grain Vendor List
+        // Live Grain Vendor Procurement Cards
         _buildVendorGrainCard(
+          context,
           title: 'Premium Sharbati Raw Wheat',
           vendor: 'SunRipe Organic Farms',
-          priceKg: '₹36.00 / kg (Min 50kg)',
+          priceKg: 36.0,
+          minKg: 50,
           status: 'Vendor Certified',
         ),
         _buildVendorGrainCard(
+          context,
           title: 'Cold-Climate Rye Grain',
           vendor: 'Highland Grains Co-op',
-          priceKg: '₹48.00 / kg (Min 25kg)',
+          priceKg: 48.0,
+          minKg: 25,
           status: 'Vendor Certified',
+        ),
+        _buildVendorGrainCard(
+          context,
+          title: 'Organic Sorghum (Jowar) Grain',
+          vendor: 'Saurashtra Agro Depot',
+          priceKg: 42.0,
+          minKg: 40,
+          status: 'Direct Farmer Sourced',
         ),
       ],
     );
   }
 
-  Widget _buildVendorGrainCard({
+  Widget _buildVendorGrainCard(
+    BuildContext context, {
     required String title,
     required String vendor,
-    required String priceKg,
+    required double priceKg,
+    required double minKg,
     required String status,
   }) {
     return Container(
@@ -902,7 +1105,7 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  priceKg,
+                  '₹${priceKg.toStringAsFixed(2)} / kg (Min ${minKg.toInt()}kg)',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
@@ -912,21 +1115,25 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
               ],
             ),
           ),
-          ElevatedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Raw Grain Vendor Ordering will be active in next update!')),
-              );
-            },
+          ElevatedButton.icon(
+            onPressed: () => _showProcureGrainModal(
+              context,
+              title: title,
+              vendor: vendor,
+              pricePerKg: priceKg,
+              minKg: minKg,
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF6E5616),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               elevation: 0,
             ),
-            child: const Text('Pre-Order', style: TextStyle(fontSize: 12)),
+            icon: const Icon(Icons.add_shopping_cart, size: 14, color: Colors.white),
+            label: const Text('Procure', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
           ),
         ],
       ),
     );
   }
 }
+

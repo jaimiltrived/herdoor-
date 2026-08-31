@@ -211,6 +211,23 @@ class _MerchantNotificationsScreenState extends State<MerchantNotificationsScree
     );
   }
 
+  Future<void> _handleDeleteNotification(AppNotification notification) async {
+    final deletedId = notification.id;
+    setState(() {
+      _notifications.removeWhere((n) => n.id == deletedId);
+    });
+    await MerchantApiService.instance.deleteNotification(deletedId);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Notification removed.'),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   Widget _buildNotificationCard(BuildContext context, AppNotification notification) {
     IconData iconData = Icons.notifications_active_rounded;
     Color iconBgColor = const Color(0xFFF6F0E7);
@@ -234,92 +251,106 @@ class _MerchantNotificationsScreenState extends State<MerchantNotificationsScree
       iconColor = const Color(0xFFD4AC0D);
     }
 
-    return InkWell(
-      onTap: () => _handleNotificationTap(notification),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
+    return Dismissible(
+      key: ValueKey(notification.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
-          color: notification.read ? Colors.white : const Color(0xFFFFFBF6),
+          color: Colors.red[400],
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: notification.read ? AppTheme.borderLight : const Color(0xFFF5E6D3),
-            width: notification.read ? 1 : 1.5,
-          ),
-          boxShadow: [
-            if (!notification.read)
-              BoxShadow(
-                color: AppTheme.primaryTerracotta.withValues(alpha: 0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-          ],
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: iconBgColor,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(iconData, color: iconColor, size: 22),
+        child: const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 24),
+      ),
+      onDismissed: (direction) => _handleDeleteNotification(notification),
+      child: InkWell(
+        onTap: () => _handleNotificationTap(notification),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: notification.read ? Colors.white : const Color(0xFFFFFBF6),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: notification.read ? AppTheme.borderLight : const Color(0xFFF5E6D3),
+              width: notification.read ? 1 : 1.5,
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          notification.title,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 14,
-                            fontWeight: notification.read ? FontWeight.w600 : FontWeight.bold,
-                            color: AppTheme.textPrimary,
+            boxShadow: [
+              if (!notification.read)
+                BoxShadow(
+                  color: AppTheme.primaryTerracotta.withValues(alpha: 0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+            ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: iconBgColor,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(iconData, color: iconColor, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            notification.title,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 14,
+                              fontWeight: notification.read ? FontWeight.w600 : FontWeight.bold,
+                              color: AppTheme.textPrimary,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        notification.createdAt,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          color: AppTheme.textMuted,
+                        const SizedBox(width: 8),
+                        Text(
+                          notification.createdAt,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            color: AppTheme.textMuted,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    notification.message,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 13,
-                      color: AppTheme.textSecondary,
-                      height: 1.3,
+                      ],
                     ),
-                  ),
-                ],
-              ),
-            ),
-            if (!notification.read) ...[
-              const SizedBox(width: 8),
-              Container(
-                width: 8,
-                height: 8,
-                margin: const EdgeInsets.only(top: 6),
-                decoration: const BoxDecoration(
-                  color: AppTheme.primaryTerracotta,
-                  shape: BoxShape.circle,
+                    const SizedBox(height: 4),
+                    Text(
+                      notification.message,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        color: AppTheme.textSecondary,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
                 ),
               ),
+              if (!notification.read) ...[
+                const SizedBox(width: 8),
+                Container(
+                  width: 8,
+                  height: 8,
+                  margin: const EdgeInsets.only(top: 6),
+                  decoration: const BoxDecoration(
+                    color: AppTheme.primaryTerracotta,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
@@ -13,85 +14,72 @@ class MerchantActiveDriverPickupScreen extends StatefulWidget {
 
 class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverPickupScreen> {
   bool _isLoading = false;
+  Timer? _pollingTimer;
   List<MerchantOrder> _readyOrders = [];
   final List<MerchantOrder> _dispatchedOrders = [];
 
   @override
   void initState() {
     super.initState();
-    _fetchCompletedOrders();
+    _fetchReadyOrders(showLoading: true);
+    // Real-time auto-polling every 3 seconds for live completed orders
+    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _fetchReadyOrders(showLoading: false);
+    });
   }
 
-  Future<void> _fetchCompletedOrders() async {
-    setState(() => _isLoading = true);
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchReadyOrders({bool showLoading = false}) async {
+    if (showLoading) setState(() => _isLoading = true);
     try {
-      final fetched = await MerchantApiService.instance.getCompletedOrders();
+      final fetchedReady = await MerchantApiService.instance.getReadyOrders();
+      final fetchedActive = await MerchantApiService.instance.getActiveOrders();
       if (mounted) {
+        final List<MerchantOrder> combined = [];
+        if (fetchedReady != null && fetchedReady.isNotEmpty) {
+          combined.addAll(fetchedReady);
+        }
+        if (fetchedActive != null) {
+          final readyFromActive = fetchedActive.where((o) =>
+              o.statusTag == 'READY FOR PICKUP' ||
+              o.statusTag == 'READY' ||
+              o.statusTag == 'Ready for Pickup' ||
+              o.statusTag == 'PACKING');
+          for (var o in readyFromActive) {
+            if (!combined.any((x) => x.orderId == o.orderId)) {
+              combined.add(o);
+            }
+          }
+        }
+
         setState(() {
-          _readyOrders = [
-            // MerchantOrder(
-            //   numericId: 9921,
-            //   orderId: '#ORD-9921-A',
-            //   customerName: 'Mrs. Eleanor Rigby',
-            //   itemsSummary: '1x Whole Wheat Flour (10kg)',
-            //   grainType: 'Organic Whole Wheat',
-            //   quantityText: '10 kg',
-            //   timeAgo: 'Milled 10 mins ago',
-            //   statusTag: 'READY FOR PICKUP',
-            //   statusColor: const Color(0xFFFF8A80),
-            //   deliveryDriverName: 'Rajesh Kumar',
-            //   deliveryDriverPhone: '+91 98765 43210',
-            //   deliveryDriverVehicle: 'Electric Bike #EB-4821',
-            //   timelineSteps: [],
-            // ),
-            // MerchantOrder(
-            //   numericId: 9922,
-            //   orderId: '#ORD-9922-B',
-            //   customerName: 'Aarav Patel',
-            //   itemsSummary: '5kg Multigrain Flour, 2kg Bajra',
-            //   grainType: 'Multigrain Mix',
-            //   quantityText: '7 kg',
-            //   timeAgo: 'Milled 20 mins ago',
-            //   statusTag: 'READY FOR PICKUP',
-            //   statusColor: const Color(0xFFFF8A80),
-            //   deliveryDriverName: 'Amit Verma',
-            //   deliveryDriverPhone: '+91 98123 45678',
-            //   deliveryDriverVehicle: 'Hero Electric #HE-9912',
-            //   timelineSteps: [],
-            // ),
-            // MerchantOrder(
-            //   numericId: 1042,
-            //   orderId: '#ORD-1042-C',
-            //   customerName: 'Elena Rodriguez',
-            //   itemsSummary: '2x Whole Wheat Flour (5kg), 1x Rye Mix',
-            //   grainType: 'Organic Whole Wheat',
-            //   quantityText: '5 lbs',
-            //   timeAgo: 'Milled 5 mins ago',
-            //   statusTag: 'READY FOR PICKUP',
-            //   statusColor: const Color(0xFFFF8A80),
-            //   deliveryDriverName: 'Vikram Singh',
-            //   deliveryDriverPhone: '+91 98334 11223',
-            //   deliveryDriverVehicle: 'Bajaj Chetak EV #BC-1102',
-            //   timelineSteps: [],
-            // ),
-            if (fetched != null)
-              ...fetched.where((o) => !_dispatchedOrders.any((d) => d.orderId == o.orderId)),
-          ];
-          _isLoading = false;
+          _readyOrders = combined
+              .where((o) => !_dispatchedOrders.any((d) => d.orderId == o.orderId))
+              .toList();
+          if (showLoading) _isLoading = false;
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted && showLoading) setState(() => _isLoading = false);
     }
   }
 
-  void _handleHandoverOrder(MerchantOrder order) {
+  Future<void> _handleHandoverOrder(MerchantOrder order) async {
+    final orderId = order.numericId ?? 501;
     setState(() {
       order.statusTag = 'OUT FOR DELIVERY';
       _readyOrders.removeWhere((o) => o.orderId == order.orderId);
       _dispatchedOrders.insert(0, order);
     });
 
+    await MerchantApiService.instance.transitionOrderStatus(orderId, 'handover');
+
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: const Color(0xFF2ECC71),
@@ -102,7 +90,7 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                '✅ Authorized! Order ${order.orderId} handed over to ${order.deliveryDriverName}.',
+                '✅ Authorized! Order ${order.orderId} handed over to ${order.deliveryDriverName ?? "Driver"}.',
                 style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
               ),
             ),
@@ -135,7 +123,7 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
       ),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: _fetchCompletedOrders,
+          onRefresh: _fetchReadyOrders,
           color: AppTheme.primaryTerracotta,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -401,7 +389,7 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
                             Row(
                               children: [
                                 Text(
-                                  order.deliveryDriverName ?? 'Rajesh Kumar',
+                                  order.deliveryDriverName ?? 'Vikram Delivery Agent',
                                   style: GoogleFonts.plusJakartaSans(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
@@ -414,7 +402,7 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
                             ),
                             const SizedBox(height: 1),
                             Text(
-                              '${order.deliveryDriverVehicle ?? "Electric Bike #EB-4821"} • Only Authorized Boy',
+                              '${order.deliveryDriverVehicle ?? "Electric Scooter #GJ-01-AB-1234"} • Only Authorized Boy',
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 11,
                                 color: const Color(0xFF6E5616),

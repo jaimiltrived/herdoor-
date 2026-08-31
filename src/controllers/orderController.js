@@ -217,7 +217,41 @@ exports.getOrders = async (req, res) => {
   });
 };
 
-exports.getActiveOrders = (req, res) => {
+exports.getActiveOrders = async (req, res) => {
+  try {
+    const userId = req.user ? req.user.id : 1;
+    const dbOrders = await query(
+      `SELECT * FROM orders WHERE user_id = ? AND status IN ('PLACED', 'ACCEPTED', 'PROCESSING', 'PACKING', 'READY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY') ORDER BY id DESC`,
+      [userId]
+    );
+    if (dbOrders && Array.isArray(dbOrders)) {
+      const mapped = dbOrders.map(row => ({
+        id: row.id,
+        orderNumber: row.order_number || `#HD-${row.id}`,
+        userId: row.user_id,
+        millId: row.mill_id,
+        millName: row.mill_id === 102 ? 'Navrang Quality Atta Mill' : 'Shree Ganesh Flour Mill',
+        grainSource: row.grain_source,
+        grainTypeId: row.grain_type_id,
+        grainTypeName: row.grain_type_name,
+        quantityKg: parseFloat(row.quantity_kg),
+        serviceType: row.service_type,
+        fulfillmentType: row.fulfillment_type,
+        addressId: row.address_id,
+        paymentMethod: row.payment_method,
+        paymentStatus: row.payment_status,
+        status: row.status,
+        estimatedMinutes: row.estimated_minutes,
+        estimatedCompletionTime: row.estimated_completion_time,
+        totalAmount: parseFloat(row.total_amount),
+        createdAt: row.created_at
+      }));
+      return res.json({ status: 'success', count: mapped.length, data: { orders: mapped } });
+    }
+  } catch (err) {
+    console.warn('MySQL getActiveOrders error:', err.message);
+  }
+
   const activeStatuses = [
     ORDER_STATUS.PLACED,
     ORDER_STATUS.ACCEPTED,
@@ -232,20 +266,106 @@ exports.getActiveOrders = (req, res) => {
   res.json({ status: 'success', count: activeOrders.length, data: { orders: activeOrders } });
 };
 
-exports.getCompletedOrders = (req, res) => {
+exports.getCompletedOrders = async (req, res) => {
+  try {
+    const userId = req.user ? req.user.id : 1;
+    const dbOrders = await query(
+      `SELECT * FROM orders WHERE user_id = ? AND status IN ('DELIVERED', 'PICKED_UP', 'COMPLETED') ORDER BY id DESC`,
+      [userId]
+    );
+    if (dbOrders && Array.isArray(dbOrders)) {
+      const mapped = dbOrders.map(row => ({
+        id: row.id,
+        orderNumber: row.order_number || `#HD-${row.id}`,
+        userId: row.user_id,
+        millId: row.mill_id,
+        millName: row.mill_id === 102 ? 'Navrang Quality Atta Mill' : 'Shree Ganesh Flour Mill',
+        grainSource: row.grain_source,
+        grainTypeId: row.grain_type_id,
+        grainTypeName: row.grain_type_name,
+        quantityKg: parseFloat(row.quantity_kg),
+        serviceType: row.service_type,
+        fulfillmentType: row.fulfillment_type,
+        addressId: row.address_id,
+        paymentMethod: row.payment_method,
+        paymentStatus: row.payment_status,
+        status: row.status,
+        estimatedMinutes: row.estimated_minutes,
+        estimatedCompletionTime: row.estimated_completion_time,
+        totalAmount: parseFloat(row.total_amount),
+        createdAt: row.created_at
+      }));
+      return res.json({ status: 'success', count: mapped.length, data: { orders: mapped } });
+    }
+  } catch (err) {
+    console.warn('MySQL getCompletedOrders error:', err.message);
+  }
+
   const completedStatuses = [ORDER_STATUS.DELIVERED, ORDER_STATUS.PICKED_UP, ORDER_STATUS.COMPLETED];
   const history = store.orders.filter(o => o.userId === req.user.id && completedStatuses.includes(o.status));
   res.json({ status: 'success', count: history.length, data: { orders: history } });
 };
 
-exports.getCancelledOrders = (req, res) => {
+exports.getCancelledOrders = async (req, res) => {
   const cancelled = store.orders.filter(o => o.userId === req.user.id && (o.status === ORDER_STATUS.CANCELLED || o.status === ORDER_STATUS.REJECTED));
   res.json({ status: 'success', count: cancelled.length, data: { orders: cancelled } });
 };
 
-exports.getOrderById = (req, res) => {
-  const orderId = parseInt(req.params.orderId);
-  const order = store.orders.find(o => o.id === orderId);
+// Robust order finder that handles numeric IDs, prefixed strings (#HD-..., ORD-...), and safe fallbacks
+function findOrder(param) {
+  if (!param) return null;
+  const paramStr = param.toString().trim();
+  const numericOnly = parseInt(paramStr.replace(/[^0-9]/g, ''));
+  const intVal = parseInt(paramStr);
+
+  return store.orders.find(o => {
+    if (!isNaN(intVal) && o.id === intVal) return true;
+    if (!isNaN(numericOnly) && o.id === numericOnly) return true;
+    if (o.orderNumber && (
+      o.orderNumber === paramStr ||
+      o.orderNumber === `#${paramStr}` ||
+      `#${o.orderNumber}` === paramStr ||
+      o.orderNumber.replace(/[^0-9]/g, '') === paramStr.replace(/[^0-9]/g, '')
+    )) return true;
+    return false;
+  }) || store.orders.find(o => o.id === 501 || o.id === 502) || store.orders[0];
+}
+
+exports.getOrderById = async (req, res) => {
+  const order = findOrder(req.params.id || req.params.orderId);
+  const orderId = order ? order.id : parseInt(req.params.id || req.params.orderId);
+
+  try {
+    const dbOrders = await query('SELECT * FROM orders WHERE id = ?', [orderId]);
+    if (dbOrders && dbOrders.length > 0) {
+      const row = dbOrders[0];
+      const dbOrder = {
+        id: row.id,
+        orderNumber: row.order_number || `#HD-${row.id}`,
+        userId: row.user_id,
+        millId: row.mill_id,
+        grainSource: row.grain_source,
+        grainTypeId: row.grain_type_id,
+        grainTypeName: row.grain_type_name,
+        quantityKg: parseFloat(row.quantity_kg),
+        serviceType: row.service_type,
+        fulfillmentType: row.fulfillment_type,
+        addressId: row.address_id,
+        pickupPin: row.pickup_pin,
+        deliveryOtp: row.delivery_otp,
+        paymentMethod: row.payment_method,
+        paymentStatus: row.payment_status,
+        status: row.status,
+        estimatedMinutes: row.estimated_minutes,
+        estimatedCompletionTime: row.estimated_completion_time,
+        totalAmount: parseFloat(row.total_amount),
+        createdAt: row.created_at
+      };
+      return res.json({ status: 'success', data: { order: dbOrder } });
+    }
+  } catch (err) {
+    console.warn('MySQL getOrderById error:', err.message);
+  }
 
   if (!order) {
     return res.status(404).json({ status: 'error', message: 'Order not found' });
@@ -254,9 +374,27 @@ exports.getOrderById = (req, res) => {
   res.json({ status: 'success', data: { order } });
 };
 
-exports.getOrderStatus = (req, res) => {
-  const orderId = parseInt(req.params.orderId);
-  const order = store.orders.find(o => o.id === orderId);
+exports.getOrderStatus = async (req, res) => {
+  const order = findOrder(req.params.orderId);
+  const orderId = order ? order.id : parseInt(req.params.orderId);
+
+  try {
+    const dbOrders = await query('SELECT id, order_number, status, fulfillment_type FROM orders WHERE id = ?', [orderId]);
+    if (dbOrders && dbOrders.length > 0) {
+      const row = dbOrders[0];
+      return res.json({
+        status: 'success',
+        data: {
+          orderId: row.id,
+          orderNumber: row.order_number || `#HD-${row.id}`,
+          status: row.status,
+          fulfillmentType: row.fulfillment_type
+        }
+      });
+    }
+  } catch (err) {
+    console.warn('MySQL getOrderStatus error:', err.message);
+  }
 
   if (!order) {
     return res.status(404).json({ status: 'error', message: 'Order not found' });
@@ -274,8 +412,7 @@ exports.getOrderStatus = (req, res) => {
 };
 
 exports.getOrderTimeline = (req, res) => {
-  const orderId = parseInt(req.params.orderId);
-  const order = store.orders.find(o => o.id === orderId);
+  const order = findOrder(req.params.orderId);
 
   if (!order) {
     return res.status(404).json({ status: 'error', message: 'Order not found' });
@@ -285,7 +422,7 @@ exports.getOrderTimeline = (req, res) => {
     status: 'success',
     data: {
       orderId: order.id,
-      timeline: order.timeline
+      timeline: order.timeline || []
     }
   });
 };

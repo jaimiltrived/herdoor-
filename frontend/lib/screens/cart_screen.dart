@@ -6,11 +6,13 @@ import 'checkout_screen.dart';
 class CartScreen extends StatefulWidget {
   final List<Map<String, dynamic>> cartItems;
   final String millName;
+  final int millId;
 
   const CartScreen({
     super.key,
     required this.cartItems,
     required this.millName,
+    this.millId = 101,
   });
 
   @override
@@ -18,6 +20,12 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
+  int get effectiveMillId {
+    if (widget.millId != 101) return widget.millId;
+    if (widget.millName.toLowerCase().contains('navrang')) return 102;
+    return widget.millId;
+  }
+
   double get cartTotal {
     return widget.cartItems.fold(
       0.0,
@@ -75,164 +83,235 @@ class _CartScreenState extends State<CartScreen> {
                 ],
               ),
             )
-          : ListView.builder(
+          : ListView(
               padding: const EdgeInsets.all(20),
-              itemCount: widget.cartItems.length,
-              itemBuilder: (context, index) {
-                final item = widget.cartItems[index];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(16),
+              children: [
+                // Shop Indicator Banner
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppTheme.borderLight),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.02),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
+                    color: const Color(0xFFF9F5EF),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE8DFC8)),
                   ),
                   child: Row(
                     children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryTerracotta.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.storefront_rounded,
+                          color: AppTheme.primaryTerracotta,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              item['name'],
+                              'ORDERING FROM',
                               style: GoogleFonts.plusJakartaSans(
+                                fontSize: 10,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: AppTheme.textPrimary,
+                                letterSpacing: 0.8,
+                                color: AppTheme.textSecondary,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            if (item['type'] == 'milling')
-                              Text(
-                                'Source: ${item['source']} • \$${(item['price'] as num).toStringAsFixed(2)}/kg',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 12,
-                                  color: AppTheme.textSecondary,
-                                ),
-                              )
-                            else
-                              Text(
-                                '\$${(item['price'] as num).toStringAsFixed(2)} each',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 12,
-                                  color: AppTheme.textSecondary,
-                                ),
-                              ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 2),
                             Text(
-                              '\$${((item['price'] as num) * (item['quantity'] as num)).toStringAsFixed(2)}',
+                              widget.millName,
                               style: GoogleFonts.plusJakartaSans(
+                                fontSize: 15,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: AppTheme.primaryTerracotta,
+                                color: AppTheme.textPrimary,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Edit Quantity Stepper
-                          Container(
-                            decoration: BoxDecoration(
-                              color: AppTheme.surfaceCream,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: AppTheme.borderLight),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                InkWell(
-                                  onTap: () {
-                                    setState(() {
-                                      if (item['quantity'] > 1) {
-                                        item['quantity']--;
-                                      } else {
-                                        widget.cartItems.removeAt(index);
-                                      }
-                                    });
-                                  },
-                                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(10)),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                    child: Icon(
-                                      item['quantity'] > 1 ? Icons.remove : Icons.delete_outline,
-                                      size: 16,
-                                      color: item['quantity'] > 1 ? AppTheme.textPrimary : Colors.red,
-                                    ),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                                  child: Text(
-                                    '${item['quantity']}${item['type'] == 'milling' ? ' kg' : ''}',
-                                    style: GoogleFonts.plusJakartaSans(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppTheme.textPrimary,
-                                    ),
-                                  ),
-                                ),
-                                InkWell(
-                                  onTap: () {
-                                    setState(() {
-                                      item['quantity']++;
-                                    });
-                                  },
-                                  borderRadius: const BorderRadius.horizontal(right: Radius.circular(10)),
-                                  child: const Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                    child: Icon(Icons.add, size: 16, color: AppTheme.textPrimary),
-                                  ),
-                                ),
-                              ],
-                            ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F8F0),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Shop #$effectiveMillId',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF27AE60),
                           ),
-                          const SizedBox(width: 8),
-
-                          // Delete Button
-                          GestureDetector(
-                            onTap: () {
-                              final deletedName = item['name'];
-                              setState(() {
-                                widget.cartItems.removeAt(index);
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('$deletedName deleted from cart'),
-                                  duration: const Duration(seconds: 1),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.all(7),
-                              decoration: BoxDecoration(
-                                color: Colors.red.shade50,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Icon(
-                                Icons.delete_outline_rounded,
-                                size: 20,
-                                color: Colors.red.shade600,
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ],
                   ),
-                );
-              },
+                ),
+
+                // Cart Items List
+                ...widget.cartItems.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppTheme.borderLight),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item['name'],
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: AppTheme.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              if (item['type'] == 'milling')
+                                Text(
+                                  'Source: ${item['source']} • \$${(item['price'] as num).toStringAsFixed(2)}/kg',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 12,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                )
+                              else
+                                Text(
+                                  '\$${(item['price'] as num).toStringAsFixed(2)} each',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 12,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                              const SizedBox(height: 6),
+                              Text(
+                                '\$${((item['price'] as num) * (item['quantity'] as num)).toStringAsFixed(2)}',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: AppTheme.primaryTerracotta,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Edit Quantity Stepper
+                            Container(
+                              decoration: BoxDecoration(
+                                color: AppTheme.surfaceCream,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: AppTheme.borderLight),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  InkWell(
+                                    onTap: () {
+                                      setState(() {
+                                        if (item['quantity'] > 1) {
+                                          item['quantity']--;
+                                        } else {
+                                          widget.cartItems.removeAt(index);
+                                        }
+                                      });
+                                    },
+                                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(10)),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                      child: Icon(
+                                        item['quantity'] > 1 ? Icons.remove : Icons.delete_outline,
+                                        size: 16,
+                                        color: item['quantity'] > 1 ? AppTheme.textPrimary : Colors.red,
+                                      ),
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                                    child: Text(
+                                      '${item['quantity']}${item['type'] == 'milling' ? ' kg' : ''}',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppTheme.textPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                  InkWell(
+                                    onTap: () {
+                                      setState(() {
+                                        item['quantity']++;
+                                      });
+                                    },
+                                    borderRadius: const BorderRadius.horizontal(right: Radius.circular(10)),
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                      child: Icon(Icons.add, size: 16, color: AppTheme.textPrimary),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+
+                            // Delete Button
+                            GestureDetector(
+                              onTap: () {
+                                final deletedName = item['name'];
+                                setState(() {
+                                  widget.cartItems.removeAt(index);
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('$deletedName deleted from cart'),
+                                    duration: const Duration(seconds: 1),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade50,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(
+                                  Icons.delete_outline_rounded,
+                                  size: 20,
+                                  color: Colors.red.shade600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
             ),
       bottomNavigationBar: widget.cartItems.isEmpty
           ? null
@@ -289,6 +368,7 @@ class _CartScreenState extends State<CartScreen> {
                               builder: (context) => CheckoutScreen(
                                 cartItems: widget.cartItems,
                                 millName: widget.millName,
+                                millId: effectiveMillId,
                               ),
                             ),
                           );

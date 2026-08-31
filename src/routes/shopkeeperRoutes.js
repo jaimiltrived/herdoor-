@@ -10,6 +10,7 @@ router.use(authorizeRoles(ROLES.SHOPKEEPER, ROLES.ADMIN));
 // Profile & Mill Details
 router.get('/profile', shopkeeperController.getProfile);
 router.put('/profile', shopkeeperController.updateProfile);
+router.post('/store-images', shopkeeperController.uploadStoreImages);
 
 // Dashboard & Revenue
 router.get('/dashboard', shopkeeperController.getDashboard);
@@ -17,6 +18,7 @@ router.get('/orders/today', shopkeeperController.getTodayOrders);
 router.get('/orders/pending', shopkeeperController.getPendingOrders);
 router.get('/orders/new', shopkeeperController.getNewOrders);
 router.get('/orders/active', shopkeeperController.getActiveOrders);
+router.get('/orders/ready', shopkeeperController.getReadyOrders);
 router.get('/orders/completed', shopkeeperController.getCompletedOrders);
 router.get('/revenue', shopkeeperController.getRevenue);
 
@@ -51,4 +53,9 @@ router.get('/availability', shopkeeperController.getAvailability);
 router.put('/availability', shopkeeperController.updateAvailability);
 router.put('/working-hours', shopkeeperController.updateWorkingHours);
 
+// Food Safety & Hygiene Audit
+router.get('/safety-audit', shopkeeperController.getSafetyAudit);
+router.put('/safety-audit', shopkeeperController.updateSafetyAudit);
+
 module.exports = router;
+

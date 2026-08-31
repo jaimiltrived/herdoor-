@@ -6,11 +6,13 @@ import 'payment_methods_screen.dart';
 class CheckoutScreen extends StatefulWidget {
   final List<Map<String, dynamic>> cartItems;
   final String millName;
+  final int millId;
 
   const CheckoutScreen({
     super.key,
     required this.cartItems,
     required this.millName,
+    this.millId = 101,
   });
 
   @override
@@ -18,6 +20,11 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
+  int get effectiveMillId {
+    if (widget.millId != 101) return widget.millId;
+    if (widget.millName.toLowerCase().contains('navrang')) return 102;
+    return widget.millId;
+  }
   Map<String, String> _selectedAddress = {
     'title': 'Home',
     'address': '456 Heritage Block, District 9, NY',
@@ -289,6 +296,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   MaterialPageRoute(builder: (context) => PaymentMethodsScreen(
                     cartItems: widget.cartItems,
                     millName: widget.millName,
+                    millId: effectiveMillId,
                     subtotal: _subtotal,
                     pickupFee: _pickupFee,
                     deliveryFee: _deliveryFee,

@@ -232,13 +232,18 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
+                        onPressed: () async {
+                          final dispatched = await Navigator.push<bool>(
                             context,
                             MaterialPageRoute(
                               builder: (context) => MerchantDeliveryHandoverScreen(order: _displayOrder),
                             ),
                           );
+                          if (dispatched == true && mounted) {
+                            setState(() {
+                              _displayOrder.statusTag = 'OUT FOR DELIVERY';
+                            });
+                          }
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primaryTerracotta,

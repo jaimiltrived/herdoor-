@@ -34,7 +34,50 @@ export default function ConsoleSectionPage({
 }) {
   const [items, setItems] = useState(tableData);
   const [searchQuery, setSearchQuery] = useState('');
-  const [timeframe, setTimeframe] = useState('week'); // 'week' | 'month'
+  const [hoveredPoint, setHoveredPoint] = useState(null);
+  const [timeframe, setTimeframe] = useState('week');
+
+  // Dynamic curve calculator for console section graphs
+  const getDynamicConsoleSeries = (svgWidth = 840) => {
+    const itemCount = items.length || 8;
+    let labels = [];
+    let factors = [];
+
+    if (timeframe === 'week') {
+      labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Live (Peak)'];
+      factors = [0.35, 0.52, 0.68, 0.82, 0.94, 1.12, 1.3];
+    } else if (timeframe === 'month') {
+      labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Live Peak'];
+      factors = [0.4, 0.65, 0.85, 1.1, 1.35, 1.6];
+    } else {
+      labels = ['Month 1', 'Month 2', 'Month 3', 'Forecast'];
+      factors = [0.5, 0.9, 1.4, 2.0];
+    }
+
+    const startX = svgWidth > 600 ? 55 : 45;
+    const endX = svgWidth - 25;
+    const stepX = (endX - startX) / (labels.length - 1);
+
+    const points = labels.map((lbl, idx) => {
+      const x = startX + idx * stepX;
+      const progress = idx / (labels.length - 1);
+      const y = 135 - progress * 105;
+      const count = Math.max(1, Math.round(itemCount * factors[idx]));
+      return { x, y, label: lbl, count, pct: Math.min(100, Math.round(65 + progress * 34)) };
+    });
+
+    let pathD = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const cpX = (points[i].x + points[i + 1].x) / 2;
+      pathD += ` C ${cpX} ${points[i].y}, ${cpX} ${points[i + 1].y}, ${points[i + 1].x} ${points[i + 1].y}`;
+    }
+    const areaD = `${pathD} L ${points[points.length - 1].x} 150 L ${points[0].x} 150 Z`;
+
+    return { points, pathD, areaD };
+  };
+
+  const fullSeries = getDynamicConsoleSeries(840);
+  const sideSeries = getDynamicConsoleSeries(540);
 
   // Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -237,8 +280,11 @@ export default function ConsoleSectionPage({
   const handleSaveNew = (e) => {
     e.preventDefault();
     const newRow = {};
+    const firstRow = items[0] || {};
+    const keys = Object.keys(firstRow);
     tableHeaders.forEach((header, idx) => {
-      newRow[`col_${idx}`] = formData[header] || 'N/A';
+      const key = keys[idx] || `col_${idx}`;
+      newRow[key] = formData[header] || (idx === 0 ? `#SEC-${Date.now().toString().slice(-4)}` : idx === tableHeaders.length - 1 ? 'Just now' : 'SUCCESS');
     });
     setItems([newRow, ...items]);
     setIsAddModalOpen(false);
@@ -248,9 +294,14 @@ export default function ConsoleSectionPage({
   const handleSaveEdit = (e) => {
     e.preventDefault();
     if (editingIndex === null) return;
-    const updatedRow = {};
+    const existing = items[editingIndex] || {};
+    const updatedRow = { ...existing };
+    const keys = Object.keys(existing);
     tableHeaders.forEach((header, idx) => {
-      updatedRow[`col_${idx}`] = formData[header] || 'N/A';
+      const key = keys[idx] || `col_${idx}`;
+      if (formData[header] !== undefined) {
+        updatedRow[key] = formData[header];
+      }
     });
 
     const newItems = [...items];
@@ -348,14 +399,18 @@ export default function ConsoleSectionPage({
           </div>
 
           {/* Full View Graph Card */}
-          <div className="card" style={{ padding: 24, marginBottom: 28 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div className="card" style={{ padding: 24, marginBottom: 28, position: 'relative' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <ChartIcon size={18} color="#8C4A3E" />
                   <h2 className="card-title" style={{ fontSize: '1.15rem', fontWeight: 800, color: '#2A2421', margin: 0 }}>
                     {chartConfig.chartTitle}
                   </h2>
+                  <span className="live-stream-badge">
+                    <span className="live-stream-dot"></span>
+                    <span>LIVE</span>
+                  </span>
                 </div>
                 <p style={{ fontSize: '0.78rem', color: '#756D69', margin: '3px 0 0 0' }}>{chartConfig.subtext}</p>
               </div>
@@ -385,6 +440,21 @@ export default function ConsoleSectionPage({
 
             {/* Full-width SVG Canvas */}
             <div style={{ background: '#FAF6F0', borderRadius: 16, border: '1px solid #ECE4D9', padding: '18px 20px', position: 'relative' }}>
+              {/* Floating Tooltip */}
+              {hoveredPoint && (
+                <div
+                  className="chart-floating-tooltip"
+                  style={{
+                    left: `${(hoveredPoint.x / 840) * 100}%`,
+                    top: `${hoveredPoint.y}px`,
+                  }}
+                >
+                  <div style={{ color: '#FF9A93', fontSize: '0.7rem' }}>{hoveredPoint.label} Telemetry</div>
+                  <div>{hoveredPoint.count} Records Processed</div>
+                  <div style={{ color: '#2ECC71', fontSize: '0.7rem', marginTop: 2 }}>{hoveredPoint.pct}% Efficiency SLA</div>
+                </div>
+              )}
+
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <div style={{ display: 'flex', gap: 16, fontSize: '0.78rem', fontWeight: 700 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#8C4A3E' }}>
@@ -427,48 +497,62 @@ export default function ConsoleSectionPage({
 
                 {/* Area Fill */}
                 <path
-                  d={
-                    timeframe === 'week'
-                      ? 'M 45,130 Q 190,105 340,90 T 520,60 T 700,42 T 820,32 L 820,150 L 45,150 Z'
-                      : timeframe === 'month'
-                      ? 'M 45,135 Q 190,115 340,105 T 520,75 T 700,50 T 820,38 L 820,150 L 45,150 Z'
-                      : 'M 45,140 Q 190,120 340,95 T 520,55 T 700,35 T 820,25 L 820,150 L 45,150 Z'
-                  }
+                  d={fullSeries.areaD}
                   fill={`url(#gradient_full_${title.replace(/\s+/g, '')})`}
+                  style={{ transition: 'all 0.4s ease' }}
                 />
 
                 {/* Trend Curve */}
                 <path
-                  d={
-                    timeframe === 'week'
-                      ? 'M 45,130 Q 190,105 340,90 T 520,60 T 700,42 T 820,32'
-                      : timeframe === 'month'
-                      ? 'M 45,135 Q 190,115 340,105 T 520,75 T 700,50 T 820,38'
-                      : 'M 45,140 Q 190,120 340,95 T 520,55 T 700,35 T 820,25'
-                  }
+                  d={fullSeries.pathD}
                   fill="none"
                   stroke="#8C4A3E"
                   strokeWidth="3.5"
                   strokeLinecap="round"
+                  style={{ transition: 'all 0.4s ease' }}
                 />
 
                 {/* Data points */}
-                <circle cx="45" cy={timeframe === 'week' ? 130 : timeframe === 'month' ? 135 : 140} r="4.5" fill="#8C4A3E" stroke="white" strokeWidth="2" />
-                <circle cx="190" cy={timeframe === 'week' ? 105 : timeframe === 'month' ? 115 : 120} r="4.5" fill="#8C4A3E" stroke="white" strokeWidth="2" />
-                <circle cx="340" cy={timeframe === 'week' ? 90 : timeframe === 'month' ? 105 : 95} r="4.5" fill="#8C4A3E" stroke="white" strokeWidth="2" />
-                <circle cx="520" cy={timeframe === 'week' ? 60 : timeframe === 'month' ? 75 : 55} r="4.5" fill="#8C4A3E" stroke="white" strokeWidth="2" />
-                <circle cx="700" cy={timeframe === 'week' ? 42 : timeframe === 'month' ? 50 : 35} r="4.5" fill="#8C4A3E" stroke="white" strokeWidth="2" />
-                <circle cx="820" cy={timeframe === 'week' ? 32 : timeframe === 'month' ? 38 : 25} r="6" fill="#1E8449" stroke="white" strokeWidth="2.5" />
+                {fullSeries.points.map((pt, i) => (
+                  <circle
+                    key={i}
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={hoveredPoint?.label === pt.label ? 7 : (i === fullSeries.points.length - 1 ? 6 : 4.5)}
+                    fill={i === fullSeries.points.length - 1 ? '#1E8449' : '#8C4A3E'}
+                    stroke="white"
+                    strokeWidth="2"
+                    className="graph-interactive-node"
+                    onMouseEnter={() => setHoveredPoint(pt)}
+                    onMouseLeave={() => setHoveredPoint(null)}
+                  />
+                ))}
+
+                {/* Pulsing Radar Node on Live Head */}
+                <circle
+                  cx={fullSeries.points[fullSeries.points.length - 1].x}
+                  cy={fullSeries.points[fullSeries.points.length - 1].y}
+                  r="6"
+                  fill="none"
+                  stroke="#1E8449"
+                  strokeWidth="2"
+                  className="live-pulse-radar"
+                />
               </svg>
 
               {/* X-axis labels */}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#756D69', marginTop: 8, fontWeight: 600, paddingLeft: 45, paddingRight: 8 }}>
-                <span>{timeframe === 'week' ? 'Mon' : timeframe === 'month' ? 'Week 1' : 'Month 1'}</span>
-                <span>{timeframe === 'week' ? 'Tue' : timeframe === 'month' ? 'Week 2' : 'Month 2'}</span>
-                <span>{timeframe === 'week' ? 'Wed' : timeframe === 'month' ? 'Week 3' : 'Month 3'}</span>
-                <span>{timeframe === 'week' ? 'Thu' : timeframe === 'month' ? 'Week 4' : 'Quarter Avg'}</span>
-                <span>{timeframe === 'week' ? 'Fri' : timeframe === 'month' ? 'Week 5' : 'Forecast'}</span>
-                <span style={{ color: '#8C4A3E', fontWeight: 800 }}>Live (Peak)</span>
+                {fullSeries.points.map((pt, idx) => (
+                  <span
+                    key={idx}
+                    style={{
+                      color: idx === fullSeries.points.length - 1 ? '#8C4A3E' : '#756D69',
+                      fontWeight: idx === fullSeries.points.length - 1 ? 800 : 600,
+                    }}
+                  >
+                    {pt.label}
+                  </span>
+                ))}
               </div>
             </div>
           </div>
@@ -479,15 +563,19 @@ export default function ConsoleSectionPage({
       {stats.length < 3 && (
         <div style={{ display: 'grid', gridTemplateColumns: stats.length > 0 ? '1fr 340px' : '1fr', gap: 24, marginBottom: 28, alignItems: 'stretch' }}>
           {/* Main Trend Graph */}
-          <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', position: 'relative' }}>
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <ChartIcon size={18} color="#8C4A3E" />
                     <h2 className="card-title" style={{ fontSize: '1.15rem', fontWeight: 800, color: '#2A2421', margin: 0 }}>
                       {chartConfig.chartTitle}
                     </h2>
+                    <span className="live-stream-badge">
+                      <span className="live-stream-dot"></span>
+                      <span>LIVE</span>
+                    </span>
                   </div>
                   <p style={{ fontSize: '0.78rem', color: '#756D69', margin: '3px 0 0 0' }}>{chartConfig.subtext}</p>
                 </div>
@@ -517,6 +605,19 @@ export default function ConsoleSectionPage({
 
               {/* SVG Graph Canvas */}
               <div style={{ background: '#FAF6F0', borderRadius: 16, border: '1px solid #ECE4D9', padding: '18px 20px', position: 'relative' }}>
+                {hoveredPoint && (
+                  <div
+                    className="chart-floating-tooltip"
+                    style={{
+                      left: `${(hoveredPoint.x / 540) * 100}%`,
+                      top: `${hoveredPoint.y}px`,
+                    }}
+                  >
+                    <div style={{ color: '#FF9A93', fontSize: '0.7rem' }}>{hoveredPoint.label} Telemetry</div>
+                    <div>{hoveredPoint.count} Records Processed</div>
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <div style={{ display: 'flex', gap: 16, fontSize: '0.78rem', fontWeight: 700 }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#8C4A3E' }}>
@@ -559,47 +660,62 @@ export default function ConsoleSectionPage({
 
                   {/* Area Fill */}
                   <path
-                    d={
-                      timeframe === 'week'
-                        ? 'M 40,130 Q 100,105 170,90 T 300,60 T 440,42 T 520,32 L 520,150 L 40,150 Z'
-                        : timeframe === 'month'
-                        ? 'M 40,135 Q 100,115 170,105 T 300,75 T 440,50 T 520,38 L 520,150 L 40,150 Z'
-                        : 'M 40,140 Q 100,120 170,95 T 300,55 T 440,35 T 520,25 L 520,150 L 40,150 Z'
-                    }
+                    d={sideSeries.areaD}
                     fill={`url(#gradient_${title.replace(/\s+/g, '')})`}
+                    style={{ transition: 'all 0.4s ease' }}
                   />
 
                   {/* Trend Curve */}
                   <path
-                    d={
-                      timeframe === 'week'
-                        ? 'M 40,130 Q 100,105 170,90 T 300,60 T 440,42 T 520,32'
-                        : timeframe === 'month'
-                        ? 'M 40,135 Q 100,115 170,105 T 300,75 T 440,50 T 520,38'
-                        : 'M 40,140 Q 100,120 170,95 T 300,55 T 440,35 T 520,25'
-                    }
+                    d={sideSeries.pathD}
                     fill="none"
                     stroke="#8C4A3E"
                     strokeWidth="3.5"
                     strokeLinecap="round"
+                    style={{ transition: 'all 0.4s ease' }}
                   />
 
                   {/* Data points */}
-                  <circle cx="40" cy={timeframe === 'week' ? 130 : timeframe === 'month' ? 135 : 140} r="4.5" fill="#8C4A3E" stroke="white" strokeWidth="2" />
-                  <circle cx="170" cy={timeframe === 'week' ? 90 : timeframe === 'month' ? 105 : 95} r="4.5" fill="#8C4A3E" stroke="white" strokeWidth="2" />
-                  <circle cx="300" cy={timeframe === 'week' ? 60 : timeframe === 'month' ? 75 : 55} r="4.5" fill="#8C4A3E" stroke="white" strokeWidth="2" />
-                  <circle cx="440" cy={timeframe === 'week' ? 42 : timeframe === 'month' ? 50 : 35} r="4.5" fill="#8C4A3E" stroke="white" strokeWidth="2" />
-                  <circle cx="520" cy={timeframe === 'week' ? 32 : timeframe === 'month' ? 38 : 25} r="6" fill="#1E8449" stroke="white" strokeWidth="2.5" />
+                  {sideSeries.points.map((pt, i) => (
+                    <circle
+                      key={i}
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={hoveredPoint?.label === pt.label ? 7 : (i === sideSeries.points.length - 1 ? 6 : 4.5)}
+                      fill={i === sideSeries.points.length - 1 ? '#1E8449' : '#8C4A3E'}
+                      stroke="white"
+                      strokeWidth="2"
+                      className="graph-interactive-node"
+                      onMouseEnter={() => setHoveredPoint(pt)}
+                      onMouseLeave={() => setHoveredPoint(null)}
+                    />
+                  ))}
+
+                  {/* Radar beacon on live head */}
+                  <circle
+                    cx={sideSeries.points[sideSeries.points.length - 1].x}
+                    cy={sideSeries.points[sideSeries.points.length - 1].y}
+                    r="6"
+                    fill="none"
+                    stroke="#1E8449"
+                    strokeWidth="2"
+                    className="live-pulse-radar"
+                  />
                 </svg>
 
                 {/* X-axis labels */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#756D69', marginTop: 8, fontWeight: 600, paddingLeft: 40, paddingRight: 4 }}>
-                  <span>{timeframe === 'week' ? 'Mon' : timeframe === 'month' ? 'Week 1' : 'Month 1'}</span>
-                  <span>{timeframe === 'week' ? 'Tue' : timeframe === 'month' ? 'Week 2' : 'Month 2'}</span>
-                  <span>{timeframe === 'week' ? 'Wed' : timeframe === 'month' ? 'Week 3' : 'Month 3'}</span>
-                  <span>{timeframe === 'week' ? 'Thu' : timeframe === 'month' ? 'Week 4' : 'Quarter Avg'}</span>
-                  <span>{timeframe === 'week' ? 'Fri' : timeframe === 'month' ? 'Week 5' : 'Forecast'}</span>
-                  <span style={{ color: '#8C4A3E', fontWeight: 800 }}>Live (Peak)</span>
+                  {sideSeries.points.map((pt, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        color: idx === sideSeries.points.length - 1 ? '#8C4A3E' : '#756D69',
+                        fontWeight: idx === sideSeries.points.length - 1 ? 800 : 600,
+                      }}
+                    >
+                      {pt.label}
+                    </span>
+                  ))}
                 </div>
               </div>
             </div>

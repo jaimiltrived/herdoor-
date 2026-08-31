@@ -21,4 +21,10 @@ router.put('/me/addresses/:id', userController.updateAddress);
 router.delete('/me/addresses/:id', userController.deleteAddress);
 router.put('/me/addresses/:id/default', userController.setDefaultAddress);
 
+// Merchant Application Workflow
+router.post('/apply-merchant', userController.applyMerchant);
+router.get('/my-merchant-application', userController.getMyMerchantApplication);
+router.post('/me/apply-merchant', userController.applyMerchant);
+router.get('/me/merchant-application', userController.getMyMerchantApplication);
+
 module.exports = router;

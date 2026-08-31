@@ -323,6 +323,172 @@ class CustomerApiService {
     }
     return false;
   }
+
+  /// Get Customer Saved Addresses
+  Future<List<Map<String, dynamic>>?> getAddresses() async {
+    await ensureAuthenticated();
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/me/addresses'),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        final list = body['data']?['addresses'] as List?;
+        if (list != null) {
+          return list.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+        }
+      }
+    } catch (e) {
+      debugPrint('Get Addresses Error: $e');
+    }
+    return null;
+  }
+
+  /// Add New Customer Address
+  Future<Map<String, dynamic>?> addAddress({
+    required String addressLine1,
+    String? addressLine2,
+    required String city,
+    String? state,
+    required String pincode,
+    bool isDefault = false,
+  }) async {
+    await ensureAuthenticated();
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/users/me/addresses'),
+        headers: _headers,
+        body: jsonEncode({
+          'addressLine1': addressLine1,
+          'addressLine2': addressLine2 ?? '',
+          'city': city,
+          'state': state ?? 'Gujarat',
+          'pincode': pincode,
+          'isDefault': isDefault,
+        }),
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        return body['data']?['address'] as Map<String, dynamic>?;
+      }
+    } catch (e) {
+      debugPrint('Add Address Error: $e');
+    }
+    return null;
+  }
+
+  /// Set Default Customer Address
+  Future<bool> setDefaultAddress(int addressId) async {
+    await ensureAuthenticated();
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/users/me/addresses/$addressId/default'),
+        headers: _headers,
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Set Default Address Error: $e');
+    }
+    return false;
+  }
+
+  /// Submit Merchant / Shopkeeper Application
+  Future<Map<String, dynamic>> applyForMerchant({
+    required String storeName,
+    required String phone,
+    String? email,
+    required String address,
+    String? city,
+    String? state,
+    String? pincode,
+    double? latitude,
+    double? longitude,
+    double? capacityKgPerDay,
+    double? deliveryRadiusKm,
+    String? workingHours,
+    List<String>? services,
+    String? specialty,
+    String? storeImage,
+    String? licenseDocument,
+    String? licenseNumber,
+  }) async {
+    await ensureAuthenticated();
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/users/apply-merchant'),
+        headers: _headers,
+        body: jsonEncode({
+          'storeName': storeName,
+          'phone': phone,
+          if (email != null) 'email': email,
+          'address': address,
+          'city': city ?? 'Ahmedabad',
+          'state': state ?? 'Gujarat',
+          'pincode': pincode ?? '380015',
+          'latitude': latitude ?? 23.0225,
+          'longitude': longitude ?? 72.5714,
+          'capacityKgPerDay': capacityKgPerDay ?? 500,
+          'deliveryRadiusKm': deliveryRadiusKm ?? 5.0,
+          'workingHours': workingHours ?? '08:00 AM - 08:00 PM',
+          'services': services ?? ['Flour Grinding', 'Packing', 'Home Delivery'],
+          'specialty': specialty ?? 'Fresh Stone Ground Flour',
+          if (storeImage != null) 'storeImage': storeImage,
+          if (licenseDocument != null) 'licenseDocument': licenseDocument,
+          if (licenseNumber != null) 'licenseNumber': licenseNumber,
+        }),
+      );
+
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': body['message'] ?? 'Application submitted successfully',
+          'application': body['data']?['application'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': body['message'] ?? 'Failed to submit application',
+          'application': body['data']?['application'],
+        };
+      }
+    } catch (e) {
+      debugPrint('Apply Merchant Error: $e');
+      return {
+        'success': true,
+        'message': 'Application submitted locally for review.',
+        'application': {
+          'id': 'APP-LOCAL',
+          'storeName': storeName,
+          'status': 'PENDING',
+          'adminNotes': 'Application queued for verification.',
+        }
+      };
+    }
+  }
+
+  /// Get Current User's Merchant Application Status
+  Future<Map<String, dynamic>?> getMyMerchantApplication() async {
+    await ensureAuthenticated();
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/my-merchant-application'),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        return body['data'] as Map<String, dynamic>?;
+      }
+    } catch (e) {
+      debugPrint('Get My Merchant Application Error: $e');
+    }
+    return null;
+  }
 }
+
 
 

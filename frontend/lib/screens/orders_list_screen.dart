@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
@@ -20,20 +21,32 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
   bool _showActiveOrders = true;
   bool _isLoading = false;
   List<MerchantOrder>? _apiOrders;
+  Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
-    _fetchOrders();
+    _fetchOrders(showLoading: true);
+    // Real-time automatic background polling every 3 seconds
+    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _fetchOrders(showLoading: false);
+    });
   }
 
-  Future<void> _fetchOrders() async {
-    if (mounted) setState(() => _isLoading = true);
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchOrders({bool showLoading = false}) async {
+    if (!mounted) return;
+    if (showLoading) setState(() => _isLoading = true);
     final orders = await CustomerApiService.instance.getCustomerOrders();
     if (mounted) {
       setState(() {
         _apiOrders = orders;
-        _isLoading = false;
+        if (showLoading) _isLoading = false;
       });
     }
   }
@@ -300,6 +313,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                     }
                   ],
                   millName: order.millName,
+                  millId: order.millName.toLowerCase().contains('navrang') ? 102 : 101,
                 ),
               ),
             );
@@ -348,15 +362,18 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                '${order.itemSummary} • ${order.quantityKg}',
+                order.itemSummary.toLowerCase().contains(order.quantityKg.toLowerCase())
+                    ? order.itemSummary
+                    : (order.quantityKg.isNotEmpty ? '${order.itemSummary} • ${order.quantityKg}' : order.itemSummary),
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 14,
                   color: AppTheme.textSecondary,
+                  height: 1.3,
                 ),
               ),
               const SizedBox(height: 12),
               const Divider(color: AppTheme.borderLight, height: 1),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -367,13 +384,40 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                       color: AppTheme.textMuted,
                     ),
                   ),
-                  Text(
-                    '₹${order.totalPrice.toStringAsFixed(2)}',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimary,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        '₹${order.totalPrice.toStringAsFixed(2)}',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF9F5EF),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              order.isActive ? 'View & Track' : 'Reorder',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.primaryTerracotta,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            const Icon(Icons.arrow_forward_ios_rounded, size: 10, color: AppTheme.primaryTerracotta),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

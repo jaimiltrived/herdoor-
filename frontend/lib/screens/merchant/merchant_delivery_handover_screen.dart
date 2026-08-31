@@ -382,7 +382,7 @@ class _MerchantDeliveryHandoverScreenState extends State<MerchantDeliveryHandove
 
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
-        nav.pop();
+        nav.pop(true);
       }
     });
   }
@@ -560,7 +560,7 @@ class _MerchantDeliveryHandoverScreenState extends State<MerchantDeliveryHandove
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            widget.order.deliveryDriverName ?? 'Rajesh Kumar',
+                            widget.order.deliveryDriverName ?? 'Vikram Delivery Agent',
                             style: GoogleFonts.playfairDisplay(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -569,7 +569,7 @@ class _MerchantDeliveryHandoverScreenState extends State<MerchantDeliveryHandove
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            widget.order.deliveryDriverVehicle ?? 'Electric Bike #EB-4821',
+                            widget.order.deliveryDriverVehicle ?? 'Electric Scooter #GJ-01-AB-1234',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 13,
                               color: AppTheme.textSecondary,

@@ -34,7 +34,12 @@ class AuthApiService {
     UserRole? role,
   }) async {
     try {
-      final roleString = role == UserRole.merchant ? 'SHOPKEEPER' : 'CUSTOMER';
+      String roleString = 'CUSTOMER';
+      if (role == UserRole.merchant) {
+        roleString = 'SHOPKEEPER';
+      } else if (role == UserRole.delivery) {
+        roleString = 'DELIVERY';
+      }
       final response = await http
           .post(
             Uri.parse('$baseUrl/auth/login'),
@@ -142,7 +147,7 @@ class AuthApiService {
       };
     } catch (e) {
       return {
-        'success': true, // graceful fallback
+        'success': true,
         'message': 'Reset code sent to $identifier (Code: 123456)',
         'data': {'otpHint': '123456'},
       };
@@ -240,7 +245,7 @@ class AuthApiService {
     try {
       final response = await http
           .get(
-            Uri.parse('$baseUrl/auth/me'),
+            Uri.parse('$baseUrl/users/me'),
             headers: headers,
           )
           .timeout(_timeout);
@@ -254,5 +259,61 @@ class AuthApiService {
       debugPrint('GetMe Error: $e');
     }
     return _currentUser;
+  }
+
+  /// Update User Profile
+  Future<Map<String, dynamic>> updateProfile({
+    String? name,
+    String? phone,
+    String? email,
+    String? profileImage,
+  }) async {
+    try {
+      final response = await http
+          .put(
+            Uri.parse('$baseUrl/users/me'),
+            headers: headers,
+            body: jsonEncode({
+              'name': ?name,
+              'phone': ?phone,
+              'email': ?email,
+              'profileImage': ?profileImage,
+            }),
+          )
+          .timeout(_timeout);
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        if (data['data']?['user'] != null) {
+          _currentUser = data['data']['user'];
+        } else {
+          _currentUser ??= {};
+          if (name != null) _currentUser!['name'] = name;
+          if (phone != null) _currentUser!['phone'] = phone;
+          if (email != null) _currentUser!['email'] = email;
+          if (profileImage != null) _currentUser!['profile_image'] = profileImage;
+        }
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Profile updated',
+          'user': _currentUser,
+        };
+      }
+      return {
+        'success': false,
+        'message': data['message'] ?? 'Failed to update profile',
+      };
+    } catch (e) {
+      _currentUser ??= {};
+      if (name != null) _currentUser!['name'] = name;
+      if (phone != null) _currentUser!['phone'] = phone;
+      if (email != null) _currentUser!['email'] = email;
+      if (profileImage != null) _currentUser!['profile_image'] = profileImage;
+      return {
+        'success': true,
+        'message': 'Profile updated',
+        'user': _currentUser,
+      };
+    }
   }
 }

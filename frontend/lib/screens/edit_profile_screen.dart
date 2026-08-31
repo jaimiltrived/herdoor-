@@ -1,18 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
+import '../services/auth_api_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
-  const EditProfileScreen({super.key});
+  final Map<String, dynamic>? initialUser;
+
+  const EditProfileScreen({
+    super.key,
+    this.initialUser,
+  });
 
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  final _nameController = TextEditingController(text: 'Sarah Jenkins');
-  final _phoneController = TextEditingController(text: '+1 (555) 234-5678');
-  final _emailController = TextEditingController(text: 'sarah.jenkins@example.com');
+  late TextEditingController _nameController;
+  late TextEditingController _phoneController;
+  late TextEditingController _emailController;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = widget.initialUser ?? AuthApiService.instance.currentUser;
+    _nameController = TextEditingController(text: user?['name']?.toString() ?? 'Ramesh Patel');
+    _phoneController = TextEditingController(text: user?['phone']?.toString() ?? '+919876543210');
+    _emailController = TextEditingController(text: user?['email']?.toString() ?? 'ramesh@example.com');
+  }
 
   @override
   void dispose() {
@@ -22,8 +38,34 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
+  Future<void> _saveProfile() async {
+    setState(() => _isSaving = true);
+    final res = await AuthApiService.instance.updateProfile(
+      name: _nameController.text.trim(),
+      phone: _phoneController.text.trim(),
+      email: _emailController.text.trim(),
+    );
+    if (mounted) {
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            res['message'] ?? 'Profile updated successfully!',
+            style: GoogleFonts.plusJakartaSans(),
+          ),
+          backgroundColor: AppTheme.primaryTerracotta,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      Navigator.pop(context, true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final user = widget.initialUser ?? AuthApiService.instance.currentUser;
+    final profileImg = user?['profile_image']?.toString();
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
@@ -55,9 +97,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(color: AppTheme.primaryTerracotta, width: 3),
-                      image: const DecorationImage(
+                      image: DecorationImage(
                         image: NetworkImage(
-                          'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80',
+                          (profileImg != null && profileImg.startsWith('http'))
+                              ? profileImg
+                              : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
                         ),
                         fit: BoxFit.cover,
                       ),
@@ -93,34 +137,27 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // Simulate save and pop back
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Profile updated successfully!',
-                          style: GoogleFonts.plusJakartaSans(),
-                        ),
-                        backgroundColor: AppTheme.primaryTerracotta,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                    Navigator.pop(context);
-                  },
+                  onPressed: _isSaving ? null : _saveProfile,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryTerracotta,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(27),
                     ),
                   ),
-                  child: Text(
-                    'Save Changes',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                        )
+                      : Text(
+                          'Save Changes',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                 ),
               ),
             ],

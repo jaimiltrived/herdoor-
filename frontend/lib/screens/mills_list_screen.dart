@@ -350,7 +350,7 @@ class _MillsListScreenState extends State<MillsListScreen> {
                                 builder: (context) => MillDetailScreen(
                                   mill: mill,
                                   onStartOrder: widget.onStartOrder,
-                                  heroTag: 'mills_list_mill_${mill.id}',
+                                  heroTag: 'mills_list_mill_${mill.id}_$index',
                                 ),
                               ),
                             );
@@ -374,7 +374,7 @@ class _MillsListScreenState extends State<MillsListScreen> {
                                 Stack(
                                   children: [
                                     Hero(
-                                      tag: 'mills_list_mill_${mill.id}',
+                                      tag: 'mills_list_mill_${mill.id}_$index',
                                       child: ClipRRect(
                                         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                                         child: Image.network(

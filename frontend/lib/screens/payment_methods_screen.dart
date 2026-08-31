@@ -7,6 +7,7 @@ import 'invoice_screen.dart';
 class PaymentMethodsScreen extends StatefulWidget {
   final List<Map<String, dynamic>> cartItems;
   final String millName;
+  final int millId;
   final double subtotal;
   final double pickupFee;
   final double deliveryFee;
@@ -18,6 +19,7 @@ class PaymentMethodsScreen extends StatefulWidget {
     super.key,
     this.cartItems = const [],
     this.millName = 'Shree Ganesh Flour Mill',
+    this.millId = 101,
     this.subtotal = 0.0,
     this.pickupFee = 0.0,
     this.deliveryFee = 0.0,
@@ -31,6 +33,12 @@ class PaymentMethodsScreen extends StatefulWidget {
 }
 
 class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
+  int get effectiveMillId {
+    if (widget.millId != 101) return widget.millId;
+    if (widget.millName.toLowerCase().contains('navrang')) return 102;
+    return widget.millId;
+  }
+
   int _selectedMethod = 0;
   bool _isProcessing = false;
 
@@ -213,7 +221,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
 
                     // Call backend place order endpoint
                     final placedOrder = await CustomerApiService.instance.placeOrder(
-                      millId: 101,
+                      millId: effectiveMillId,
                       items: widget.cartItems,
                       grainTypeName: widget.cartItems.isNotEmpty ? widget.cartItems[0]['name'] : 'Wheat',
                       totalAmount: widget.total,

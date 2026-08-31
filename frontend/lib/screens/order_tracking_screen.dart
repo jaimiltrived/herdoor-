@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import '../models/app_models.dart';
+import '../services/customer_api_service.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
   final OrderModel order;
@@ -22,11 +24,75 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     super.initState();
     _order = widget.order;
     _ensureTrackingSteps();
-    _uiRefreshTimer = Timer.periodic(const Duration(seconds: 2), (t) {
-      if (mounted) {
-        setState(() {});
-      }
+    _pollLiveOrderStatus();
+    _uiRefreshTimer = Timer.periodic(const Duration(seconds: 3), (t) {
+      _pollLiveOrderStatus();
     });
+  }
+
+  Future<void> _pollLiveOrderStatus() async {
+    if (!mounted) return;
+    try {
+      final numericId = int.tryParse(_order.orderId.replaceAll(RegExp(r'[^0-9]'), ''));
+      if (numericId != null) {
+        final liveOrder = await CustomerApiService.instance.getOrderDetails(numericId);
+        if (liveOrder != null && mounted) {
+          setState(() {
+            _order.statusStep = liveOrder.statusTag;
+            final s = liveOrder.statusTag.toUpperCase();
+            final isDelivered = s == 'DELIVERED' || s == 'COMPLETED';
+            final isOut = s == 'OUT FOR DELIVERY' || s == 'OUT_FOR_DELIVERY';
+            final isReady = s == 'READY' || s == 'READY FOR PICKUP' || s == 'READY_FOR_PICKUP' || s == 'PACKING';
+            final isMilling = s == 'IN PROGRESS' || s == 'PROCESSING' || s == 'MILLING' || s == 'ACCEPTED';
+
+            if (_order.trackingSteps.length >= 5) {
+              _order.trackingSteps[0] = TrackingStep(
+                title: _order.trackingSteps[0].title,
+                subtitle: _order.trackingSteps[0].subtitle,
+                timeText: _order.trackingSteps[0].timeText,
+                isCompleted: true,
+                isCurrent: false,
+              );
+
+              _order.trackingSteps[1] = TrackingStep(
+                title: _order.trackingSteps[1].title,
+                subtitle: _order.trackingSteps[1].subtitle,
+                timeText: _order.trackingSteps[1].timeText,
+                isCompleted: (isMilling || isReady || isOut || isDelivered),
+                isCurrent: !isMilling && !isReady && !isOut && !isDelivered,
+              );
+
+              _order.trackingSteps[2] = TrackingStep(
+                title: _order.trackingSteps[2].title,
+                subtitle: _order.trackingSteps[2].subtitle,
+                timeText: _order.trackingSteps[2].timeText,
+                isCompleted: (isReady || isOut || isDelivered),
+                isCurrent: isMilling,
+              );
+
+              _order.trackingSteps[3] = TrackingStep(
+                title: _order.trackingSteps[3].title,
+                subtitle: _order.trackingSteps[3].subtitle,
+                timeText: _order.trackingSteps[3].timeText,
+                isCompleted: isDelivered,
+                isCurrent: isOut,
+              );
+
+              _order.trackingSteps[4] = TrackingStep(
+                title: _order.trackingSteps[4].title,
+                subtitle: _order.trackingSteps[4].subtitle,
+                timeText: _order.trackingSteps[4].timeText,
+                isCompleted: isDelivered,
+                isCurrent: false,
+              );
+            }
+            if (isDelivered) {
+              _order.isActive = false;
+            }
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   void _ensureTrackingSteps() {
@@ -135,6 +201,26 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         duration: const Duration(seconds: 2),
       ),
     );
+  }
+
+  Future<void> _launchGoogleMaps() async {
+    final destination = '${_order.millName}, ${_order.deliveryAddress}';
+    final Uri url = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=${Uri.encodeComponent(destination)}&travelmode=driving',
+    );
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        await launchUrl(url, mode: LaunchMode.platformDefault);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Opening Google Maps: $destination')),
+        );
+      }
+    }
   }
 
   List<Map<String, dynamic>> _getOrderItems() {
@@ -498,6 +584,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             ),
           ),
         ],
+        const SizedBox(height: 24),
+
+        // Items Summary Box in Stepper View
+        _buildItemsSummaryBox(_getOrderItems()),
       ],
     );
   }
@@ -656,26 +746,51 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Contacting ${_order.millName}...'),
-                            duration: const Duration(seconds: 2),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _launchGoogleMaps,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primaryTerracotta,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                            icon: const Icon(Icons.directions_outlined, size: 16, color: Colors.white),
+                            label: Text(
+                              'Google Maps',
+                              style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
                           ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.surfaceCream,
-                        foregroundColor: AppTheme.textPrimary,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      ),
-                      icon: const Icon(Icons.phone_outlined, size: 18),
-                      label: Text(
-                        'Contact Mill',
-                        style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
-                      ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('📞 Contacting ${_order.millName}...'),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.surfaceCream,
+                              foregroundColor: AppTheme.textPrimary,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                            icon: const Icon(Icons.phone_outlined, size: 16),
+                            label: Text(
+                              'Contact Mill',
+                              style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -686,116 +801,167 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         const SizedBox(height: 20),
 
         // Items Summary Box (Dynamic)
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: AppTheme.borderLight),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Items Summary',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              ...items.map((item) {
-                final name = item['name']?.toString() ?? 'Flour Item';
-                final qty = item['quantity'] ?? 1;
-                final price = (item['price'] is num) ? (item['price'] as num).toDouble() : 5.0;
-                final isWheat = name.toLowerCase().contains('wheat');
-                final badgeColor = isWheat ? const Color(0xFFB5B782) : AppTheme.mustardGold;
+        _buildItemsSummaryBox(items),
+      ],
+    );
+  }
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: badgeColor,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              name.length > 8 ? '${name.substring(0, 6)}..' : name,
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                name,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppTheme.textPrimary,
-                                ),
-                              ),
-                              Text(
-                                'Qty: $qty',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 12,
-                                  color: AppTheme.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      Text(
-                        '\$${(price * (qty is int ? qty : 1)).toStringAsFixed(2)}',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-              const Divider(height: 24, color: AppTheme.borderLight),
+  Widget _buildItemsSummaryBox(List<Map<String, dynamic>> items) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppTheme.borderLight),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  const Icon(Icons.shopping_bag_outlined, color: AppTheme.primaryTerracotta, size: 20),
+                  const SizedBox(width: 8),
                   Text(
-                    'Total Paid',
+                    'Ordered Items (${items.length})',
                     style: GoogleFonts.plusJakartaSans(
-                      fontSize: 15,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: AppTheme.textPrimary,
                     ),
                   ),
-                  Text(
-                    '\$${_order.totalPrice.toStringAsFixed(2)}',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.primaryTerracotta,
-                    ),
-                  ),
                 ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9F5EF),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _order.millName,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF6E5616),
+                  ),
+                ),
               ),
             ],
           ),
-        ),
-      ],
+          const SizedBox(height: 16),
+          ...items.map((item) {
+            final name = item['name']?.toString() ?? 'Flour Item';
+            final qty = item['quantity'] ?? 1;
+            final price = (item['price'] is num) ? (item['price'] as num).toDouble() : 5.0;
+            final type = item['type']?.toString() ?? 'milling';
+            final isMilling = type == 'milling' || name.toLowerCase().contains('milling');
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12.0),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFAF7F2),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppTheme.borderLight),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: isMilling ? const Color(0xFFEDE9D9) : const Color(0xFFE8F8F0),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      isMilling ? Icons.grain_rounded : Icons.inventory_2_rounded,
+                      color: isMilling ? const Color(0xFF6E5616) : const Color(0xFF27AE60),
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          isMilling ? 'Custom Stone Milling' : 'Pre-packed Artisan Flour',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '₹${(price * (qty is int ? qty : 1)).toStringAsFixed(2)}',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryTerracotta,
+                        ),
+                      ),
+                      Text(
+                        'Qty: $qty${isMilling && (qty is int && qty > 1) ? 'kg' : ''}',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
+          const Divider(height: 20, color: AppTheme.borderLight),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Total Amount Paid',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              Text(
+                '₹${_order.totalPrice.toStringAsFixed(2)}',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.primaryTerracotta,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 

@@ -25,6 +25,7 @@ router.get('/orders/assigned', deliveryController.getAssignedOrders);
 router.get('/orders/:orderId', deliveryController.getDeliveryOrderById);
 
 // Trip Actions
+router.post('/group/accept', deliveryController.acceptGroupDelivery);
 router.post('/orders/:orderId/accept', deliveryController.acceptDelivery);
 router.post('/orders/:orderId/pickup', deliveryController.markPickedUp);
 router.post('/orders/:orderId/picked-up', deliveryController.markPickedUp);
@@ -39,5 +40,23 @@ router.get('/tracking/:deliveryId', deliveryController.getDeliveryTracking);
 router.get('/:deliveryId/tracking', deliveryController.getDeliveryTracking);
 router.put('/:deliveryId/status', deliveryController.updateDeliveryStatus);
 router.get('/earnings', deliveryController.getEarnings);
+
+// Cashout & Wallet
+router.post('/cashout', deliveryController.requestCashout);
+router.get('/cashouts', deliveryController.getCashouts);
+
+// Shifts & Scheduling
+router.get('/shifts', deliveryController.getShiftSlots);
+router.post('/shifts/:shiftId/toggle', deliveryController.toggleShiftBooking);
+
+// Emergency & Incidents
+router.post('/incident', deliveryController.reportIncident);
+
+// Leaderboard & Community
+router.get('/leaderboard', deliveryController.getLeaderboard);
+
+// Rider Expenses
+router.get('/expenses', deliveryController.getExpenses);
+router.post('/expenses', deliveryController.addExpense);
 
 module.exports = router;

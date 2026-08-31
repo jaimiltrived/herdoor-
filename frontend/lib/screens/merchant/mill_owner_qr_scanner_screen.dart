@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
 import '../../models/merchant_models.dart';
+import '../../services/merchant_api_service.dart';
+import 'merchant_active_driver_pickup_screen.dart';
 
 class MillOwnerQrScannerScreen extends StatefulWidget {
   final MerchantOrder order;
@@ -57,8 +59,23 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
     });
   }
 
-  void _handleConfirmMoveToMill() {
-    Navigator.pop(context, true);
+  Future<void> _handleConfirmMoveToMill() async {
+    final orderId = widget.order.numericId ?? 501;
+    widget.order.statusTag = 'READY FOR PICKUP';
+    widget.order.statusColor = const Color(0xFFFF8A80);
+
+    // Update backend order status to READY / READY_FOR_PICKUP
+    await MerchantApiService.instance.transitionOrderStatus(orderId, 'ready');
+
+    if (!mounted) return;
+
+    // Immediately redirect to Live Delivery Handover Screen showing all ready orders
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const MerchantActiveDriverPickupScreen(),
+      ),
+    );
   }
 
   @override
@@ -430,9 +447,9 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             elevation: 0,
                           ),
-                          icon: const Icon(Icons.precision_manufacturing_rounded, color: Colors.white, size: 20),
+                          icon: const Icon(Icons.handshake_outlined, color: Colors.white, size: 20),
                           label: Text(
-                            !_isScanned ? 'Align QR to Verify' : 'Confirm & Move into Mill',
+                            !_isScanned ? 'Align QR to Verify' : 'Confirm & Proceed to Handover',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,

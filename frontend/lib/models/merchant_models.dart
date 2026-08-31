@@ -3,18 +3,21 @@ import 'package:flutter/material.dart';
 enum UserRole {
   customer,
   merchant,
+  delivery,
 }
 
 class MerchantDashboardMetrics {
-  final int pendingOrders;
-  final int activeOrders;
-  final int completedOrders;
-  final double totalRevenue;
+  int pendingOrders;
+  int activeOrders;
+  int completedOrders;
+  int readyForDispatchOrders;
+  double totalRevenue;
 
   MerchantDashboardMetrics({
     required this.pendingOrders,
     required this.activeOrders,
     required this.completedOrders,
+    this.readyForDispatchOrders = 0,
     required this.totalRevenue,
   });
 
@@ -23,6 +26,7 @@ class MerchantDashboardMetrics {
       pendingOrders: json['pendingOrders'] ?? 0,
       activeOrders: json['activeOrders'] ?? 0,
       completedOrders: json['completedOrders'] ?? 0,
+      readyForDispatchOrders: json['readyForDispatchOrders'] ?? json['readyOrdersCount'] ?? 0,
       totalRevenue: (json['totalRevenue'] ?? 0.0).toDouble(),
     );
   }
@@ -443,3 +447,467 @@ class MerchantMockData {
     ),
   ];
 }
+
+class DeliveryTripStop {
+  final int orderId;
+  final String orderNumber;
+  final String customerName;
+  final String customerPhone;
+  final String deliveryAddress;
+  final String homePickupAddress;
+  final String? homePickupLandmark;
+  final String? homePickupInstructions;
+  final bool isHomeGrainPickup;
+  final double quantityKg;
+  final String grainTypeName;
+  final String deliveryOtp;
+  final String pickupPin;
+  final String barcodeNumber;
+  final bool isPickedUp;
+  final bool isDelivered;
+  final double distanceKm;
+  final double latitude;
+  final double longitude;
+  final String? customerNotes;
+  final double orderPayout;
+
+  DeliveryTripStop({
+    required this.orderId,
+    required this.orderNumber,
+    required this.customerName,
+    required this.customerPhone,
+    required this.deliveryAddress,
+    this.homePickupAddress = 'Flat 402, Shivalik Towers, Ellisbridge, Ahmedabad - 380006',
+    this.homePickupLandmark = 'Near Central Bank / Behind Town Hall',
+    this.homePickupInstructions = 'Ring bell 402, raw grain bag kept outside door',
+    this.isHomeGrainPickup = true,
+    required this.quantityKg,
+    required this.grainTypeName,
+    this.deliveryOtp = '7391',
+    this.pickupPin = '4821',
+    required this.barcodeNumber,
+    this.isPickedUp = false,
+    this.isDelivered = false,
+    this.distanceKm = 1.8,
+    this.latitude = 23.0225,
+    this.longitude = 72.5714,
+    this.customerNotes,
+    this.orderPayout = 45.0,
+  });
+
+  factory DeliveryTripStop.fromJson(Map<String, dynamic> json) {
+    return DeliveryTripStop(
+      orderId: json['orderId'] ?? json['id'] ?? 0,
+      orderNumber: json['orderNumber'] ?? '#HD-${json['orderId'] ?? json['id'] ?? '101'}',
+      customerName: json['customerName'] ?? 'Customer',
+      customerPhone: json['customerPhone'] ?? '+919876543210',
+      deliveryAddress: json['deliveryAddress'] ?? 'Ahmedabad',
+      homePickupAddress: json['homePickupAddress'] ?? json['pickupAddress'] ?? 'Flat 402, Shivalik Towers, Ellisbridge, Ahmedabad',
+      homePickupLandmark: json['homePickupLandmark'] ?? json['landmark'] ?? 'Near Central Bank / Behind Town Hall',
+      homePickupInstructions: json['homePickupInstructions'] ?? json['pickupInstructions'] ?? 'Ring bell, grain bag ready',
+      isHomeGrainPickup: json['isHomeGrainPickup'] ?? true,
+      quantityKg: (json['quantityKg'] ?? 5.0).toDouble(),
+      grainTypeName: json['grainTypeName'] ?? 'Fresh Flour',
+      deliveryOtp: json['deliveryOtp'] ?? '7391',
+      pickupPin: json['pickupPin'] ?? '4821',
+      barcodeNumber: json['barcodeNumber'] ?? 'HD-BAG-${json['orderId'] ?? '101'}',
+      isPickedUp: json['isPickedUp'] ?? false,
+      isDelivered: json['isDelivered'] ?? false,
+      distanceKm: (json['distanceKm'] ?? 1.8).toDouble(),
+      latitude: (json['latitude'] ?? 23.0225).toDouble(),
+      longitude: (json['longitude'] ?? 72.5714).toDouble(),
+      customerNotes: json['customerNotes'],
+      orderPayout: (json['orderPayout'] ?? json['deliveryFee'] ?? 45.0).toDouble(),
+    );
+  }
+
+  DeliveryTripStop copyWith({
+    bool? isPickedUp,
+    bool? isDelivered,
+    String? homePickupAddress,
+    String? deliveryAddress,
+  }) {
+    return DeliveryTripStop(
+      orderId: orderId,
+      orderNumber: orderNumber,
+      customerName: customerName,
+      customerPhone: customerPhone,
+      deliveryAddress: deliveryAddress ?? this.deliveryAddress,
+      homePickupAddress: homePickupAddress ?? this.homePickupAddress,
+      homePickupLandmark: homePickupLandmark,
+      homePickupInstructions: homePickupInstructions,
+      isHomeGrainPickup: isHomeGrainPickup,
+      quantityKg: quantityKg,
+      grainTypeName: grainTypeName,
+      deliveryOtp: deliveryOtp,
+      pickupPin: pickupPin,
+      barcodeNumber: barcodeNumber,
+      isPickedUp: isPickedUp ?? this.isPickedUp,
+      isDelivered: isDelivered ?? this.isDelivered,
+      distanceKm: distanceKm,
+      latitude: latitude,
+      longitude: longitude,
+      customerNotes: customerNotes,
+      orderPayout: orderPayout,
+    );
+  }
+}
+
+class DeliveryTrip {
+  final int orderId;
+  final String orderNumber;
+  final String customerName;
+  final String customerPhone;
+  final String millName;
+  final String millAddress;
+  final String millPhone;
+  final String deliveryAddress;
+  final String homePickupAddress;
+  final String? homePickupLandmark;
+  final String? homePickupInstructions;
+  final bool isHomeGrainPickup;
+  final double quantityKg;
+  final String grainTypeName;
+  final double deliveryFee;
+  final double distanceKm;
+  final String status;
+  final String pickupPin;
+  final String deliveryOtp;
+  final String barcodeNumber;
+  final double currentLatitude;
+  final double currentLongitude;
+  final double millLatitude;
+  final double millLongitude;
+  final String? customerNotes;
+  final bool isBatch;
+  final int batchOrderCount;
+  final double surgeBonus;
+  final double heavyBagBonus;
+  final int estimatedMins;
+  final String pickupZone;
+  final String paymentMode;
+  final String vehicleTypeAllowed; // 'ANY' | 'CAR_VAN' | 'BIKE_EV'
+  final List<DeliveryTripStop> stops;
+
+  DeliveryTrip({
+    required this.orderId,
+    required this.orderNumber,
+    required this.customerName,
+    required this.customerPhone,
+    required this.millName,
+    required this.millAddress,
+    this.millPhone = '+919876543211',
+    required this.deliveryAddress,
+    this.homePickupAddress = 'Flat 402, Shivalik Towers, Ellisbridge, Ahmedabad - 380006',
+    this.homePickupLandmark = 'Near Central Bank / Behind Town Hall',
+    this.homePickupInstructions = 'Ring bell 402, raw grain bag kept outside door',
+    this.isHomeGrainPickup = true,
+    required this.quantityKg,
+    required this.grainTypeName,
+    this.deliveryFee = 40.0,
+    this.distanceKm = 2.8,
+    required this.status,
+    this.pickupPin = '4821',
+    this.deliveryOtp = '7391',
+    this.barcodeNumber = 'HD-BAG-101',
+    this.currentLatitude = 23.0225,
+    this.currentLongitude = 72.5714,
+    this.millLatitude = 23.0280,
+    this.millLongitude = 72.5680,
+    this.customerNotes = 'Leave package at doorstep / Ring bell',
+    this.isBatch = false,
+    this.batchOrderCount = 1,
+    this.surgeBonus = 0.0,
+    this.heavyBagBonus = 0.0,
+    this.estimatedMins = 18,
+    this.pickupZone = 'Ellisbridge Hub',
+    this.paymentMode = 'PREPAID_ONLINE',
+    this.vehicleTypeAllowed = 'ANY',
+    this.stops = const [],
+  });
+
+  List<DeliveryTripStop> get resolvedStops {
+    if (stops.isNotEmpty) return stops;
+    return [
+      DeliveryTripStop(
+        orderId: orderId,
+        orderNumber: orderNumber,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        deliveryAddress: deliveryAddress,
+        homePickupAddress: homePickupAddress,
+        homePickupLandmark: homePickupLandmark,
+        homePickupInstructions: homePickupInstructions,
+        isHomeGrainPickup: isHomeGrainPickup,
+        quantityKg: quantityKg,
+        grainTypeName: grainTypeName,
+        deliveryOtp: deliveryOtp,
+        pickupPin: pickupPin,
+        barcodeNumber: barcodeNumber,
+        distanceKm: distanceKm,
+        customerNotes: customerNotes,
+        orderPayout: deliveryFee,
+      ),
+    ];
+  }
+
+  factory DeliveryTrip.fromJson(Map<String, dynamic> json) {
+    var rawStops = json['stops'] as List?;
+    List<DeliveryTripStop> parsedStops = [];
+    if (rawStops != null) {
+      parsedStops = rawStops
+          .map((s) => DeliveryTripStop.fromJson(Map<String, dynamic>.from(s as Map)))
+          .toList();
+    }
+
+    return DeliveryTrip(
+      orderId: json['orderId'] ?? json['id'] ?? 0,
+      orderNumber: json['orderNumber'] ?? '#HD-${json['orderId'] ?? json['id'] ?? '101'}',
+      customerName: json['customerName'] ?? 'Customer',
+      customerPhone: json['customerPhone'] ?? '+919876543210',
+      millName: json['millName'] ?? json['pickupAddress'] ?? 'Shree Ganesh Flour Mill',
+      millAddress: json['millAddress'] ?? json['pickupAddress'] ?? '12 Market Yard, Ellisbridge',
+      millPhone: json['millPhone'] ?? '+919876543211',
+      deliveryAddress: json['deliveryAddress'] ?? 'Sunrise Arcade, Ahmedabad',
+      quantityKg: (json['quantityKg'] ?? 5.0).toDouble(),
+      grainTypeName: json['grainTypeName'] ?? 'Fresh Wheat Flour',
+      deliveryFee: (json['deliveryFee'] ?? json['estimatedDeliveryFee'] ?? 40.0).toDouble(),
+      distanceKm: (json['distanceKm'] ?? 2.8).toDouble(),
+      status: json['status'] ?? 'ASSIGNED',
+      pickupPin: json['pickupPin'] ?? '4821',
+      deliveryOtp: json['deliveryOtp'] ?? '7391',
+      barcodeNumber: json['barcodeNumber'] ?? 'HD-BAG-${json['orderId'] ?? json['id'] ?? '101'}',
+      currentLatitude: (json['currentLatitude'] ?? 23.0225).toDouble(),
+      currentLongitude: (json['currentLongitude'] ?? 72.5714).toDouble(),
+      millLatitude: (json['millLatitude'] ?? 23.0280).toDouble(),
+      millLongitude: (json['millLongitude'] ?? 72.5680).toDouble(),
+      customerNotes: json['customerNotes'] ?? 'Leave at doorstep and ring bell',
+      isBatch: json['isBatch'] ?? (parsedStops.length > 1),
+      batchOrderCount: json['batchOrderCount'] ?? (parsedStops.isNotEmpty ? parsedStops.length : 1),
+      surgeBonus: (json['surgeBonus'] ?? 0.0).toDouble(),
+      heavyBagBonus: (json['heavyBagBonus'] ?? ((json['quantityKg'] ?? 5.0) >= 10 ? 20.0 : 0.0)).toDouble(),
+      estimatedMins: json['estimatedMins'] ?? 18,
+      pickupZone: json['pickupZone'] ?? 'Central Ahmedabad',
+      paymentMode: json['paymentMode'] ?? 'PREPAID_ONLINE',
+      vehicleTypeAllowed: json['vehicleTypeAllowed'] ?? 'ANY',
+      stops: parsedStops,
+    );
+  }
+}
+
+class RiderProfile {
+  final int id;
+  final String name;
+  final String phone;
+  final String email;
+  final String vehicleNumber;
+  final String vehicleType;
+  final double rating;
+  final int totalTrips;
+  final bool isOnline;
+  final String drivingLicense;
+  final double acceptanceRate;
+  final double onTimeRate;
+  final int batteryLevelPct;
+
+  RiderProfile({
+    required this.id,
+    required this.name,
+    required this.phone,
+    required this.email,
+    required this.vehicleNumber,
+    required this.vehicleType,
+    required this.rating,
+    required this.totalTrips,
+    required this.isOnline,
+    this.drivingLicense = 'GJ-01-2022-009841',
+    this.acceptanceRate = 98.4,
+    this.onTimeRate = 99.1,
+    this.batteryLevelPct = 84,
+  });
+
+  factory RiderProfile.fromJson(Map<String, dynamic> json) {
+    return RiderProfile(
+      id: json['id'] ?? 3,
+      name: json['name'] ?? 'Vikram Delivery Agent',
+      phone: json['phone'] ?? '+919876543212',
+      email: json['email'] ?? 'delivery@herdoor.com',
+      vehicleNumber: json['vehicleNumber'] ?? 'GJ-01-AB-4821',
+      vehicleType: json['vehicleType'] ?? 'Hero Electric Nyx Scooter',
+      rating: (json['rating'] ?? 4.9).toDouble(),
+      totalTrips: json['totalTrips'] ?? 348,
+      isOnline: json['isOnline'] ?? true,
+      drivingLicense: json['drivingLicense'] ?? 'GJ-01-2022-009841',
+      acceptanceRate: (json['acceptanceRate'] ?? 98.4).toDouble(),
+      onTimeRate: (json['onTimeRate'] ?? 99.1).toDouble(),
+      batteryLevelPct: json['batteryLevelPct'] ?? 84,
+    );
+  }
+}
+
+class RiderEarnings {
+  final double todayEarnings;
+  final int todayTrips;
+  final double weeklyEarnings;
+  final double tripEarnings;
+  final double surgeBonus;
+  final double tips;
+  final double totalPayout;
+  final int targetTrips;
+  final double targetBonus;
+
+  RiderEarnings({
+    required this.todayEarnings,
+    required this.todayTrips,
+    required this.weeklyEarnings,
+    required this.tripEarnings,
+    required this.surgeBonus,
+    required this.tips,
+    required this.totalPayout,
+    this.targetTrips = 8,
+    this.targetBonus = 150.0,
+  });
+
+  factory RiderEarnings.fromJson(Map<String, dynamic> json) {
+    return RiderEarnings(
+      todayEarnings: (json['todayEarnings'] ?? 525.0).toDouble(),
+      todayTrips: json['todayTrips'] ?? 7,
+      weeklyEarnings: (json['weeklyEarnings'] ?? 3840.0).toDouble(),
+      tripEarnings: (json['tripEarnings'] ?? 440.0).toDouble(),
+      surgeBonus: (json['surgeBonus'] ?? 60.0).toDouble(),
+      tips: (json['tips'] ?? 25.0).toDouble(),
+      totalPayout: (json['totalPayout'] ?? 525.0).toDouble(),
+      targetTrips: json['targetTrips'] ?? 8,
+      targetBonus: (json['targetBonus'] ?? 150.0).toDouble(),
+    );
+  }
+}
+
+class RiderShiftSlot {
+  final String id;
+  final String title;
+  final String timing;
+  final double guaranteedPay;
+  final String surgeMultiplier;
+  final String zone;
+  final int spotsLeft;
+  final bool isBooked;
+  final String status;
+
+  RiderShiftSlot({
+    required this.id,
+    required this.title,
+    required this.timing,
+    required this.guaranteedPay,
+    required this.surgeMultiplier,
+    required this.zone,
+    required this.spotsLeft,
+    required this.isBooked,
+    required this.status,
+  });
+
+  factory RiderShiftSlot.fromJson(Map<String, dynamic> json) {
+    return RiderShiftSlot(
+      id: json['id'] ?? '',
+      title: json['title'] ?? 'Peak Shift',
+      timing: json['timing'] ?? '08:00 AM - 12:00 PM',
+      guaranteedPay: (json['guaranteedPay'] ?? 450.0).toDouble(),
+      surgeMultiplier: json['surgeMultiplier'] ?? '1.5x',
+      zone: json['zone'] ?? 'Ahmedabad Central',
+      spotsLeft: json['spotsLeft'] ?? 5,
+      isBooked: json['isBooked'] ?? false,
+      status: json['status'] ?? 'OPEN',
+    );
+  }
+}
+
+class RiderLeaderboardEntry {
+  final int rank;
+  final String name;
+  final int totalTrips;
+  final double rating;
+  final double earnings;
+  final String badge;
+  final bool isMe;
+
+  RiderLeaderboardEntry({
+    required this.rank,
+    required this.name,
+    required this.totalTrips,
+    required this.rating,
+    required this.earnings,
+    required this.badge,
+    required this.isMe,
+  });
+
+  factory RiderLeaderboardEntry.fromJson(Map<String, dynamic> json) {
+    return RiderLeaderboardEntry(
+      rank: json['rank'] ?? 1,
+      name: json['name'] ?? 'Rider',
+      totalTrips: json['totalTrips'] ?? 0,
+      rating: (json['rating'] ?? 4.9).toDouble(),
+      earnings: (json['earnings'] ?? 0.0).toDouble(),
+      badge: json['badge'] ?? '⚡ Star Rider',
+      isMe: json['isMe'] ?? false,
+    );
+  }
+}
+
+class RiderCashoutTransaction {
+  final String id;
+  final double amount;
+  final String method;
+  final String upiId;
+  final String status;
+  final String timestamp;
+  final String referenceNo;
+
+  RiderCashoutTransaction({
+    required this.id,
+    required this.amount,
+    required this.method,
+    required this.upiId,
+    required this.status,
+    required this.timestamp,
+    required this.referenceNo,
+  });
+
+  factory RiderCashoutTransaction.fromJson(Map<String, dynamic> json) {
+    return RiderCashoutTransaction(
+      id: json['id'] ?? '',
+      amount: (json['amount'] ?? 0.0).toDouble(),
+      method: json['method'] ?? 'Instant UPI',
+      upiId: json['upiId'] ?? '',
+      status: json['status'] ?? 'COMPLETED',
+      timestamp: json['timestamp'] ?? 'Recently',
+      referenceNo: json['referenceNo'] ?? 'UPI/2026/0000',
+    );
+  }
+}
+
+class RiderExpenseItem {
+  final String id;
+  final String type;
+  final double amount;
+  final String date;
+  final String note;
+
+  RiderExpenseItem({
+    required this.id,
+    required this.type,
+    required this.amount,
+    required this.date,
+    required this.note,
+  });
+
+  factory RiderExpenseItem.fromJson(Map<String, dynamic> json) {
+    return RiderExpenseItem(
+      id: json['id'] ?? '',
+      type: json['type'] ?? 'Expense',
+      amount: (json['amount'] ?? 0.0).toDouble(),
+      date: json['date'] ?? 'Today',
+      note: json['note'] ?? '',
+    );
+  }
+}
+

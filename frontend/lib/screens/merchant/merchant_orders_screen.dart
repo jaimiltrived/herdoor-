@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
 import '../../models/merchant_models.dart';
+import '../../services/merchant_api_service.dart';
 import 'merchant_order_process_detail_screen.dart';
+import 'merchant_active_driver_pickup_screen.dart';
 import 'mill_owner_qr_scanner_screen.dart';
 
 class MerchantOrdersScreen extends StatefulWidget {
@@ -15,119 +18,74 @@ class MerchantOrdersScreen extends StatefulWidget {
 class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
   int _selectedFilterTab = 0; // 0: NEW, 1: Pending, 2: Completed, 3: Delivered
   bool _isLoading = false;
+  Timer? _pollingTimer;
 
-  // In-memory persistent order state
-  final List<MerchantOrder> _newOrders = [
-    MerchantOrder(
-      numericId: 9921,
-      orderId: '#ORD-9921-A',
-      customerName: 'Elena Rodriguez',
-      itemsSummary: 'Organic Whole Wheat (5 lbs)',
-      grainType: 'Organic Whole Wheat',
-      quantityText: '5 lbs',
-      timeAgo: 'Just now',
-      statusTag: 'NEW',
-      statusColor: const Color(0xFFFF8A80),
-      timelineSteps: [],
-    ),
-    MerchantOrder(
-      numericId: 9922,
-      orderId: '#ORD-9922-B',
-      customerName: 'Marcus Chen',
-      itemsSummary: 'Stoneground Rye (10 lbs)',
-      grainType: 'Stoneground Rye',
-      quantityText: '10 lbs',
-      timeAgo: '5 mins ago',
-      statusTag: 'NEW',
-      statusColor: const Color(0xFFFF8A80),
-      timelineSteps: [],
-    ),
-  ];
-
-  final List<MerchantOrder> _pendingOrders = [
-    MerchantOrder(
-      numericId: 1042,
-      orderId: '#HD-1042',
-      customerName: 'Elena Rodriguez',
-      itemsSummary: '2x Whole Wheat Flour (5kg), 1x Rye Mix',
-      grainType: 'Organic Whole Wheat',
-      quantityText: '5 lbs',
-      timeAgo: 'Ordered 10 mins ago',
-      statusTag: 'IN PROGRESS',
-      statusColor: const Color(0xFFCBA034),
-      estimatedCompletionTime: '30 Mins',
-      timelineSteps: [],
-    ),
-    MerchantOrder(
-      numericId: 1039,
-      orderId: '#HD-1039',
-      customerName: 'Marcus Chen',
-      itemsSummary: '1x Stoneground Rye (10kg)',
-      grainType: 'Stoneground Rye',
-      quantityText: '10 lbs',
-      timeAgo: 'Ordered 25 mins ago',
-      statusTag: 'PICKUP PENDING',
-      statusColor: const Color(0xFFCBA034),
-      estimatedCompletionTime: '20 Mins',
-      timelineSteps: [],
-    ),
-  ];
-
-  final List<MerchantOrder> _completedMillingOrders = [
-    MerchantMockData.sampleOrderHD8829,
-    MerchantOrder(
-      numericId: 8472,
-      orderId: '#HD-8472',
-      customerName: 'Aarav Patel',
-      itemsSummary: '5kg Multigrain Flour, 2kg Bajra',
-      grainType: 'Multigrain Mix',
-      quantityText: '7 kg',
-      timeAgo: 'Milled 15 mins ago',
-      statusTag: 'OUT FOR DELIVERY',
-      statusColor: const Color(0xFF3498DB),
-      binLocation: 'Bin B-2',
-      deliveryDriverName: 'Rahul Sharma',
-      deliveryDriverVehicle: 'Honda Activa #HA-2910',
-      timelineSteps: [],
-    ),
-  ];
-
-  final List<MerchantOrder> _deliveredOrders = [
-    MerchantOrder(
-      numericId: 1020,
-      orderId: '#HD-1020',
-      customerName: 'Aarav Patel',
-      itemsSummary: '10kg Sharbati Whole Wheat',
-      grainType: 'Sharbati Wheat',
-      quantityText: '10 kg',
-      timeAgo: 'Delivered Today, 2:30 PM',
-      statusTag: 'DELIVERED',
-      statusColor: const Color(0xFF2ECC71),
-      timelineSteps: [],
-    ),
-    MerchantOrder(
-      numericId: 1018,
-      orderId: '#HD-1018',
-      customerName: 'Priya Sharma',
-      itemsSummary: '5kg Multigrain Flour',
-      grainType: 'Multigrain Mix',
-      quantityText: '5 kg',
-      timeAgo: 'Delivered Today, 1:15 PM',
-      statusTag: 'DELIVERED',
-      statusColor: const Color(0xFF2ECC71),
-      timelineSteps: [],
-    ),
-  ];
+  final List<MerchantOrder> _newOrders = [];
+  final List<MerchantOrder> _pendingOrders = [];
+  final List<MerchantOrder> _completedMillingOrders = [];
+  final List<MerchantOrder> _deliveredOrders = [];
 
   @override
   void initState() {
     super.initState();
-    _fetchOrdersData();
+    _fetchOrdersData(showLoading: true);
+    // Real-time automatic background polling every 3 seconds
+    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _fetchOrdersData(showLoading: false);
+    });
   }
 
-  Future<void> _fetchOrdersData() async {
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchOrdersData({bool showLoading = false}) async {
     if (!mounted) return;
-    setState(() => _isLoading = false);
+    if (showLoading) setState(() => _isLoading = true);
+
+    try {
+      final newOrdersFuture = MerchantApiService.instance.getNewOrders();
+      final activeOrdersFuture = MerchantApiService.instance.getActiveOrders();
+      final readyOrdersFuture = MerchantApiService.instance.getReadyOrders();
+      final completedOrdersFuture = MerchantApiService.instance.getCompletedOrders();
+
+      final results = await Future.wait([newOrdersFuture, activeOrdersFuture, readyOrdersFuture, completedOrdersFuture]);
+
+      final fetchedNew = results[0];
+      final fetchedActive = results[1];
+      final fetchedReady = results[2];
+      final fetchedCompleted = results[3];
+
+      if (mounted) {
+        setState(() {
+          _newOrders.clear();
+          if (fetchedNew != null) {
+            _newOrders.addAll(fetchedNew.where((o) => o.statusTag == 'NEW' || o.statusTag == 'PLACED' || o.statusTag == 'New Request'));
+          }
+
+          _pendingOrders.clear();
+          if (fetchedActive != null) {
+            _pendingOrders.addAll(fetchedActive.where((o) => o.statusTag == 'IN PROGRESS' || o.statusTag == 'PROCESSING' || o.statusTag == 'ACCEPTED' || o.statusTag == 'MILLING' || o.statusTag == 'PACKING'));
+          }
+
+          _completedMillingOrders.clear();
+          if (fetchedReady != null) {
+            _completedMillingOrders.addAll(fetchedReady);
+          }
+
+          _deliveredOrders.clear();
+          if (fetchedCompleted != null) {
+            _deliveredOrders.addAll(fetchedCompleted);
+          }
+
+          if (showLoading) _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted && showLoading) setState(() => _isLoading = false);
+    }
   }
 
   void _onTabChanged(int index) {
@@ -151,27 +109,43 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
     }
   }
 
-  void _handleAcceptOrder(MerchantOrder order) {
+  Future<void> _handleAcceptOrder(MerchantOrder order) async {
+    final orderId = order.numericId ?? 501;
+    final messenger = ScaffoldMessenger.of(context);
+
+    // Update UI state immediately for responsive feel
     setState(() {
       _newOrders.removeWhere((o) => o.orderId == order.orderId);
       order.statusTag = 'IN PROGRESS';
       order.statusColor = const Color(0xFFCBA034);
       _pendingOrders.insert(0, order);
     });
-    ScaffoldMessenger.of(context).showSnackBar(
+
+    messenger.showSnackBar(
       SnackBar(
         backgroundColor: const Color(0xFF2ECC71),
         content: Text('✅ Order ${order.orderId} Accepted! Moved to Pending.'),
       ),
     );
+
+    final success = await MerchantApiService.instance.acceptOrder(orderId, estimatedMinutes: 30);
+    if (!mounted) return;
+    if (success) {
+      _fetchOrdersData();
+    }
   }
 
-  void _executeDeclineWithProof(MerchantOrder order, String reason, String details, int photoCount) {
+  Future<void> _executeDeclineWithProof(MerchantOrder order, String reason, String details, int photoCount) async {
+    final orderId = order.numericId ?? 501;
+    final messenger = ScaffoldMessenger.of(context);
+    await MerchantApiService.instance.rejectOrder(orderId, reason: reason);
+    if (!mounted) return;
+
     setState(() {
       _newOrders.removeWhere((o) => o.orderId == order.orderId);
       _pendingOrders.removeWhere((o) => o.orderId == order.orderId);
     });
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(
         backgroundColor: Colors.red.shade800,
         content: Row(
@@ -188,6 +162,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
         ),
       ),
     );
+    _fetchOrdersData();
   }
 
   void _showDeclineOrderWithProofModal(BuildContext context, MerchantOrder order) {
@@ -494,7 +469,8 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
     );
   }
 
-  void _handleCompleteMillingAndMoveToHandover(MerchantOrder order) {
+  Future<void> _handleCompleteMillingAndMoveToHandover(MerchantOrder order) async {
+    final orderId = order.numericId ?? 501;
     setState(() {
       _pendingOrders.removeWhere((o) => o.orderId == order.orderId);
       order.statusTag = 'READY FOR PICKUP';
@@ -504,9 +480,11 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: const Color(0xFF2ECC71),
-        content: Text('⚙️ Milling Finished! Order ${order.orderId} moved to Handover (Completed).'),
+        content: Text('⚙️ Milling Finished! Order ${order.orderId} moved to Handover (Ready).'),
       ),
     );
+    await MerchantApiService.instance.transitionOrderStatus(orderId, 'ready');
+    if (mounted) _fetchOrdersData();
   }
 
   @override
@@ -787,13 +765,14 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
 
   Widget _buildOrderRequestCard(BuildContext context, MerchantOrder order) {
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => MerchantOrderProcessDetailScreen(order: order),
           ),
         );
+        if (mounted) _fetchOrdersData();
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
@@ -888,25 +867,29 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                         ),
                       ),
                       const SizedBox(width: 14),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Grain Type',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 12,
-                              color: AppTheme.textSecondary,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Grain Type',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
                             ),
-                          ),
-                          Text(
-                            order.grainType,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.textPrimary,
+                            Text(
+                              order.grainType,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimary,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -927,25 +910,29 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                         ),
                       ),
                       const SizedBox(width: 14),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Quantity',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 12,
-                              color: AppTheme.textSecondary,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Quantity',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
                             ),
-                          ),
-                          Text(
-                            order.quantityText,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.textPrimary,
+                            Text(
+                              order.quantityText,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimary,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -1041,30 +1028,20 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
         );
       }
 
-      // State 1 (Before scan): Scan QR & Move into Mill
+      // State 1: Scan QR & Proceed to Handover
       return SizedBox(
         width: double.infinity,
         height: 48,
         child: ElevatedButton.icon(
           onPressed: () async {
-            final scanned = await Navigator.push<bool>(
+            await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => MillOwnerQrScannerScreen(order: order),
               ),
             );
-            if (scanned == true) {
-              setState(() {
-                order.statusTag = 'MILLING';
-                order.statusColor = const Color(0xFFE67E22);
-              });
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  backgroundColor: const Color(0xFF2ECC71),
-                  content: Text('✅ QR Verified! Order ${order.orderId} is milling. Tap Complete Milling & Move to Handover when finished.'),
-                ),
-              );
+            if (mounted) {
+              _fetchOrdersData();
             }
           },
           style: ElevatedButton.styleFrom(
@@ -1073,7 +1050,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
           ),
           icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 20),
           label: Text(
-            'Scan QR & Move into Mill',
+            'Scan QR & Move to Handover',
             style: GoogleFonts.plusJakartaSans(
               fontSize: 15,
               fontWeight: FontWeight.bold,
@@ -1083,32 +1060,67 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
         ),
       );
     } else if (_selectedFilterTab == 2) {
-      // 3. Completed: Milling Completed
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF9F5EF),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE8DFC8)),
-        ),
-        child: Center(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF6E5616), size: 18),
-              const SizedBox(width: 8),
-              Text(
-                'Milling Completed • Ready in Store',
+      // 3. Ready for Handover
+      return Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9F5EF),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE8DFC8)),
+            ),
+            child: Center(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF6E5616), size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Milling Finished • Ready for Handover',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF6E5616),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const MerchantActiveDriverPickupScreen(),
+                  ),
+                );
+                if (mounted) {
+                  _fetchOrdersData();
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryTerracotta,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.handshake_outlined, color: Colors.white, size: 18),
+              label: Text(
+                'Handover to Delivery Person',
                 style: GoogleFonts.plusJakartaSans(
                   fontWeight: FontWeight.bold,
-                  color: const Color(0xFF6E5616),
-                  fontSize: 13,
+                  color: Colors.white,
+                  fontSize: 14,
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       );
     } else {
       // 4. Delivered: Delivered to Home
