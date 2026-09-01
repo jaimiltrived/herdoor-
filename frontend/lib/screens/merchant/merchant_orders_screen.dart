@@ -1003,63 +1003,62 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
         ],
       );
     } else if (_selectedFilterTab == 1) {
-      final isMilling = order.statusTag == 'MILLING';
-
-      if (isMilling) {
-        // State 2 (After scan): Complete Milling & Move to Handover
-        return SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: ElevatedButton.icon(
-            onPressed: () => _handleCompleteMillingAndMoveToHandover(order),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryTerracotta,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 0,
-            ),
-            icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 20),
-            label: Text(
-              'Complete Milling & Move to Handover',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+      return Column(
+        children: [
+          // 1-Click Fast Action: Complete Milling & Ready for Dispatch
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: () => _handleCompleteMillingAndMoveToHandover(order),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryTerracotta,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 1,
+              ),
+              icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 20),
+              label: Text(
+                'Complete & Ready to Dispatch (Leg 2)',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
             ),
           ),
-        );
-      }
-
-      // State 1: Scan QR & Proceed to Handover
-      return SizedBox(
-        width: double.infinity,
-        height: 48,
-        child: ElevatedButton.icon(
-          onPressed: () async {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => MillOwnerQrScannerScreen(order: order),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            height: 42,
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MillOwnerQrScannerScreen(order: order),
+                  ),
+                );
+                if (mounted) {
+                  _fetchOrdersData();
+                }
+              },
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF6E5616),
+                side: const BorderSide(color: Color(0xFF6E5616)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-            );
-            if (mounted) {
-              _fetchOrdersData();
-            }
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF6E5616),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 20),
-          label: Text(
-            'Scan QR & Move to Handover',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+              icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+              label: Text(
+                'Scan Driver Handover QR',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       );
     } else if (_selectedFilterTab == 2) {
       // 3. Ready for Handover

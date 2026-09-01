@@ -566,6 +566,10 @@ class DeliveryTrip {
   final String? homePickupLandmark;
   final String? homePickupInstructions;
   final bool isHomeGrainPickup;
+  final String legType; // 'LEG_1_GRAIN_PICKUP' | 'LEG_2_FLOUR_DELIVERY'
+  final String? tripBadge;
+  final String? originTitle;
+  final String? destinationTitle;
   final double quantityKg;
   final String grainTypeName;
   final double deliveryFee;
@@ -602,6 +606,10 @@ class DeliveryTrip {
     this.homePickupLandmark = 'Near Central Bank / Behind Town Hall',
     this.homePickupInstructions = 'Ring bell 402, raw grain bag kept outside door',
     this.isHomeGrainPickup = true,
+    this.legType = 'LEG_1_GRAIN_PICKUP',
+    this.tripBadge,
+    this.originTitle,
+    this.destinationTitle,
     required this.quantityKg,
     required this.grainTypeName,
     this.deliveryFee = 40.0,
@@ -625,6 +633,22 @@ class DeliveryTrip {
     this.vehicleTypeAllowed = 'ANY',
     this.stops = const [],
   });
+
+  bool get isLeg1GrainPickup =>
+      legType == 'LEG_1_GRAIN_PICKUP' ||
+      (isHomeGrainPickup && (status == 'PLACED' || status == 'ACCEPTED' || status == 'CONFIRMED' || status == 'PENDING' || status == 'NEW'));
+
+  bool get isLeg2FlourDelivery => !isLeg1GrainPickup;
+
+  String get resolvedLegBadge => tripBadge ?? (isLeg1GrainPickup ? '🌾 Grain Pickup (Home ➔ Mill)' : '🍞 Flour Delivery (Mill ➔ Home)');
+
+  String get resolvedOriginName => originTitle ?? (isLeg1GrainPickup ? 'Customer Home ($customerName)' : millName);
+
+  String get resolvedDestinationName => destinationTitle ?? (isLeg1GrainPickup ? '$millName (Drop for Grinding)' : 'Customer Doorstep ($customerName)');
+
+  String get effectivePickupLocation => isLeg1GrainPickup ? homePickupAddress : millAddress;
+
+  String get effectiveDeliveryLocation => isLeg1GrainPickup ? millAddress : deliveryAddress;
 
   List<DeliveryTripStop> get resolvedStops {
     if (stops.isNotEmpty) return stops;
@@ -660,6 +684,10 @@ class DeliveryTrip {
           .toList();
     }
 
+    final String statusStr = (json['status'] ?? 'ASSIGNED').toString().toUpperCase();
+    final bool homeGrain = json['isHomeGrainPickup'] ?? true;
+    final String parsedLeg = json['legType'] ?? (homeGrain && ['PLACED', 'ACCEPTED', 'CONFIRMED', 'PENDING', 'NEW'].contains(statusStr) ? 'LEG_1_GRAIN_PICKUP' : 'LEG_2_FLOUR_DELIVERY');
+
     return DeliveryTrip(
       orderId: json['orderId'] ?? json['id'] ?? 0,
       orderNumber: json['orderNumber'] ?? '#HD-${json['orderId'] ?? json['id'] ?? '101'}',
@@ -669,6 +697,14 @@ class DeliveryTrip {
       millAddress: json['millAddress'] ?? json['pickupAddress'] ?? '12 Market Yard, Ellisbridge',
       millPhone: json['millPhone'] ?? '+919876543211',
       deliveryAddress: json['deliveryAddress'] ?? 'Sunrise Arcade, Ahmedabad',
+      homePickupAddress: json['homePickupAddress'] ?? 'Flat 402, Shivalik Towers, Ellisbridge',
+      homePickupLandmark: json['homePickupLandmark'] ?? 'Near Central Bank',
+      homePickupInstructions: json['homePickupInstructions'] ?? 'Pick up raw grain bag from doorstep',
+      isHomeGrainPickup: homeGrain,
+      legType: parsedLeg,
+      tripBadge: json['tripBadge'],
+      originTitle: json['originTitle'],
+      destinationTitle: json['destinationTitle'],
       quantityKg: (json['quantityKg'] ?? 5.0).toDouble(),
       grainTypeName: json['grainTypeName'] ?? 'Fresh Wheat Flour',
       deliveryFee: (json['deliveryFee'] ?? json['estimatedDeliveryFee'] ?? 40.0).toDouble(),

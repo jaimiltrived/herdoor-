@@ -718,8 +718,14 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
             ),
           );
         } else {
-          // Last stop completed — also confirm the main trip orderId for grouped batches
-          if (widget.trip.isBatch && widget.trip.orderId != _activeStop.orderId) {
+          // Last stop completed — confirm all stops and batch trip so backend removes them completely
+          for (var stop in _tripStops) {
+            DeliveryApiService.instance.confirmDelivery(
+              stop.orderId,
+              otp: effectiveOtp,
+            );
+          }
+          if (widget.trip.isBatch) {
             DeliveryApiService.instance.confirmDelivery(
               widget.trip.orderId,
               otp: effectiveOtp,
@@ -1026,66 +1032,94 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
   }
 
   String _getStageTitle() {
+    final bool isLeg1 = widget.trip.isLeg1GrainPickup;
     switch (_currentStage) {
       case TripStage.headingToMill:
-        return 'Step 1: Heading to Mill Pickup';
+        return isLeg1 ? 'Leg 1: Heading to Customer Home (Grain Pickup)' : 'Leg 2: Heading to Mill (Flour Pickup)';
       case TripStage.atMillPickup:
-        return 'Step 2: At Mill Handover (Scan Bags)';
+        return isLeg1 ? 'Leg 1: At Customer Home (Collect Raw Grain)' : 'Leg 2: At Mill Handover (Scan Flour Bags)';
       case TripStage.headingToCustomer:
-        return 'Step 3: Heading to Stop ${_currentStopIndex + 1} of ${_tripStops.length}';
+        return isLeg1 ? 'Leg 1: Heading to Flour Mill (Drop Grain for Grinding)' : 'Leg 2: Heading to Stop ${_currentStopIndex + 1} (${_activeStop.customerName})';
       case TripStage.atCustomerDelivery:
-        return 'Step 4: At Stop ${_currentStopIndex + 1} Doorstep';
+        return isLeg1 ? 'Leg 1: At Mill (Handover Grain to Mill Owner)' : 'Leg 2: At Stop ${_currentStopIndex + 1} Doorstep (Verify OTP)';
       case TripStage.completed:
-        return 'Trip Completed';
+        return isLeg1 ? 'Leg 1 Completed (Grain Handed to Mill)' : 'Leg 2 Completed (Flour Delivered)';
     }
   }
 
   Widget _buildStageProgressBar() {
-    final stages = [
-      {'title': 'Accept', 'done': true},
-      {'title': 'Mill', 'done': _currentStage.index >= TripStage.headingToMill.index},
-      {'title': 'Pickup', 'done': _currentStage.index >= TripStage.headingToCustomer.index},
-      {'title': 'Drop', 'done': _currentStage.index >= TripStage.atCustomerDelivery.index},
-      {'title': 'Done', 'done': _currentStage == TripStage.completed},
-    ];
+    final bool isLeg1 = widget.trip.isLeg1GrainPickup;
+    final stages = isLeg1
+        ? [
+            {'title': 'Accept', 'done': true},
+            {'title': 'Home', 'done': _currentStage.index >= TripStage.headingToMill.index},
+            {'title': 'Grain', 'done': _currentStage.index >= TripStage.headingToCustomer.index},
+            {'title': 'Mill', 'done': _currentStage.index >= TripStage.atCustomerDelivery.index},
+            {'title': 'Done', 'done': _currentStage == TripStage.completed},
+          ]
+        : [
+            {'title': 'Accept', 'done': true},
+            {'title': 'Mill', 'done': _currentStage.index >= TripStage.headingToMill.index},
+            {'title': 'Flour', 'done': _currentStage.index >= TripStage.headingToCustomer.index},
+            {'title': 'Home', 'done': _currentStage.index >= TripStage.atCustomerDelivery.index},
+            {'title': 'Done', 'done': _currentStage == TripStage.completed},
+          ];
 
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: stages.map((s) {
+        children: List.generate(stages.length, (index) {
+          final s = stages[index];
           final isDone = s['done'] as bool;
-          return Row(
-            children: [
-              Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isDone ? const Color(0xFF1E8449) : Colors.grey[300],
+          final isLast = index == stages.length - 1;
+
+          return Expanded(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Expanded(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 18,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isDone ? const Color(0xFF1E8449) : Colors.grey[300],
+                        ),
+                        child: isDone
+                            ? const Icon(Icons.check, size: 12, color: Colors.white)
+                            : null,
+                      ),
+                      const SizedBox(width: 3),
+                      Flexible(
+                        child: Text(
+                          s['title'] as String,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10,
+                            fontWeight: isDone ? FontWeight.bold : FontWeight.w500,
+                            color: isDone ? const Color(0xFF1E8449) : AppTheme.textMuted,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: isDone
-                    ? const Icon(Icons.check, size: 14, color: Colors.white)
-                    : null,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                s['title'] as String,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 11,
-                  fontWeight: isDone ? FontWeight.bold : FontWeight.w500,
-                  color: isDone ? const Color(0xFF1E8449) : AppTheme.textMuted,
-                ),
-              ),
-              if (s != stages.last) ...[
-                const SizedBox(width: 8),
-                Container(width: 14, height: 2, color: isDone ? const Color(0xFF1E8449) : Colors.grey[300]),
-                const SizedBox(width: 8),
+                if (!isLast)
+                  Container(
+                    width: 6,
+                    height: 2,
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    color: isDone ? const Color(0xFF1E8449) : Colors.grey[300],
+                  ),
               ],
-            ],
+            ),
           );
-        }).toList(),
+        }),
       ),
     );
   }

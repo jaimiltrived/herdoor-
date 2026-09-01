@@ -1119,22 +1119,26 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           const Divider(height: 1),
           const SizedBox(height: 12),
 
-          // Pickup Mill
+          // Step 1: Pickup Location
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.store_rounded, size: 20, color: AppTheme.primaryTerracotta),
+              Icon(
+                trip.isLeg1GrainPickup ? Icons.home_rounded : Icons.storefront_rounded,
+                size: 20,
+                color: trip.isLeg1GrainPickup ? const Color(0xFF0369A1) : AppTheme.primaryTerracotta,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'PICKUP: ${trip.millName}',
+                      trip.isLeg1GrainPickup ? '1. PICKUP GRAIN: ${trip.customerName}' : '1. PICKUP FLOUR: ${trip.millName}',
                       style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
                     ),
                     Text(
-                      '${trip.millAddress} (${trip.quantityKg} kg)',
+                      '${trip.effectivePickupLocation} (${trip.quantityKg} kg)',
                       style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1146,22 +1150,26 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           ),
           const SizedBox(height: 10),
 
-          // Dropoff Customer
+          // Step 2: Drop Location
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.location_on_rounded, size: 20, color: Color(0xFF1E8449)),
+              Icon(
+                trip.isLeg1GrainPickup ? Icons.storefront_rounded : Icons.location_on_rounded,
+                size: 20,
+                color: trip.isLeg1GrainPickup ? const Color(0xFF6E5616) : const Color(0xFF1E8449),
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'DROP: ${trip.customerName}',
+                      trip.isLeg1GrainPickup ? '2. DROP AT MILL: ${trip.millName}' : '2. DELIVER TO: ${trip.customerName}',
                       style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
                     ),
                     Text(
-                      trip.deliveryAddress,
+                      trip.effectiveDeliveryLocation,
                       style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1844,121 +1852,128 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Badges, Multi-select Checkbox & Total Pay
+          // Badges, Multi-select Checkbox & Total Pay (Wrapped to prevent overflow on small screens)
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Row(
-                children: [
-                  // Tappable Checkbox for Multi-Order Combining
-                  InkWell(
-                    onTap: () => _toggleOrderSelection(trip.orderId),
+              // Tappable Checkbox for Multi-Order Combining
+              InkWell(
+                onTap: () => _toggleOrderSelection(trip.orderId),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected ? const Color(0xFF1E8449) : const Color(0xFFFAF6F0),
                     borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      margin: const EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFF1E8449) : const Color(0xFFFAF6F0),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isSelected ? const Color(0xFF1E8449) : const Color(0xFFCBD5E0),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Icon(
-                        isSelected ? Icons.check_rounded : Icons.add_rounded,
-                        size: 16,
-                        color: isSelected ? Colors.white : AppTheme.textSecondary,
-                      ),
+                    border: Border.all(
+                      color: isSelected ? const Color(0xFF1E8449) : const Color(0xFFCBD5E0),
+                      width: 1.5,
                     ),
                   ),
-
-                  if (isGrouped)
-                    Container(
-                      margin: const EdgeInsets.only(right: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFDEDEC),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFE74C3C)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.layers_rounded, size: 12, color: Color(0xFFC0392B)),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${trip.stops.length}x GROUPED (1 MAP)',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFFC0392B),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF3ECE1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        trip.orderNumber,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF6E5616),
-                        ),
-                      ),
-                    ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F8F5),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      '${trip.distanceKm} km away',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF1E8449),
-                      ),
-                    ),
+                  child: Icon(
+                    isSelected ? Icons.check_rounded : Icons.add_rounded,
+                    size: 16,
+                    color: isSelected ? Colors.white : AppTheme.textSecondary,
                   ),
-                ],
+                ),
               ),
-              Row(
-                children: [
-                  if (trip.surgeBonus > 0)
+
+              // Badges in Wrap so they never overflow
+              Expanded(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (isGrouped)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFDEDEC),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE74C3C)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.layers_rounded, size: 12, color: Color(0xFFC0392B)),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${trip.stops.length}x GROUPED',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFFC0392B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3ECE1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          trip.orderNumber,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF6E5616),
+                          ),
+                        ),
+                      ),
                     Container(
-                      margin: const EdgeInsets.only(right: 6),
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFDEDEC),
+                        color: trip.isLeg1GrainPickup ? const Color(0xFFE0F2FE) : const Color(0xFFE8F8F5),
                         borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: trip.isLeg1GrainPickup ? const Color(0xFF7DD3FC) : const Color(0xFFA3E4D7),
+                        ),
                       ),
                       child: Text(
-                        '+₹${trip.surgeBonus.toStringAsFixed(0)} Surge',
+                        trip.resolvedLegBadge,
                         style: GoogleFonts.plusJakartaSans(
-                          fontSize: 10,
+                          fontSize: 9.5,
                           fontWeight: FontWeight.w800,
-                          color: const Color(0xFFC0392B),
+                          color: trip.isLeg1GrainPickup ? const Color(0xFF0369A1) : const Color(0xFF1E8449),
                         ),
                       ),
                     ),
-                  Text(
-                    '₹${trip.deliveryFee.toStringAsFixed(0)}',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF1E8449),
-                    ),
-                  ),
-                ],
+                    if (trip.surgeBonus > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFDEDEC),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '+₹${trip.surgeBonus.toStringAsFixed(0)} Surge',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFFC0392B),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              // Payout
+              Text(
+                '₹${trip.deliveryFee.toStringAsFixed(0)}',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF1E8449),
+                ),
               ),
             ],
           ),
@@ -1967,11 +1982,15 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           // Grain items summary & weight
           Row(
             children: [
-              const Icon(Icons.inventory_2_outlined, size: 16, color: AppTheme.primaryTerracotta),
+              Icon(
+                trip.isLeg1GrainPickup ? Icons.grass_rounded : Icons.inventory_2_outlined,
+                size: 16,
+                color: AppTheme.primaryTerracotta,
+              ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  '${trip.quantityKg} kg Total • ${trip.grainTypeName}',
+                  '${trip.quantityKg} kg • ${trip.grainTypeName} (${trip.isLeg1GrainPickup ? "Raw Grain for Grinding" : "Fresh Packed Flour"})',
                   style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1999,13 +2018,13 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           ),
           const SizedBox(height: 10),
 
-          // 1. HOME GRAIN PICKUP LOCATION (Full Detailed Address)
+          // Step 1 Location (Origin: Customer Home on Leg 1, Flour Mill on Leg 2)
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF0F9FF),
+              color: trip.isLeg1GrainPickup ? const Color(0xFFF0F9FF) : const Color(0xFFFAF6F0),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFBAE6FD)),
+              border: Border.all(color: trip.isLeg1GrainPickup ? const Color(0xFFBAE6FD) : const Color(0xFFECE4D9)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2016,12 +2035,22 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                     Expanded(
                       child: Row(
                         children: [
-                          const Icon(Icons.home_outlined, size: 16, color: Color(0xFF0369A1)),
+                          Icon(
+                            trip.isLeg1GrainPickup ? Icons.home_rounded : Icons.storefront_rounded,
+                            size: 16,
+                            color: trip.isLeg1GrainPickup ? const Color(0xFF0369A1) : const Color(0xFF6E5616),
+                          ),
                           const SizedBox(width: 6),
                           Flexible(
                             child: Text(
-                              '1. PICKUP FROM HOME (RAW GRAINS):',
-                              style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF0369A1), fontWeight: FontWeight.w800),
+                              trip.isLeg1GrainPickup
+                                  ? '1. PICK UP RAW GRAIN FROM HOME:'
+                                  : '1. PICK UP FRESH FLOUR FROM MILL:',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                color: trip.isLeg1GrainPickup ? const Color(0xFF0369A1) : const Color(0xFF6E5616),
+                                fontWeight: FontWeight.w800,
+                              ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -2029,18 +2058,20 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE0F2FE),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          trip.customerName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.plusJakartaSans(fontSize: 10, color: const Color(0xFF0284C7), fontWeight: FontWeight.bold),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: trip.isLeg1GrainPickup ? const Color(0xFFE0F2FE) : const Color(0xFFF3ECE1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        trip.isLeg1GrainPickup ? trip.customerName : trip.millName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 10,
+                          color: trip.isLeg1GrainPickup ? const Color(0xFF0284C7) : const Color(0xFF6E5616),
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
@@ -2048,28 +2079,13 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  trip.homePickupAddress,
+                  trip.isLeg1GrainPickup ? trip.homePickupAddress : trip.millAddress,
                   style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
                 ),
-                if (trip.homePickupLandmark != null) ...[
-                  const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      const Icon(Icons.near_me_outlined, size: 12, color: Color(0xFF0284C7)),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          'Landmark: ${trip.homePickupLandmark}',
-                          style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF334155), fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
                 if (trip.homePickupInstructions != null) ...[
                   const SizedBox(height: 3),
                   Text(
-                    '📝 Note: "${trip.homePickupInstructions}"',
+                    '📝 Instructions: "${trip.homePickupInstructions}"',
                     style: GoogleFonts.plusJakartaSans(fontSize: 10, color: const Color(0xFF475569), fontStyle: FontStyle.italic),
                   ),
                 ],
@@ -2078,42 +2094,77 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           ),
           const SizedBox(height: 8),
 
-          // 2. CHAKKI MILL HANDOVER LOCATION
+          // Step 2 Location (Destination: Flour Mill on Leg 1, Customer Doorstep on Leg 2)
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFFAF6F0),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFECE4D9)),
+              color: trip.isLeg1GrainPickup ? const Color(0xFFFAF6F0) : const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: trip.isLeg1GrainPickup ? const Color(0xFFECE4D9) : const Color(0xFFBBF7D0)),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.storefront_rounded, size: 16, color: Color(0xFF6E5616)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '2. CHAKKI MILL: ${trip.millName}',
-                        style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF6E5616), fontWeight: FontWeight.bold),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Icon(
+                            trip.isLeg1GrainPickup ? Icons.storefront_rounded : Icons.location_on_rounded,
+                            size: 16,
+                            color: trip.isLeg1GrainPickup ? const Color(0xFF6E5616) : const Color(0xFF1E8449),
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              trip.isLeg1GrainPickup
+                                  ? '2. DROP RAW GRAIN AT MILL (FOR GRINDING):'
+                                  : '2. DELIVER FLOUR TO CUSTOMER HOME:',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                color: trip.isLeg1GrainPickup ? const Color(0xFF6E5616) : const Color(0xFF1E8449),
+                                fontWeight: FontWeight.w800,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        trip.millAddress,
-                        style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: trip.isLeg1GrainPickup ? const Color(0xFFF3ECE1) : const Color(0xFFDCFCE7),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        trip.isLeg1GrainPickup ? trip.millName : trip.customerName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 10,
+                          color: trip.isLeg1GrainPickup ? const Color(0xFF6E5616) : const Color(0xFF15803D),
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  trip.isLeg1GrainPickup ? trip.millAddress : trip.deliveryAddress,
+                  style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 8),
 
-          // 3. FINAL FLOUR DROP DESTINATION (Multi-Stop or Single Drop)
-          if (isGrouped) ...[
+          // For Grouped Runs: show list of multiple stops
+          if (isGrouped && trip.stops.length > 1) ...[
+            const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
@@ -2125,7 +2176,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '3. SEQUENTIAL FLOUR DROPS (${trip.stops.length} Customer Homes):',
+                    'Multi-Stop Route Details (${trip.stops.length} Drops):',
                     style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
                   ),
                   const SizedBox(height: 6),
@@ -2155,32 +2206,12 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      '${stop.customerName} (${stop.quantityKg} kg)',
-                                      style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold),
-                                    ),
-                                    Text(
-                                      stop.barcodeNumber,
-                                      style: GoogleFonts.plusJakartaSans(fontSize: 10, color: const Color(0xFF6E5616), fontWeight: FontWeight.w700),
-                                    ),
-                                  ],
-                                ),
                                 Text(
-                                  'Drop: ${stop.deliveryAddress}',
-                                  style: GoogleFonts.plusJakartaSans(fontSize: 10, color: AppTheme.textSecondary),
+                                  '${stop.customerName} (${stop.quantityKg} kg) • ${stop.deliveryAddress}',
+                                  style: GoogleFonts.plusJakartaSans(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                if (stop.homePickupAddress.isNotEmpty)
-                                  Text(
-                                    'Pickup from: ${stop.homePickupAddress}',
-                                    style: GoogleFonts.plusJakartaSans(fontSize: 9, color: const Color(0xFF0369A1), fontWeight: FontWeight.w600),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
                               ],
                             ),
                           ),
@@ -2188,39 +2219,6 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                       ),
                     );
                   }),
-                ],
-              ),
-            ),
-          ] else ...[
-            // Single Delivery Address
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.location_on_outlined, size: 16, color: Color(0xFF1E8449)),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '3. FINAL DROP: ${trip.customerName}',
-                          style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF1E8449)),
-                        ),
-                        Text(
-                          trip.deliveryAddress,
-                          style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),

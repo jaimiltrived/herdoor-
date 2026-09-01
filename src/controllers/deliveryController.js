@@ -132,7 +132,7 @@ exports.updateOnlineStatus = async (req, res) => {
 };
 
 /**
- * @desc Get Available Trips Queue (Orders ready for driver pickup from MySQL)
+ * @desc Get Available Trips Queue (Orders accepted by merchant or ready for pickup)
  * @route GET /api/v1/delivery/available-trips
  */
 exports.getAvailableTrips = async (req, res) => {
@@ -144,10 +144,17 @@ exports.getAvailableTrips = async (req, res) => {
       FROM orders o
       LEFT JOIN mills m ON o.mill_id = m.id
       LEFT JOIN addresses a ON o.address_id = a.id
-      WHERE o.status NOT IN ('DELIVERED', 'COMPLETED', 'CANCELLED')
-        AND o.id NOT IN (
-          SELECT order_id FROM deliveries WHERE status IN ('ASSIGNED', 'PICKED_UP_FROM_MILL', 'OUT_FOR_DELIVERY', 'DELIVERED')
-        )
+      WHERE (
+        -- Leg 1: Customer's own grain -> only when merchant has ACCEPTED, CONFIRMED, or is PROCESSING
+        (o.grain_source = 'CUSTOMER' AND o.status IN ('ACCEPTED', 'CONFIRMED', 'PROCESSING', 'READY', 'READY_FOR_PICKUP'))
+        OR
+        -- Leg 2: Mill's grain or completed flour -> only when READY
+        (o.grain_source != 'CUSTOMER' AND o.status IN ('READY', 'READY_FOR_PICKUP'))
+      )
+      AND o.status NOT IN ('DELIVERED', 'COMPLETED', 'CANCELLED', 'ASSIGNED', 'OUT_FOR_DELIVERY')
+      AND o.id NOT IN (
+        SELECT order_id FROM deliveries WHERE status IN ('ASSIGNED', 'PICKED_UP_FROM_MILL', 'OUT_FOR_DELIVERY', 'DELIVERED')
+      )
       ORDER BY o.id DESC
     `);
 
@@ -159,11 +166,25 @@ exports.getAvailableTrips = async (req, res) => {
         const baseFee = 45.0;
         const distance = 1.4 + ((idx * 0.7) % 3.2);
 
-        let custAddress = o.address_line1
+        const custAddress = o.address_line1
           ? `${o.address_line1}${o.address_line2 ? ', ' + o.address_line2 : ''}, ${o.city || 'Ahmedabad'}`
           : 'Flat 402, Shivalik Towers, Satellite Road, Ahmedabad';
 
-        let pickupAddress = o.mill_address || '12 Market Yard, Ellisbridge, Ahmedabad';
+        const millAddress = o.mill_address || '12 Market Yard, Ellisbridge, Ahmedabad';
+
+        const isCustomerGrain = (o.grain_source || 'CUSTOMER').toUpperCase() === 'CUSTOMER';
+        // Leg 1 only when accepted / in processing; Leg 2 when ready
+        const isLeg1 = isCustomerGrain && ['ACCEPTED', 'CONFIRMED', 'PROCESSING'].includes(o.status);
+
+        const effectivePickupAddress = isLeg1 ? custAddress : millAddress;
+        const effectiveDeliveryAddress = isLeg1 ? millAddress : custAddress;
+        const legType = isLeg1 ? 'LEG_1_GRAIN_PICKUP' : 'LEG_2_FLOUR_DELIVERY';
+        const tripBadge = isLeg1 ? '🌾 Grain Pickup (Home ➔ Mill)' : '🍞 Flour Delivery (Mill ➔ Home)';
+        const instructions = isLeg1
+          ? 'Pick up raw grain bag from customer doorstep and drop at flour mill for milling.'
+          : 'Pick up freshly milled & sealed flour from flour mill and deliver to customer home.';
+
+        const isBatch = Boolean(o.is_batch) || Boolean(o.group_code || o.group_id);
 
         return {
           orderId: o.id,
@@ -171,25 +192,31 @@ exports.getAvailableTrips = async (req, res) => {
           customerName: o.customer_name || 'Customer',
           customerPhone: o.customer_phone || '+919876543210',
           millName: o.mill_name || 'Shree Ganesh Flour Mill & Grinding Hub',
-          millAddress: pickupAddress,
+          millAddress: millAddress,
           millPhone: o.mill_phone || '+919876543211',
           homePickupAddress: custAddress,
-          homePickupLandmark: 'Opposite Main Gate',
-          homePickupInstructions: 'Doorbell is active. Pick up / delivery bag.',
-          deliveryAddress: custAddress,
+          homePickupLandmark: isLeg1 ? 'Near Customer Main Gate' : 'Behind Town Hall',
+          homePickupInstructions: instructions,
+          isHomeGrainPickup: isLeg1,
+          legType,
+          tripBadge,
+          originTitle: isLeg1 ? 'Customer Home (Pick up Grain)' : 'Flour Mill (Pick up Flour)',
+          destinationTitle: isLeg1 ? 'Flour Mill (Drop Grain for Milling)' : 'Customer Doorstep (Deliver Flour)',
+          pickupAddress: effectivePickupAddress,
+          deliveryAddress: effectiveDeliveryAddress,
           quantityKg: parseFloat(o.quantity_kg) || 5.0,
           grainTypeName: o.grain_type_name || 'Fresh Stone Ground Flour',
           deliveryFee: baseFee + surgeBonus + heavyBagBonus,
           estimatedDeliveryFee: baseFee + surgeBonus + heavyBagBonus,
           surgeBonus,
           heavyBagBonus,
-          isBatch: false,
-          batchOrderCount: 1,
+          isBatch: isBatch,
+          batchOrderCount: isBatch ? 2 : 1,
           groupId: o.group_id || null,
           groupCode: o.group_code || null,
           distanceKm: parseFloat(distance.toFixed(1)),
           estimatedMins: 12 + Math.round(distance * 3),
-          pickupZone: 'Ellisbridge / Satellite Hub',
+          pickupZone: isLeg1 ? 'Satellite / Residential Cluster' : 'Ellisbridge Mill Hub',
           paymentMode: o.payment_method || 'UPI',
           status: o.status,
           pickupPin: o.pickup_pin || '4821',
@@ -202,9 +229,13 @@ exports.getAvailableTrips = async (req, res) => {
               customerName: o.customer_name || 'Customer',
               customerPhone: o.customer_phone || '+919876543210',
               homePickupAddress: custAddress,
-              homePickupLandmark: 'Opposite Main Gate',
-              homePickupInstructions: 'Pick up / deliver bag',
-              deliveryAddress: custAddress,
+              homePickupLandmark: isLeg1 ? 'Near Customer Main Gate' : 'Behind Town Hall',
+              homePickupInstructions: instructions,
+              isHomeGrainPickup: isLeg1,
+              legType,
+              tripBadge,
+              pickupAddress: effectivePickupAddress,
+              deliveryAddress: effectiveDeliveryAddress,
               quantityKg: parseFloat(o.quantity_kg) || 5.0,
               grainTypeName: o.grain_type_name || 'Fresh Stone Ground Flour',
               deliveryOtp: o.delivery_otp || '7391',
@@ -221,58 +252,94 @@ exports.getAvailableTrips = async (req, res) => {
     console.warn('MySQL getAvailableTrips query warning:', err.message);
   }
 
-  // Include 1 pre-configured grouped batch from first 2 ready orders if available
-  if (availableOrders.length >= 2) {
-    const batchOrders = availableOrders.slice(0, 2);
-    const batchOrderIds = batchOrders.map(o => o.orderId);
-    const combinedFee = batchOrders.reduce((sum, o) => sum + o.deliveryFee, 0) + 30.0;
-    const combinedKg = batchOrders.reduce((sum, o) => sum + o.quantityKg, 0);
+  // In-memory fallback if database query returns no rows
+  if (!availableOrders || availableOrders.length === 0) {
+    const validMemOrders = store.orders.filter(o => {
+      // Exclude delivered, completed, cancelled, assigned, or out for delivery orders
+      if (['DELIVERED', 'COMPLETED', 'CANCELLED', 'ASSIGNED', 'OUT_FOR_DELIVERY'].includes(o.status)) {
+        return false;
+      }
+      const isAssignedOrDeliveredInStore = store.deliveries.some(
+        d => (d.orderId === o.id || d.orderId === o.orderNumber) &&
+             ['ASSIGNED', 'PICKED_UP_FROM_MILL', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(d.status)
+      );
+      if (isAssignedOrDeliveredInStore) {
+        return false;
+      }
 
-    // Filter out the individual orders that are now part of the grouped batch
-    availableOrders = availableOrders.filter(o => !batchOrderIds.includes(o.orderId));
+      const isCust = (o.grainSource || 'CUSTOMER').toUpperCase() === 'CUSTOMER';
+      if (isCust) {
+        return ['ACCEPTED', 'CONFIRMED', 'PROCESSING', 'READY', 'READY_FOR_PICKUP'].includes(o.status);
+      } else {
+        return ['READY', 'READY_FOR_PICKUP'].includes(o.status);
+      }
+    });
 
-    availableOrders.unshift({
-      orderId: batchOrders[0].orderId,
-      orderNumber: '#HD-GRP-201',
-      customerName: `Grouped 2x Batch (${batchOrders.map(b => b.customerName).join(' + ')})`,
-      customerPhone: batchOrders[0].customerPhone || '+919811223344',
-      millName: batchOrders[0].millName || 'Shree Ganesh Flour Mill & Grinding Hub',
-      millAddress: batchOrders[0].millAddress || '12 Market Yard, Ellisbridge',
-      millPhone: batchOrders[0].millPhone || '+919876543211',
-      homePickupAddress: 'Multiple Customer Homes (Satellite, Ellisbridge)',
-      homePickupLandmark: 'Opposite Shell Station & Town Hall',
-      homePickupInstructions: 'Pick up raw grain bags from customer homes, drop at mill for milling',
-      deliveryAddress: '2-Stop Route: Satellite ➔ Ellisbridge',
-      quantityKg: combinedKg,
-      grainTypeName: `Stacked Batch: 2 Orders (${batchOrders.map(b => b.grainTypeName).join(' + ')})`,
-      deliveryFee: combinedFee,
-      estimatedDeliveryFee: combinedFee,
-      surgeBonus: 35.0,
-      heavyBagBonus: 30.0,
-      isBatch: true,
-      batchOrderCount: 2,
-      groupId: batchOrders[0].orderId,
-      groupCode: '#HD-GRP-201',
-      distanceKm: 2.8,
-      estimatedMins: 22,
-      pickupZone: 'Ellisbridge Central Hub 🔥 High Pool',
-      paymentMode: 'UPI',
-      status: 'READY_FOR_PICKUP',
-      pickupPin: '4821',
-      deliveryOtp: '9120',
-      barcodeNumber: 'HD-BAG-GRP-01',
-      stops: batchOrders.map(b => ({
-        ...b.stops[0],
-        orderId: b.stops[0].orderId,
-        orderNumber: b.stops[0].orderNumber,
-        homePickupAddress: b.stops[0].homePickupAddress,
-        deliveryAddress: b.stops[0].deliveryAddress,
-        quantityKg: b.stops[0].quantityKg,
-        grainTypeName: b.stops[0].grainTypeName,
-        customerName: b.stops[0].customerName,
-        orderPayout: b.stops[0].orderPayout,
-      })),
-      _batchedOrderIds: batchOrderIds,
+    availableOrders = validMemOrders.map((o, idx) => {
+      const isCust = (o.grainSource || 'CUSTOMER').toUpperCase() === 'CUSTOMER';
+      const isLeg1 = isCust && ['ACCEPTED', 'CONFIRMED', 'PROCESSING'].includes(o.status);
+      const custAddress = 'Flat 402, Shivalik Towers, Satellite Road, Ahmedabad';
+      const millAddress = '12 Market Yard, Ellisbridge, Ahmedabad';
+      const legType = isLeg1 ? 'LEG_1_GRAIN_PICKUP' : 'LEG_2_FLOUR_DELIVERY';
+
+      return {
+        orderId: o.id,
+        orderNumber: o.orderNumber || `#HD-${o.id}`,
+        customerName: o.customerName || 'Customer',
+        customerPhone: o.customerPhone || '+919876543210',
+        millName: 'Shree Ganesh Flour Mill & Grinding Hub',
+        millAddress: millAddress,
+        millPhone: '+919876543211',
+        homePickupAddress: custAddress,
+        homePickupLandmark: isLeg1 ? 'Near Customer Main Gate' : 'Behind Town Hall',
+        homePickupInstructions: isLeg1
+          ? 'Pick up raw grain bag from customer doorstep and drop at flour mill for milling.'
+          : 'Pick up freshly milled & sealed flour from flour mill and deliver to customer home.',
+        isHomeGrainPickup: isLeg1,
+        legType,
+        tripBadge: isLeg1 ? '🌾 Grain Pickup (Home ➔ Mill)' : '🍞 Flour Delivery (Mill ➔ Home)',
+        originTitle: isLeg1 ? 'Customer Home (Pick up Grain)' : 'Flour Mill (Pick up Flour)',
+        destinationTitle: isLeg1 ? 'Flour Mill (Drop Grain for Milling)' : 'Customer Doorstep (Deliver Flour)',
+        pickupAddress: isLeg1 ? custAddress : millAddress,
+        deliveryAddress: isLeg1 ? millAddress : custAddress,
+        quantityKg: parseFloat(o.quantityKg) || 5.0,
+        grainTypeName: o.grainTypeName || 'Fresh Stone Ground Flour',
+        deliveryFee: 45.0 + ((idx % 2 === 0) ? 25.0 : 15.0),
+        estimatedDeliveryFee: 45.0 + ((idx % 2 === 0) ? 25.0 : 15.0),
+        surgeBonus: (idx % 2 === 0) ? 25.0 : 15.0,
+        heavyBagBonus: 0.0,
+        isBatch: false,
+        batchOrderCount: 1,
+        groupId: o.groupId || null,
+        groupCode: o.groupCode || null,
+        distanceKm: 2.1,
+        estimatedMins: 16,
+        pickupZone: isLeg1 ? 'Satellite / Residential Cluster' : 'Ellisbridge Mill Hub',
+        paymentMode: o.paymentMethod || 'UPI',
+        status: o.status,
+        pickupPin: o.pickupPin || '4821',
+        deliveryOtp: o.deliveryOtp || '7391',
+        barcodeNumber: `HD-BAG-${o.id}-01`,
+        stops: [
+          {
+            orderId: o.id,
+            orderNumber: o.orderNumber || `#HD-${o.id}`,
+            customerName: o.customerName || 'Customer',
+            customerPhone: o.customerPhone || '+919876543210',
+            homePickupAddress: custAddress,
+            homePickupLandmark: isLeg1 ? 'Near Customer Main Gate' : 'Behind Town Hall',
+            homePickupInstructions: 'Pick up bag',
+            deliveryAddress: isLeg1 ? millAddress : custAddress,
+            quantityKg: parseFloat(o.quantityKg) || 5.0,
+            grainTypeName: o.grainTypeName || 'Fresh Stone Ground Flour',
+            deliveryOtp: o.deliveryOtp || '7391',
+            pickupPin: o.pickupPin || '4821',
+            barcodeNumber: `HD-BAG-${o.id}-01`,
+            distanceKm: 2.1,
+            orderPayout: 45.0 + ((idx % 2 === 0) ? 25.0 : 15.0),
+          }
+        ]
+      };
     });
   }
 
@@ -347,6 +414,9 @@ exports.getAssignedOrders = async (req, res) => {
     const isBatch = Boolean(d.is_batch) || parsedStops.length > 1;
     const orderId = d.order_id;
     const orderNumber = d.group_code || d.order_group_code || d.order_number || `#HD-${orderId}`;
+    const isLeg1 = d.status === 'ASSIGNED' || d.status === 'PICKED_UP_FROM_MILL';
+    const legType = isLeg1 ? 'LEG_1_GRAIN_PICKUP' : 'LEG_2_FLOUR_DELIVERY';
+    const tripBadge = isLeg1 ? '🌾 Grain Pickup (Home ➔ Mill)' : '🍞 Flour Delivery (Mill ➔ Home)';
 
     return {
       orderId: orderId,
@@ -360,6 +430,11 @@ exports.getAssignedOrders = async (req, res) => {
       homePickupLandmark: 'Near Central Bank / Behind Town Hall',
       homePickupInstructions: isBatch ? 'Pick up raw wheat & chana grain bags from customer homes, drop at mill for grinding' : 'Ring bell 402, raw grain bag ready',
       deliveryAddress: d.delivery_address || 'Customer Address',
+      legType,
+      tripBadge,
+      originTitle: isLeg1 ? 'Customer Home (Pick up Grain)' : 'Flour Mill (Pick up Flour)',
+      destinationTitle: isLeg1 ? 'Flour Mill (Drop Grain for Milling)' : 'Customer Doorstep (Deliver Flour)',
+      pickupAddress: isLeg1 ? (d.pickup_address || 'Customer Home') : (d.mill_address || '12 Market Yard, Ellisbridge'),
       quantityKg: isBatch ? (parsedStops.length > 0 ? parsedStops.reduce((sum, s) => sum + (parseFloat(s.quantityKg) || 10.0), 0.0) : 20.0) : (parseFloat(d.quantity_kg) || 5.0),
       grainTypeName: isBatch ? `Stacked Batch: ${parsedStops.length > 0 ? parsedStops.length : 2} Orders (Sharbati + Multigrain)` : (d.grain_type_name || 'Fresh Stone Ground Flour'),
       deliveryFee: parseFloat(d.delivery_fee) || (isBatch ? 200.0 : 65.0),
@@ -627,7 +702,41 @@ exports.acceptGroupDelivery = async (req, res) => {
   const driverName = req.user.name || 'Vikram Delivery Agent';
   const driverPhone = req.user.phone || '+919876543212';
   const stopsJson = JSON.stringify(stops || []);
+  const resolvedGroupCode = groupCode || '#HD-GRP-201';
 
+  // 1. Update in-memory store for all batched order IDs
+  if (Array.isArray(orderIds)) {
+    orderIds.forEach(id => {
+      const parsedId = parseInt(id);
+      const inMem = store.orders.find(o => o.id === parsedId || o.orderNumber === id);
+      if (inMem) {
+        inMem.status = ORDER_STATUS.ASSIGNED;
+        inMem.groupId = primaryId;
+        inMem.groupCode = resolvedGroupCode;
+      }
+      let del = store.deliveries.find(d => d.orderId === parsedId);
+      if (!del) {
+        store.deliveries.push({
+          id: 800 + store.deliveries.length + 1,
+          orderId: parsedId,
+          deliveryPersonId: req.user.id || 3,
+          deliveryPersonName: driverName,
+          deliveryPersonPhone: driverPhone,
+          status: DELIVERY_STATUS.ASSIGNED,
+          isBatch: true,
+          groupCode: resolvedGroupCode,
+          updatedAt: new Date().toISOString()
+        });
+      } else {
+        del.status = DELIVERY_STATUS.ASSIGNED;
+        del.isBatch = true;
+        del.groupCode = resolvedGroupCode;
+        del.updatedAt = new Date().toISOString();
+      }
+    });
+  }
+
+  // 2. Update MySQL database for all batched order IDs
   try {
     const existing = await query('SELECT id FROM deliveries WHERE order_id = ? LIMIT 1', [primaryId]);
     if (existing && existing.length > 0) {
@@ -644,19 +753,37 @@ exports.acceptGroupDelivery = async (req, res) => {
           delivery_fee = ?,
           updated_at = NOW()
         WHERE order_id = ?
-      `, [req.user.id || 3, driverName, driverPhone, (stops || []).length || 2, groupCode || '#HD-GRP-201', stopsJson, totalFee || 200.0, primaryId]);
+      `, [req.user.id || 3, driverName, driverPhone, (stops || []).length || 2, resolvedGroupCode, stopsJson, totalFee || 200.0, primaryId]);
     } else {
       await query(`
         INSERT INTO deliveries
           (order_id, delivery_person_id, delivery_person_name, delivery_person_phone, status, pickup_address, delivery_address, current_latitude, current_longitude, pickup_pin, delivery_otp, delivery_fee, estimated_minutes, is_batch, batch_order_count, group_code, stops_data, created_at, updated_at)
         VALUES
           (?, ?, ?, ?, 'ASSIGNED', 'Shree Ganesh Flour Mill & Grinding Hub', 'Multi-Stop Group Route', 23.0225, 72.5714, '4821', '9120', ?, 22, 1, ?, ?, ?, NOW(), NOW())
-      `, [primaryId, req.user.id || 3, driverName, driverPhone, totalFee || 200.0, (stops || []).length || 2, groupCode || '#HD-GRP-201', stopsJson]);
+      `, [primaryId, req.user.id || 3, driverName, driverPhone, totalFee || 200.0, (stops || []).length || 2, resolvedGroupCode, stopsJson]);
     }
 
     if (Array.isArray(orderIds) && orderIds.length > 0) {
       const placeholders = orderIds.map(() => '?').join(',');
-      await query(`UPDATE orders SET status = 'READY_FOR_PICKUP', group_code = ?, group_id = ?, updated_at = NOW() WHERE id IN (${placeholders})`, [groupCode || '#HD-GRP-201', primaryId, ...orderIds]);
+      await query(`UPDATE orders SET status = 'ASSIGNED', group_code = ?, group_id = ?, updated_at = NOW() WHERE id IN (${placeholders})`, [resolvedGroupCode, primaryId, ...orderIds]);
+
+      // Ensure every order has a corresponding delivery row marked ASSIGNED
+      for (const oId of orderIds) {
+        const parsedOId = parseInt(oId);
+        if (parsedOId !== primaryId) {
+          const subExisting = await query('SELECT id FROM deliveries WHERE order_id = ? LIMIT 1', [parsedOId]);
+          if (subExisting && subExisting.length > 0) {
+            await query(`UPDATE deliveries SET status = 'ASSIGNED', delivery_person_id = ?, group_code = ?, updated_at = NOW() WHERE order_id = ?`, [req.user.id || 3, resolvedGroupCode, parsedOId]);
+          } else {
+            await query(`
+              INSERT INTO deliveries
+                (order_id, delivery_person_id, delivery_person_name, delivery_person_phone, status, pickup_address, delivery_address, current_latitude, current_longitude, pickup_pin, delivery_otp, delivery_fee, estimated_minutes, is_batch, batch_order_count, group_code, created_at, updated_at)
+              VALUES
+                (?, ?, ?, ?, 'ASSIGNED', 'Shree Ganesh Flour Mill & Grinding Hub', 'Multi-Stop Group Route', 23.0225, 72.5714, '4821', '9120', 45.0, 22, 1, 1, ?, NOW(), NOW())
+            `, [parsedOId, req.user.id || 3, driverName, driverPhone, resolvedGroupCode]);
+          }
+        }
+      }
     }
   } catch (err) {
     console.warn('MySQL acceptGroupDelivery error:', err.message);
@@ -666,7 +793,7 @@ exports.acceptGroupDelivery = async (req, res) => {
     status: 'success',
     message: 'Multi-stop grouped batch order accepted and stored in database',
     data: {
-      groupCode: groupCode || '#HD-GRP-201',
+      groupCode: resolvedGroupCode,
       orderIds: orderIds || [505, 506],
       stopsCount: (stops || []).length || 2,
       totalFee: totalFee || 200.0
@@ -930,87 +1057,93 @@ exports.updateLocation = (req, res) => {
  * @route POST /api/v1/delivery/orders/:orderId/deliver
  */
 exports.markDelivered = async (req, res) => {
-  // Parse orderId directly from URL param — NOT through findOrder which
-  // falls back to hardcoded in-memory orders 501/502 when the real DB ID isn't found
   const paramStr = (req.params.orderId || '').toString().trim();
-  const orderId = parseInt(paramStr.replace(/[^0-9]/g, ''));
-
-  if (!orderId || isNaN(orderId)) {
-    return res.status(404).json({ status: 'error', message: 'Invalid order ID' });
-  }
+  const numId = parseInt(paramStr.replace(/[^0-9]/g, ''));
+  const effectiveId = !isNaN(numId) && numId > 0 ? numId : null;
 
   const { otp } = req.body;
-
-  // Accept any known master OTP for smooth delivery flow
   const providedOtp = String(otp || '7391').trim();
-  const isMasterOtp = ['7391', '1234', '9999', '0000', '5812', '9041', '2819'].includes(providedOtp);
 
-  // Validate OTP against DB if not a master OTP
-  if (!isMasterOtp) {
-    try {
-      const dbOrder = await query('SELECT delivery_otp FROM orders WHERE id = ? LIMIT 1', [orderId]);
-      if (dbOrder && dbOrder.length > 0 && dbOrder[0].delivery_otp) {
-        const expectedOtp = String(dbOrder[0].delivery_otp).trim();
-        if (providedOtp !== expectedOtp) {
-          console.warn(`OTP mismatch for order ${orderId}: expected ${expectedOtp}, got ${providedOtp} — allowing via fallback`);
-        }
-      }
-    } catch (_) {}
-  }
+  // 1. Update in-memory store
+  const matchedOrders = store.orders.filter(o =>
+    (effectiveId && o.id === effectiveId) ||
+    o.orderNumber === paramStr ||
+    (o.groupCode && o.groupCode === paramStr) ||
+    (effectiveId && o.groupId && o.groupId === effectiveId)
+  );
 
-  // Update in-memory store if the order/delivery exists there
-  const inMemOrder = store.orders.find(o => o.id === orderId);
-  if (inMemOrder) {
-    inMemOrder.status = ORDER_STATUS.DELIVERED;
-    inMemOrder.paymentStatus = 'PAID';
-    if (inMemOrder.timeline) {
-      inMemOrder.timeline.push({
+  matchedOrders.forEach(ord => {
+    ord.status = ORDER_STATUS.DELIVERED;
+    ord.paymentStatus = 'PAID';
+    if (ord.timeline) {
+      ord.timeline.push({
         status: ORDER_STATUS.DELIVERED,
         timestamp: new Date().toISOString(),
         note: 'Delivered to customer successfully'
       });
     }
-  }
+  });
 
-  const delivery = store.deliveries.find(d => d.orderId === orderId);
-  if (delivery) {
-    delivery.status = DELIVERY_STATUS.DELIVERED;
-    delivery.updatedAt = new Date().toISOString();
-  }
+  // Also update store.deliveries
+  store.deliveries.forEach(d => {
+    if (
+      (effectiveId && d.orderId === effectiveId) ||
+      d.orderId === paramStr ||
+      (d.groupCode && d.groupCode === paramStr)
+    ) {
+      d.status = DELIVERY_STATUS.DELIVERED;
+      d.updatedAt = new Date().toISOString();
+    }
+  });
 
   // Increment rider trips
   const rider = store.users.find(u => u.id === req.user.id);
   if (rider) {
-    rider.totalTrips = (rider.totalTrips || 0) + 1;
+    rider.totalTrips = (rider.totalTrips || 0) + (matchedOrders.length || 1);
   }
 
-  // Real-time Database Persistence — use the REAL orderId from URL param
+  // 2. Real-time Database Persistence
   try {
-    // 1) Mark THIS order as delivered
-    await query('UPDATE orders SET status = ?, payment_status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.DELIVERED, 'PAID', orderId]);
+    if (effectiveId) {
+      // Mark THIS order as delivered
+      await query('UPDATE orders SET status = ?, payment_status = ?, updated_at = NOW() WHERE id = ? OR order_number = ?', [ORDER_STATUS.DELIVERED, 'PAID', effectiveId, paramStr]);
 
-    // 2) Mark the delivery record for this exact order_id
-    await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.DELIVERED, orderId]);
+      // Mark the delivery record for this exact order_id
+      await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.DELIVERED, effectiveId]);
 
-    // 3) For grouped batch orders: also mark the group's primary delivery record as DELIVERED
-    const groupRows = await query('SELECT group_id FROM orders WHERE id = ? AND group_id IS NOT NULL LIMIT 1', [orderId]);
-    if (groupRows && groupRows.length > 0 && groupRows[0].group_id) {
-      const dbGroupId = groupRows[0].group_id;
-      await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.DELIVERED, dbGroupId]);
-      // Also mark all sibling orders in this group as DELIVERED
-      await query('UPDATE orders SET status = ?, payment_status = ?, updated_at = NOW() WHERE group_id = ?', [ORDER_STATUS.DELIVERED, 'PAID', dbGroupId]);
+      // For grouped batch orders: check if this order belongs to a group or is the group primary
+      const groupRows = await query('SELECT group_id, group_code FROM orders WHERE (id = ? OR order_number = ?) LIMIT 1', [effectiveId, paramStr]);
+      if (groupRows && groupRows.length > 0) {
+        const dbGroupId = groupRows[0].group_id;
+        const dbGroupCode = groupRows[0].group_code;
+        if (dbGroupId) {
+          await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.DELIVERED, dbGroupId]);
+          await query('UPDATE orders SET status = ?, payment_status = ?, updated_at = NOW() WHERE group_id = ?', [ORDER_STATUS.DELIVERED, 'PAID', dbGroupId]);
+        }
+        if (dbGroupCode) {
+          await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE group_code = ?', [DELIVERY_STATUS.DELIVERED, dbGroupCode]);
+          await query('UPDATE orders SET status = ?, payment_status = ?, updated_at = NOW() WHERE group_code = ?', [ORDER_STATUS.DELIVERED, 'PAID', dbGroupCode]);
+        }
+      }
     }
   } catch (dbErr) {
     console.warn('MySQL markDelivered update warning:', dbErr.message);
   }
 
-  const resDelivery = delivery || {
-    orderId,
-    status: DELIVERY_STATUS.DELIVERED,
-    updatedAt: new Date().toISOString()
-  };
-
-  res.json({ status: 'success', message: 'Order delivered successfully', data: { delivery: resDelivery, order: inMemOrder, orderId } });
+  res.json({
+    status: 'success',
+    message: 'Order delivered successfully',
+    data: {
+      orderId: effectiveId || paramStr,
+      delivery: {
+        orderId: effectiveId || paramStr,
+        status: DELIVERY_STATUS.DELIVERED,
+        updatedAt: new Date().toISOString()
+      },
+      status: DELIVERY_STATUS.DELIVERED,
+      updatedAt: new Date().toISOString()
+    }
+  });
 };
 
 /**
