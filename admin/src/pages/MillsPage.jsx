@@ -772,7 +772,7 @@ export default function MillsPage() {
                 </div>
               </div>
 
-              {/* Dynamic SVG Graph Graphic */}
+              {/* Dynamic SVG Bar Chart Graphic with Y-Axis & X-Axis */}
               {(() => {
                 const totalOut = mills.reduce((s, m) => s + (parseInt(m.output, 10) || 400), 0);
                 const totalCap = Math.max(totalCapacityKg, totalOut * 1.15, 1000);
@@ -791,37 +791,64 @@ export default function MillsPage() {
                   capFactors = [1.0, 1.35, 1.75, 2.2];
                 }
 
-                const maxVal = Math.max(...outFactors.map(f => totalOut * f), ...capFactors.map(f => totalCap * f)) * 1.15;
-                const startX = 25;
-                const endX = 475;
-                const stepX = (endX - startX) / (labels.length - 1);
+                const outVals = labels.map((lbl, idx) => Math.round(totalOut * outFactors[idx]));
+                const capVals = labels.map((lbl, idx) => Math.round(totalCap * capFactors[idx]));
 
-                const outPoints = labels.map((lbl, idx) => {
-                  const val = Math.round(totalOut * outFactors[idx]);
-                  const x = startX + idx * stepX;
-                  const y = 145 - (val / maxVal) * 115;
-                  return { x, y, val, label: lbl, type: 'Output' };
+                const rawMax = Math.max(...outVals, ...capVals);
+                // Round maxVal up to clean interval (e.g. 500, 1000, 1200, 1500)
+                const maxVal = Math.ceil((rawMax * 1.12) / 200) * 200;
+
+                // Layout Dimensions
+                const svgWidth = 620;
+                const svgHeight = 220;
+                const leftPad = 65;
+                const rightPad = 25;
+                const topPad = 25;
+                const bottomPad = 40;
+                const chartWidth = svgWidth - leftPad - rightPad;
+                const chartHeight = svgHeight - topPad - bottomPad;
+
+                // Y-Axis Ticks (4 intervals: 0%, 33%, 66%, 100%)
+                const yTicks = [
+                  { val: maxVal, y: topPad },
+                  { val: Math.round(maxVal * 0.66), y: topPad + chartHeight * 0.34 },
+                  { val: Math.round(maxVal * 0.33), y: topPad + chartHeight * 0.67 },
+                  { val: 0, y: topPad + chartHeight },
+                ];
+
+                const groupWidth = chartWidth / labels.length;
+                const barWidth = Math.min(22, groupWidth * 0.28);
+                const barGap = 4;
+
+                const barGroups = labels.map((lbl, idx) => {
+                  const outVal = outVals[idx];
+                  const capVal = capVals[idx];
+
+                  const groupCenterX = leftPad + idx * groupWidth + groupWidth / 2;
+                  const outBarHeight = Math.max(4, (outVal / maxVal) * chartHeight);
+                  const capBarHeight = Math.max(4, (capVal / maxVal) * chartHeight);
+
+                  const outX = groupCenterX - barWidth - barGap / 2;
+                  const outY = topPad + chartHeight - outBarHeight;
+
+                  const capX = groupCenterX + barGap / 2;
+                  const capY = topPad + chartHeight - capBarHeight;
+
+                  return {
+                    idx,
+                    label: lbl,
+                    outVal,
+                    capVal,
+                    groupCenterX,
+                    outX,
+                    outY,
+                    outBarHeight,
+                    capX,
+                    capY,
+                    capBarHeight,
+                    isPeak: idx === labels.length - 1,
+                  };
                 });
-
-                const capPoints = labels.map((lbl, idx) => {
-                  const val = Math.round(totalCap * capFactors[idx]);
-                  const x = startX + idx * stepX;
-                  const y = 145 - (val / maxVal) * 115;
-                  return { x, y, val, label: lbl, type: 'Capacity' };
-                });
-
-                let outPath = `M ${outPoints[0].x} ${outPoints[0].y}`;
-                for (let i = 0; i < outPoints.length - 1; i++) {
-                  const cpX = (outPoints[i].x + outPoints[i + 1].x) / 2;
-                  outPath += ` C ${cpX} ${outPoints[i].y}, ${cpX} ${outPoints[i + 1].y}, ${outPoints[i + 1].x} ${outPoints[i + 1].y}`;
-                }
-                const outArea = `${outPath} L ${outPoints[outPoints.length - 1].x} 150 L ${outPoints[0].x} 150 Z`;
-
-                let capPath = `M ${capPoints[0].x} ${capPoints[0].y}`;
-                for (let i = 0; i < capPoints.length - 1; i++) {
-                  const cpX = (capPoints[i].x + capPoints[i + 1].x) / 2;
-                  capPath += ` C ${cpX} ${capPoints[i].y}, ${cpX} ${capPoints[i + 1].y}, ${capPoints[i + 1].x} ${capPoints[i + 1].y}`;
-                }
 
                 return (
                   <div style={{ background: '#FAF6F0', borderRadius: 16, border: '1px solid #ECE4D9', padding: '18px 20px', position: 'relative' }}>
@@ -829,22 +856,38 @@ export default function MillsPage() {
                       <div
                         className="chart-floating-tooltip"
                         style={{
-                          left: `${(hoveredMillPoint.x / 500) * 100}%`,
-                          top: `${hoveredMillPoint.y}px`,
+                          left: `${(hoveredMillPoint.groupCenterX / svgWidth) * 100}%`,
+                          top: `${Math.min(hoveredMillPoint.outY, hoveredMillPoint.capY) + 40}px`,
+                          backgroundColor: 'rgba(38, 33, 30, 0.96)',
+                          borderRadius: '10px',
+                          padding: '10px 14px',
+                          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+                          border: '1px solid rgba(255, 255, 255, 0.15)',
                         }}
                       >
-                        <div style={{ color: '#FF9A93', fontSize: '0.7rem' }}>{hoveredMillPoint.type} • {hoveredMillPoint.label}</div>
-                        <div>{hoveredMillPoint.val.toLocaleString()} kg</div>
+                        <div style={{ color: '#FF9A93', fontSize: '0.78rem', fontWeight: 800, marginBottom: 4, letterSpacing: '0.2px' }}>
+                          {hoveredMillPoint.label}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.84rem', color: '#FFFFFF', fontWeight: 800, marginBottom: 3 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#8C4A3E', display: 'inline-block', flexShrink: 0 }}></span>
+                          <span>Output: {hoveredMillPoint.outVal.toLocaleString()} kg</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.76rem', color: '#F0D47C', fontWeight: 700 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#CBA034', display: 'inline-block', flexShrink: 0 }}></span>
+                          <span>Capacity: {hoveredMillPoint.capVal.toLocaleString()} kg ({Math.round((hoveredMillPoint.outVal / hoveredMillPoint.capVal) * 100)}% load)</span>
+                        </div>
                       </div>
                     )}
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                      <div style={{ display: 'flex', gap: 16, fontSize: '0.78rem', fontWeight: 700 }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#8C4A3E' }}>
-                          <span style={{ width: 10, height: 10, borderRadius: 3, background: '#8C4A3E' }}></span> Output Volume ({totalOut.toLocaleString()} kg)
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                      <div style={{ display: 'flex', gap: 20, fontSize: '0.8rem', fontWeight: 700 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#8C4A3E' }}>
+                          <span style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: '#8C4A3E', display: 'inline-block' }}></span>
+                          Output Volume ({totalOut.toLocaleString()} kg)
                         </span>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#CBA034' }}>
-                          <span style={{ width: 10, height: 2, background: '#CBA034' }}></span> Total Rated Capacity ({totalCap.toLocaleString()} kg)
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#A0781C' }}>
+                          <span style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: '#CBA034', display: 'inline-block' }}></span>
+                          Total Rated Capacity ({totalCap.toLocaleString()} kg)
                         </span>
                       </div>
                       <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#1E8449', backgroundColor: '#E8F8F0', padding: '3px 8px', borderRadius: 8 }}>
@@ -852,89 +895,148 @@ export default function MillsPage() {
                       </span>
                     </div>
 
-                    <svg viewBox="0 0 500 160" style={{ width: '100%', height: '160px', overflow: 'visible' }}>
+                    <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: '100%', height: '220px', overflow: 'visible' }}>
                       <defs>
-                        <linearGradient id="millAreaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" stopColor="#8C4A3E" stopOpacity="0.25" />
-                          <stop offset="100%" stopColor="#8C4A3E" stopOpacity="0.0" />
+                        <linearGradient id="outBarGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                          <stop offset="0%" stopColor="#8C4A3E" />
+                          <stop offset="100%" stopColor="#B86B5D" />
+                        </linearGradient>
+                        <linearGradient id="capBarGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                          <stop offset="0%" stopColor="#CBA034" />
+                          <stop offset="100%" stopColor="#EAD186" />
+                        </linearGradient>
+                        <linearGradient id="peakBarGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                          <stop offset="0%" stopColor="#1E8449" />
+                          <stop offset="100%" stopColor="#2ECC71" />
                         </linearGradient>
                       </defs>
 
-                      {/* Grid Horizontal Reference Lines */}
-                      <line x1="0" y1="30" x2="500" y2="30" stroke="#ECE4D9" strokeDasharray="4 4" />
-                      <line x1="0" y1="70" x2="500" y2="70" stroke="#ECE4D9" strokeDasharray="4 4" />
-                      <line x1="0" y1="110" x2="500" y2="110" stroke="#ECE4D9" strokeDasharray="4 4" />
-                      <line x1="0" y1="150" x2="500" y2="150" stroke="#ECE4D9" strokeWidth="1.5" />
-
-                      {/* Area Fill */}
-                      <path
-                        d={outArea}
-                        fill="url(#millAreaGrad)"
-                        style={{ transition: 'all 0.4s ease' }}
-                      />
-
-                      {/* Target Capacity Line (Dashed Golden) */}
-                      <path
-                        d={capPath}
-                        fill="none"
-                        stroke="#CBA034"
-                        strokeWidth="2.5"
-                        strokeDasharray="6 4"
-                        style={{ transition: 'all 0.4s ease' }}
-                      />
-
-                      {/* Output Line (Terracotta) */}
-                      <path
-                        d={outPath}
-                        fill="none"
-                        stroke="#8C4A3E"
-                        strokeWidth="3.5"
-                        strokeLinecap="round"
-                        style={{ transition: 'all 0.4s ease' }}
-                      />
-
-                      {/* Data Points */}
-                      {outPoints.map((pt, i) => (
-                        <circle
-                          key={`out_${i}`}
-                          cx={pt.x}
-                          cy={pt.y}
-                          r={hoveredMillPoint?.label === pt.label ? 7 : (i === outPoints.length - 1 ? 6 : 4.5)}
-                          fill={i === outPoints.length - 1 ? '#1E8449' : '#FFF'}
-                          stroke="#8C4A3E"
-                          strokeWidth="2.5"
-                          className="graph-interactive-node"
-                          onMouseEnter={() => setHoveredMillPoint(pt)}
-                          onMouseLeave={() => setHoveredMillPoint(null)}
-                        />
+                      {/* Y-Axis Horizontal Grid Lines & Labels */}
+                      {yTicks.map((tick, i) => (
+                        <g key={`ytick_${i}`}>
+                          <line
+                            x1={leftPad}
+                            y1={tick.y}
+                            x2={leftPad + chartWidth}
+                            y2={tick.y}
+                            stroke={tick.val === 0 ? '#DAC8B3' : '#ECE4D9'}
+                            strokeWidth={tick.val === 0 ? 1.5 : 1}
+                            strokeDasharray={tick.val === 0 ? undefined : '4 4'}
+                          />
+                          <text
+                            x={leftPad - 10}
+                            y={tick.y + 4}
+                            textAnchor="end"
+                            fontSize="10.5"
+                            fontWeight="600"
+                            fill="#8A817C"
+                          >
+                            {tick.val.toLocaleString()} kg
+                          </text>
+                        </g>
                       ))}
 
-                      {/* Live Pulsing Beacon on Latest Output Point */}
-                      <circle
-                        cx={outPoints[outPoints.length - 1].x}
-                        cy={outPoints[outPoints.length - 1].y}
-                        r="6"
-                        fill="none"
-                        stroke="#1E8449"
-                        strokeWidth="2"
-                        className="live-pulse-radar"
+                      {/* Bar Groups */}
+                      {barGroups.map((grp) => {
+                        const isHovered = hoveredMillPoint?.label === grp.label;
+
+                        return (
+                          <g
+                            key={`grp_${grp.idx}`}
+                            style={{ cursor: 'pointer' }}
+                            onMouseEnter={() => setHoveredMillPoint(grp)}
+                            onMouseLeave={() => setHoveredMillPoint(null)}
+                          >
+                            {/* Hover Slot Background Glow */}
+                            <rect
+                              x={grp.groupCenterX - groupWidth / 2 + 2}
+                              y={topPad}
+                              width={groupWidth - 4}
+                              height={chartHeight}
+                              fill={isHovered ? 'rgba(140, 74, 62, 0.07)' : 'transparent'}
+                              rx="8"
+                              style={{ transition: 'fill 0.2s ease' }}
+                            />
+
+                            {/* Output Volume Bar */}
+                            <rect
+                              x={grp.outX}
+                              y={grp.outY}
+                              width={barWidth}
+                              height={grp.outBarHeight}
+                              fill={grp.isPeak ? 'url(#peakBarGrad)' : 'url(#outBarGrad)'}
+                              rx="5"
+                              style={{
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                filter: isHovered ? 'brightness(1.1) drop-shadow(0 4px 6px rgba(140, 74, 62, 0.3))' : 'none',
+                              }}
+                            />
+
+                            {/* Capacity Bar */}
+                            <rect
+                              x={grp.capX}
+                              y={grp.capY}
+                              width={barWidth}
+                              height={grp.capBarHeight}
+                              fill="url(#capBarGrad)"
+                              rx="5"
+                              opacity={isHovered ? 1 : 0.85}
+                              style={{
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                filter: isHovered ? 'brightness(1.1) drop-shadow(0 4px 6px rgba(203, 160, 52, 0.3))' : 'none',
+                              }}
+                            />
+
+                            {/* Value on Top of Output Bar */}
+                            <text
+                              x={grp.outX + barWidth / 2}
+                              y={grp.outY - 6}
+                              textAnchor="middle"
+                              fontSize="9.5"
+                              fontWeight={grp.isPeak || isHovered ? '800' : '600'}
+                              fill={grp.isPeak ? '#1E8449' : (isHovered ? '#8C4A3E' : '#756D69')}
+                            >
+                              {grp.outVal >= 1000 ? `${(grp.outVal / 1000).toFixed(1)}k` : `${grp.outVal}`}
+                            </text>
+
+                            {/* Live Pulsing Beacon on Peak Bar */}
+                            {grp.isPeak && (
+                              <circle
+                                cx={grp.outX + barWidth / 2}
+                                cy={grp.outY}
+                                r="4.5"
+                                fill="#1E8449"
+                                stroke="#FFF"
+                                strokeWidth="1.5"
+                                className="live-pulse-radar"
+                              />
+                            )}
+
+                            {/* X-Axis Day Label directly below bar center */}
+                            <text
+                              x={grp.groupCenterX}
+                              y={topPad + chartHeight + 20}
+                              textAnchor="middle"
+                              fontSize={grp.isPeak ? '11.5' : '11'}
+                              fontWeight={grp.isPeak ? '800' : (isHovered ? '700' : '600')}
+                              fill={grp.isPeak ? '#8C4A3E' : (isHovered ? '#2A2421' : '#756D69')}
+                            >
+                              {grp.label}
+                            </text>
+                          </g>
+                        );
+                      })}
+
+                      {/* X-Axis Baseline */}
+                      <line
+                        x1={leftPad}
+                        y1={topPad + chartHeight}
+                        x2={leftPad + chartWidth}
+                        y2={topPad + chartHeight}
+                        stroke="#DAC8B3"
+                        strokeWidth="1.5"
                       />
                     </svg>
-
-                    {/* X-axis labels */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#756D69', marginTop: 8, fontWeight: 600, paddingLeft: 16, paddingRight: 8 }}>
-                      {labels.map((lbl, idx) => (
-                        <span
-                          key={idx}
-                          style={{
-                            color: idx === labels.length - 1 ? '#8C4A3E' : '#756D69',
-                            fontWeight: idx === labels.length - 1 ? 800 : 600,
-                          }}
-                        >
-                          {lbl}
-                        </span>
-                      ))}
-                    </div>
                   </div>
                 );
               })()}

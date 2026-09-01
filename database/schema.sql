@@ -135,11 +135,15 @@ CREATE TABLE `orders` (
   `estimated_minutes` INT DEFAULT 30,
   `estimated_completion_time` VARCHAR(50) DEFAULT NULL,
   `total_amount` DECIMAL(10, 2) NOT NULL,
+  `group_id` INT DEFAULT NULL,
+  `group_code` VARCHAR(50) DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT `fk_orders_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `fk_orders_mill` FOREIGN KEY (`mill_id`) REFERENCES `mills` (`id`),
-  INDEX `idx_orders_status` (`status`)
+  INDEX `idx_orders_status` (`status`),
+  INDEX `idx_orders_group_code` (`group_code`),
+  INDEX `idx_orders_group_id` (`group_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 8. Order Status Timeline Table
@@ -180,6 +184,10 @@ CREATE TABLE `deliveries` (
   `delivery_otp` VARCHAR(10) DEFAULT '7391',
   `delivery_fee` DECIMAL(10, 2) DEFAULT 40.00,
   `estimated_minutes` INT DEFAULT 20,
+  `is_batch` TINYINT(1) DEFAULT 0,
+  `batch_order_count` INT DEFAULT 1,
+  `group_code` VARCHAR(50) DEFAULT NULL,
+  `stops_data` LONGTEXT DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT `fk_deliveries_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE

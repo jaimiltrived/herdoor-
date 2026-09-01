@@ -263,53 +263,56 @@ class _MerchantStoreDetailsScreenState extends State<MerchantStoreDetailsScreen>
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(color: AppTheme.borderLight),
                     ),
-                    child: Column(
-                      children: [
-                        SwitchListTile(
-                          value: _isOpen,
-                          activeTrackColor: const Color(0xFF2ECC71),
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            'Store Open for Orders',
-                            style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: Column(
+                        children: [
+                          SwitchListTile(
+                            value: _isOpen,
+                            activeTrackColor: const Color(0xFF2ECC71),
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              'Store Open for Orders',
+                              style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Text(
+                              'Toggle online store accepting customer milling orders',
+                              style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary),
+                            ),
+                            onChanged: (val) => setState(() => _isOpen = val),
                           ),
-                          subtitle: Text(
-                            'Toggle online store accepting customer milling orders',
-                            style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary),
+                          const Divider(height: 1),
+                          SwitchListTile(
+                            value: _expressDelivery,
+                            activeTrackColor: AppTheme.primaryTerracotta,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              'Express Home Delivery',
+                              style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Text(
+                              'Enable door-to-door rider pickup and delivery',
+                              style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary),
+                            ),
+                            onChanged: (val) => setState(() => _expressDelivery = val),
                           ),
-                          onChanged: (val) => setState(() => _isOpen = val),
-                        ),
-                        const Divider(height: 1),
-                        SwitchListTile(
-                          value: _expressDelivery,
-                          activeTrackColor: AppTheme.primaryTerracotta,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            'Express Home Delivery',
-                            style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold),
+                          const Divider(height: 1),
+                          SwitchListTile(
+                            value: _selfPickup,
+                            activeTrackColor: const Color(0xFF6E5616),
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              'Counter Self-Pickup',
+                              style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Text(
+                              'Allow customers to collect fresh flour directly from store bins',
+                              style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary),
+                            ),
+                            onChanged: (val) => setState(() => _selfPickup = val),
                           ),
-                          subtitle: Text(
-                            'Enable door-to-door rider pickup and delivery',
-                            style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary),
-                          ),
-                          onChanged: (val) => setState(() => _expressDelivery = val),
-                        ),
-                        const Divider(height: 1),
-                        SwitchListTile(
-                          value: _selfPickup,
-                          activeTrackColor: const Color(0xFF6E5616),
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            'Counter Self-Pickup',
-                            style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Text(
-                            'Allow customers to collect fresh flour directly from store bins',
-                            style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary),
-                          ),
-                          onChanged: (val) => setState(() => _selfPickup = val),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),

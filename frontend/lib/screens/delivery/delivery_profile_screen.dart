@@ -511,35 +511,38 @@ class _DeliveryProfileScreenState extends State<DeliveryProfileScreen> {
   }
 
   Widget _buildAccountActionsCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppTheme.borderLight),
-      ),
-      child: Column(
-        children: [
-          ListTile(
-            leading: const Icon(Icons.swap_horiz_rounded, color: AppTheme.primaryTerracotta),
-            title: Text('Switch to Customer Mode', style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600)),
-            trailing: const Icon(Icons.chevron_right_rounded, size: 18),
-            onTap: widget.onSwitchToCustomer,
-          ),
-          const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.storefront_outlined, color: AppTheme.primaryTerracotta),
-            title: Text('Switch to Merchant Mode', style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600)),
-            trailing: const Icon(Icons.chevron_right_rounded, size: 18),
-            onTap: widget.onSwitchToMerchant,
-          ),
-          const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.logout_rounded, color: Color(0xFFC0392B)),
-            title: Text('Logout Delivery Account', style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFFC0392B))),
-            onTap: widget.onLogout,
-          ),
-        ],
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppTheme.borderLight),
+        ),
+        child: Column(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.swap_horiz_rounded, color: AppTheme.primaryTerracotta),
+              title: Text('Switch to Customer Mode', style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600)),
+              trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+              onTap: widget.onSwitchToCustomer,
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.storefront_outlined, color: AppTheme.primaryTerracotta),
+              title: Text('Switch to Merchant Mode', style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600)),
+              trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+              onTap: widget.onSwitchToMerchant,
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.logout_rounded, color: Color(0xFFC0392B)),
+              title: Text('Logout Delivery Account', style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFFC0392B))),
+              onTap: widget.onLogout,
+            ),
+          ],
+        ),
       ),
     );
   }

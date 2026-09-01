@@ -5,7 +5,7 @@ import { apiService } from '../services/apiService';
 export default function AnalyticsPage() {
   const [orders, setOrders] = useState([]);
   const [mills, setMills] = useState([]);
-  const [timeframe, setTimeframe] = useState('30d');
+  const [timeframe, setTimeframe] = useState('7d');
   const [selectedGrain, setSelectedGrain] = useState('ALL');
   const [hoverPoint, setHoverPoint] = useState(null);
 
@@ -248,25 +248,80 @@ export default function AnalyticsPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
               {/* Grain Legend Toggles */}
-              <div style={{ display: 'flex', gap: '10px', fontSize: '0.8rem', fontWeight: 700 }}>
+              <div style={{ display: 'flex', gap: '8px', fontSize: '0.8rem', fontWeight: 700, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedGrain('ALL')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    background: selectedGrain === 'ALL' ? '#EFE6D2' : 'transparent',
+                    border: selectedGrain === 'ALL' ? '1.5px solid #CBA034' : '1px solid #ECE4D9',
+                    padding: '5px 12px',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    color: selectedGrain === 'ALL' ? '#6E5616' : '#756D69',
+                    fontWeight: selectedGrain === 'ALL' ? 800 : 600,
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#6E5616' }}></span> All Grains
+                </button>
                 <button
                   type="button"
                   onClick={() => setSelectedGrain(selectedGrain === 'WHEAT' ? 'ALL' : 'WHEAT')}
-                  style={{ display: 'flex', alignItems: 'center', gap: '5px', background: selectedGrain === 'WHEAT' ? '#FFECEB' : 'transparent', border: '1px solid #ECE4D9', padding: '4px 10px', borderRadius: 8, cursor: 'pointer', color: '#8C4A3E' }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    background: selectedGrain === 'WHEAT' ? '#FFECEB' : 'transparent',
+                    border: selectedGrain === 'WHEAT' ? '1.5px solid #8C4A3E' : '1px solid #ECE4D9',
+                    padding: '5px 12px',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    color: selectedGrain === 'WHEAT' ? '#8C4A3E' : '#756D69',
+                    fontWeight: selectedGrain === 'WHEAT' ? 800 : 600,
+                    transition: 'all 0.2s ease',
+                  }}
                 >
                   <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#8C4A3E' }}></span> Wheat
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectedGrain(selectedGrain === 'MAIZE' ? 'ALL' : 'MAIZE')}
-                  style={{ display: 'flex', alignItems: 'center', gap: '5px', background: selectedGrain === 'MAIZE' ? '#FFF8E7' : 'transparent', border: '1px solid #ECE4D9', padding: '4px 10px', borderRadius: 8, cursor: 'pointer', color: '#CBA034' }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    background: selectedGrain === 'MAIZE' ? '#FFF8E7' : 'transparent',
+                    border: selectedGrain === 'MAIZE' ? '1.5px solid #CBA034' : '1px solid #ECE4D9',
+                    padding: '5px 12px',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    color: selectedGrain === 'MAIZE' ? '#CBA034' : '#756D69',
+                    fontWeight: selectedGrain === 'MAIZE' ? 800 : 600,
+                    transition: 'all 0.2s ease',
+                  }}
                 >
                   <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#CBA034' }}></span> Maize
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectedGrain(selectedGrain === 'MILLET' ? 'ALL' : 'MILLET')}
-                  style={{ display: 'flex', alignItems: 'center', gap: '5px', background: selectedGrain === 'MILLET' ? '#F0F9EB' : 'transparent', border: '1px solid #ECE4D9', padding: '4px 10px', borderRadius: 8, cursor: 'pointer', color: '#6B701D' }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    background: selectedGrain === 'MILLET' ? '#F0F9EB' : 'transparent',
+                    border: selectedGrain === 'MILLET' ? '1.5px solid #6B701D' : '1px solid #ECE4D9',
+                    padding: '5px 12px',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    color: selectedGrain === 'MILLET' ? '#6B701D' : '#756D69',
+                    fontWeight: selectedGrain === 'MILLET' ? 800 : 600,
+                    transition: 'all 0.2s ease',
+                  }}
                 >
                   <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#6B701D' }}></span> Millet
                 </button>
@@ -286,125 +341,230 @@ export default function AnalyticsPage() {
           </div>
 
           <div style={{ position: 'relative', background: '#FAF6F0', borderRadius: '16px', border: '1px solid #ECE4D9', padding: '20px' }}>
-            <div style={{ position: 'absolute', top: '16px', right: '20px', background: '#FFF', padding: '4px 12px', borderRadius: '8px', border: '1px solid #ECE4D9', fontSize: '0.78rem', fontWeight: 800, color: '#6E5616', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
-              {currentDataset.trend}
+            <div style={{ position: 'absolute', top: '16px', right: '20px', background: '#FFF', padding: '4px 12px', borderRadius: '8px', border: '1px solid #ECE4D9', fontSize: '0.78rem', fontWeight: 800, color: selectedGrain === 'WHEAT' ? '#8C4A3E' : selectedGrain === 'MAIZE' ? '#CBA034' : selectedGrain === 'MILLET' ? '#6B701D' : '#6E5616', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
+              {selectedGrain === 'ALL' ? `All Grains: ${currentDataset.trend}` : `${selectedGrain.charAt(0) + selectedGrain.slice(1).toLowerCase()}: ${currentDataset.trend}`}
             </div>
 
-            {/* Floating Interactive Tooltip */}
-            {hoverPoint && (
-              <div
-                className="chart-floating-tooltip"
-                style={{
-                  left: `${(hoverPoint.x / 600) * 100}%`,
-                  top: `${hoverPoint.y}px`,
-                }}
-              >
-                <div style={{ color: '#FF9A93', fontSize: '0.7rem' }}>{hoverPoint.grain} • {hoverPoint.label}</div>
-                <div>{hoverPoint.val} kg Processed</div>
-              </div>
-            )}
+            {/* Dynamic Grouped Bar Chart Graphic */}
+            {(() => {
+              const allValues = [
+                ...(selectedGrain === 'ALL' || selectedGrain === 'WHEAT' ? currentDataset.wheat : []),
+                ...(selectedGrain === 'ALL' || selectedGrain === 'MAIZE' ? currentDataset.maize : []),
+                ...(selectedGrain === 'ALL' || selectedGrain === 'MILLET' ? currentDataset.millet : []),
+              ];
+              const rawMax = Math.max(...allValues, 20);
+              const maxVal = Math.ceil((rawMax * 1.15) / 20) * 20;
 
-            <svg viewBox="0 0 600 180" style={{ width: '100%', height: '180px', overflow: 'visible' }}>
-              <defs>
-                <linearGradient id="wheatAreaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#8C4A3E" stopOpacity="0.28" />
-                  <stop offset="100%" stopColor="#8C4A3E" stopOpacity="0.0" />
-                </linearGradient>
-              </defs>
+              const svgWidth = 600;
+              const svgHeight = 220;
+              const leftPad = 55;
+              const rightPad = 20;
+              const topPad = 25;
+              const bottomPad = 40;
+              const chartWidth = svgWidth - leftPad - rightPad;
+              const chartHeight = svgHeight - topPad - bottomPad;
 
-              {/* Grid Lines */}
-              <line x1="20" y1="35" x2="580" y2="35" stroke="#ECE4D9" strokeDasharray="3,3" />
-              <line x1="20" y1="75" x2="580" y2="75" stroke="#ECE4D9" strokeDasharray="3,3" />
-              <line x1="20" y1="115" x2="580" y2="115" stroke="#ECE4D9" strokeDasharray="3,3" />
-              <line x1="20" y1="150" x2="580" y2="150" stroke="#ECE4D9" strokeWidth="1.5" />
+              const yTicks = [
+                { val: maxVal, text: `${maxVal} kg`, y: topPad },
+                { val: Math.round(maxVal * 0.66), text: `${Math.round(maxVal * 0.66)} kg`, y: topPad + chartHeight * 0.34 },
+                { val: Math.round(maxVal * 0.33), text: `${Math.round(maxVal * 0.33)} kg`, y: topPad + chartHeight * 0.67 },
+                { val: 0, text: '0 kg', y: topPad + chartHeight },
+              ];
 
-              {/* Wheat Curve & Area */}
-              {(selectedGrain === 'ALL' || selectedGrain === 'WHEAT') && (
-                <>
-                  <path
-                    d={`${wheatCurve.path} L ${wheatCurve.points[wheatCurve.points.length - 1].x} 150 L 20 150 Z`}
-                    fill="url(#wheatAreaGrad)"
-                    style={{ transition: 'all 0.4s ease' }}
-                  />
-                  <path d={wheatCurve.path} fill="none" stroke="#8C4A3E" strokeWidth="4" strokeLinecap="round" style={{ transition: 'all 0.4s ease' }} />
-                  {wheatCurve.points.map((pt, i) => (
-                    <circle
-                      key={`w_${i}`}
-                      cx={pt.x}
-                      cy={pt.y}
-                      r={hoverPoint?.label === pt.label && hoverPoint?.grain === pt.grain ? 7 : (i === wheatCurve.points.length - 1 ? 5.5 : 4)}
-                      fill="#8C4A3E"
-                      stroke="#FFF"
-                      strokeWidth="2"
-                      className="graph-interactive-node"
-                      onMouseEnter={() => setHoverPoint(pt)}
-                      onMouseLeave={() => setHoverPoint(null)}
+              const groupWidth = chartWidth / currentDataset.labels.length;
+              const activeGrainsCount = (selectedGrain === 'ALL') ? 3 : 1;
+              const barWidth = Math.min(16, (groupWidth * 0.7) / activeGrainsCount);
+              const barGap = 3;
+
+              const barGroups = currentDataset.labels.map((lbl, idx) => {
+                const groupCenterX = leftPad + idx * groupWidth + groupWidth / 2;
+                const wheatVal = currentDataset.wheat[idx] || 0;
+                const maizeVal = currentDataset.maize[idx] || 0;
+                const milletVal = currentDataset.millet[idx] || 0;
+
+                const wheatHeight = Math.max(4, (wheatVal / maxVal) * chartHeight);
+                const maizeHeight = Math.max(4, (maizeVal / maxVal) * chartHeight);
+                const milletHeight = Math.max(4, (milletVal / maxVal) * chartHeight);
+
+                return {
+                  idx,
+                  label: lbl,
+                  wheatVal,
+                  maizeVal,
+                  milletVal,
+                  wheatHeight,
+                  maizeHeight,
+                  milletHeight,
+                  groupCenterX,
+                  isPeak: idx === currentDataset.labels.length - 1,
+                };
+              });
+
+              return (
+                <div style={{ position: 'relative' }}>
+                  {hoverPoint && (
+                    <div
+                      className="chart-floating-tooltip"
+                      style={{
+                        left: `${(hoverPoint.groupCenterX / svgWidth) * 100}%`,
+                        top: `30px`,
+                        backgroundColor: 'rgba(38, 33, 30, 0.96)',
+                        borderRadius: '10px',
+                        padding: '10px 14px',
+                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        position: 'absolute',
+                        zIndex: 10,
+                      }}
+                    >
+                      <div style={{ color: '#FF9A93', fontSize: '0.78rem', fontWeight: 800, marginBottom: 4 }}>
+                        {hoverPoint.label} Grain Forecast
+                      </div>
+                      {(selectedGrain === 'ALL' || selectedGrain === 'WHEAT') && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.82rem', color: '#FFFFFF', fontWeight: 800, marginBottom: 2 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#8C4A3E', display: 'inline-block' }}></span>
+                          <span>Wheat: {hoverPoint.wheatVal} kg</span>
+                        </div>
+                      )}
+                      {(selectedGrain === 'ALL' || selectedGrain === 'MAIZE') && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.82rem', color: '#F0D47C', fontWeight: 800, marginBottom: 2 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#CBA034', display: 'inline-block' }}></span>
+                          <span>Maize: {hoverPoint.maizeVal} kg</span>
+                        </div>
+                      )}
+                      {(selectedGrain === 'ALL' || selectedGrain === 'MILLET') && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.82rem', color: '#A3E635', fontWeight: 800 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#6B701D', display: 'inline-block' }}></span>
+                          <span>Millet: {hoverPoint.milletVal} kg</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: '100%', height: '220px', overflow: 'visible' }}>
+                    <defs>
+                      <linearGradient id="anWheatGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#8C4A3E" />
+                        <stop offset="100%" stopColor="#B86B5D" />
+                      </linearGradient>
+                      <linearGradient id="anMaizeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#CBA034" />
+                        <stop offset="100%" stopColor="#EAD186" />
+                      </linearGradient>
+                      <linearGradient id="anMilletGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#6B701D" />
+                        <stop offset="100%" stopColor="#9CA338" />
+                      </linearGradient>
+                    </defs>
+
+                    {/* Y-Axis Grid Lines & Tick Labels */}
+                    {yTicks.map((tick, i) => (
+                      <g key={`ytick_${i}`}>
+                        <line
+                          x1={leftPad}
+                          y1={tick.y}
+                          x2={leftPad + chartWidth}
+                          y2={tick.y}
+                          stroke={tick.val === 0 ? '#DAC8B3' : '#ECE4D9'}
+                          strokeWidth={tick.val === 0 ? 1.5 : 1}
+                          strokeDasharray={tick.val === 0 ? undefined : '4 4'}
+                        />
+                        <text
+                          x={leftPad - 10}
+                          y={tick.y + 4}
+                          fontSize="10"
+                          fontWeight="700"
+                          fill="#A59D96"
+                          textAnchor="end"
+                        >
+                          {tick.text}
+                        </text>
+                      </g>
+                    ))}
+
+                    {/* Bar Groups */}
+                    {barGroups.map((grp) => {
+                      const isHovered = hoverPoint?.label === grp.label;
+
+                      const barsToRender = [];
+                      if (selectedGrain === 'ALL') {
+                        barsToRender.push({ key: 'wheat', val: grp.wheatVal, height: grp.wheatHeight, grad: 'url(#anWheatGrad)' });
+                        barsToRender.push({ key: 'maize', val: grp.maizeVal, height: grp.maizeHeight, grad: 'url(#anMaizeGrad)' });
+                        barsToRender.push({ key: 'millet', val: grp.milletVal, height: grp.milletHeight, grad: 'url(#anMilletGrad)' });
+                      } else if (selectedGrain === 'WHEAT') {
+                        barsToRender.push({ key: 'wheat', val: grp.wheatVal, height: grp.wheatHeight, grad: 'url(#anWheatGrad)' });
+                      } else if (selectedGrain === 'MAIZE') {
+                        barsToRender.push({ key: 'maize', val: grp.maizeVal, height: grp.maizeHeight, grad: 'url(#anMaizeGrad)' });
+                      } else if (selectedGrain === 'MILLET') {
+                        barsToRender.push({ key: 'millet', val: grp.milletVal, height: grp.milletHeight, grad: 'url(#anMilletGrad)' });
+                      }
+
+                      const totalBarsWidth = barsToRender.length * barWidth + (barsToRender.length - 1) * barGap;
+                      const startBarX = grp.groupCenterX - totalBarsWidth / 2;
+
+                      return (
+                        <g
+                          key={`grp_${grp.idx}`}
+                          style={{ cursor: 'pointer' }}
+                          onMouseEnter={() => setHoverPoint(grp)}
+                          onMouseLeave={() => setHoverPoint(null)}
+                        >
+                          <rect
+                            x={grp.groupCenterX - groupWidth / 2 + 2}
+                            y={topPad}
+                            width={groupWidth - 4}
+                            height={chartHeight}
+                            fill={isHovered ? 'rgba(140, 74, 62, 0.07)' : 'transparent'}
+                            rx="8"
+                          />
+
+                          {barsToRender.map((b, bIdx) => {
+                            const bX = startBarX + bIdx * (barWidth + barGap);
+                            const bY = topPad + chartHeight - b.height;
+
+                            return (
+                              <rect
+                                key={b.key}
+                                x={bX}
+                                y={bY}
+                                width={barWidth}
+                                height={b.height}
+                                fill={b.grad}
+                                rx="4"
+                                style={{
+                                  transition: 'all 0.3s ease',
+                                  filter: isHovered ? 'brightness(1.1) drop-shadow(0 3px 5px rgba(0,0,0,0.2))' : 'none',
+                                }}
+                              />
+                            );
+                          })}
+
+                          <text
+                            x={grp.groupCenterX}
+                            y={topPad + chartHeight + 20}
+                            textAnchor="middle"
+                            fontSize={grp.isPeak ? '11.5' : '11'}
+                            fontWeight={grp.isPeak ? '800' : (isHovered ? '700' : '600')}
+                            fill={grp.isPeak ? '#8C4A3E' : (isHovered ? '#2A2421' : '#756D69')}
+                          >
+                            {grp.label}
+                          </text>
+                        </g>
+                      );
+                    })}
+
+                    <line
+                      x1={leftPad}
+                      y1={topPad + chartHeight}
+                      x2={leftPad + chartWidth}
+                      y2={topPad + chartHeight}
+                      stroke="#DAC8B3"
+                      strokeWidth="1.5"
                     />
-                  ))}
-                  {/* Radar Beacon on latest Wheat Point */}
-                  <circle
-                    cx={wheatCurve.points[wheatCurve.points.length - 1].x}
-                    cy={wheatCurve.points[wheatCurve.points.length - 1].y}
-                    r="5"
-                    fill="none"
-                    stroke="#8C4A3E"
-                    strokeWidth="2"
-                    className="live-pulse-radar"
-                  />
-                </>
-              )}
-
-              {/* Maize Curve */}
-              {(selectedGrain === 'ALL' || selectedGrain === 'MAIZE') && (
-                <>
-                  <path d={maizeCurve.path} fill="none" stroke="#CBA034" strokeWidth="3" strokeDasharray="6,6" strokeLinecap="round" style={{ transition: 'all 0.4s ease' }} />
-                  {maizeCurve.points.map((pt, i) => (
-                    <circle
-                      key={`m_${i}`}
-                      cx={pt.x}
-                      cy={pt.y}
-                      r={hoverPoint?.label === pt.label && hoverPoint?.grain === pt.grain ? 7 : 4}
-                      fill="#CBA034"
-                      stroke="#FFF"
-                      strokeWidth="2"
-                      className="graph-interactive-node"
-                      onMouseEnter={() => setHoverPoint(pt)}
-                      onMouseLeave={() => setHoverPoint(null)}
-                    />
-                  ))}
-                </>
-              )}
-
-              {/* Millet Curve */}
-              {(selectedGrain === 'ALL' || selectedGrain === 'MILLET') && (
-                <>
-                  <path d={milletCurve.path} fill="none" stroke="#6B701D" strokeWidth="3" strokeLinecap="round" style={{ transition: 'all 0.4s ease' }} />
-                  {milletCurve.points.map((pt, i) => (
-                    <circle
-                      key={`ml_${i}`}
-                      cx={pt.x}
-                      cy={pt.y}
-                      r={hoverPoint?.label === pt.label && hoverPoint?.grain === pt.grain ? 7 : 4}
-                      fill="#6B701D"
-                      stroke="#FFF"
-                      strokeWidth="2"
-                      className="graph-interactive-node"
-                      onMouseEnter={() => setHoverPoint(pt)}
-                      onMouseLeave={() => setHoverPoint(null)}
-                    />
-                  ))}
-                </>
-              )}
-            </svg>
-
-            {/* X-Axis Timeline Labels */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#756D69', marginTop: 12, fontWeight: 700, paddingLeft: 10, paddingRight: 10 }}>
-              {currentDataset.labels.map((lbl, idx) => (
-                <span key={idx} style={{ color: idx === currentDataset.labels.length - 1 ? '#8C4A3E' : '#756D69', fontWeight: idx === currentDataset.labels.length - 1 ? 800 : 600 }}>
-                  {lbl}
-                </span>
-              ))}
-            </div>
+                  </svg>
+                </div>
+              );
+            })()}
           </div>
         </div>
 

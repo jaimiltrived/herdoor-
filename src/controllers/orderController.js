@@ -16,7 +16,9 @@ exports.createOrder = async (req, res) => {
     paymentMethod = 'UPI',
     totalAmount: passedTotal,
     pickupFee = 0,
-    deliveryFee = 2.0
+    deliveryFee = 2.0,
+    groupId,
+    groupCode
   } = req.body;
 
   const mill = store.mills.find(m => m.id === parseInt(millId || 101)) || store.mills[0];
@@ -40,14 +42,13 @@ exports.createOrder = async (req, res) => {
     computedTotal = grindingCost + grainCost + parseFloat(deliveryFee);
   }
 
-  const orderId = 500 + store.orders.length + 1;
   const orderNumber = req.body.orderNumber || `#HD-${Math.floor(1000 + Math.random() * 9000)}`;
   const userId = req.user ? req.user.id : 1;
   const custName = req.user ? req.user.name : 'Ramesh Patel';
   const custPhone = req.user ? req.user.phone : '+919876543210';
 
   const newOrder = {
-    id: orderId,
+    id: 0,
     orderNumber,
     userId,
     customerName: custName,
@@ -63,7 +64,7 @@ exports.createOrder = async (req, res) => {
     fulfillmentType,
     addressId: addressId ? parseInt(addressId) : 25,
     pickupAddress: req.body.pickupAddress || (mill ? mill.address : '12 Market Yard, Ellisbridge, Ahmedabad'),
-    deliveryAddress: req.body.deliveryAddress || '456 Heritage Block, District 9, NY',
+    deliveryAddress: req.body.deliveryAddress || 'Flat 402, Shivalik Towers, Satellite Road, Ahmedabad',
     pickupFee: parseFloat(pickupFee),
     deliveryFee: parseFloat(deliveryFee),
     paymentMethod,
@@ -72,6 +73,8 @@ exports.createOrder = async (req, res) => {
     estimatedMinutes: 30,
     estimatedCompletionTime: 'Within 24 Hours',
     totalAmount: parseFloat(computedTotal),
+    groupId: groupId || null,
+    groupCode: groupCode || null,
     timeline: [
       {
         status: ORDER_STATUS.PLACED,
@@ -90,8 +93,9 @@ exports.createOrder = async (req, res) => {
         mill_id, grain_source, grain_type_id, grain_type_name,
         quantity_kg, service_type, fulfillment_type, address_id,
         pickup_pin, delivery_otp, payment_method, payment_status,
-        status, estimated_minutes, estimated_completion_time, total_amount
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        status, estimated_minutes, estimated_completion_time, total_amount,
+        group_id, group_code
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     const dbResult = await query(insertSql, [
       newOrder.orderNumber || null,
@@ -113,7 +117,9 @@ exports.createOrder = async (req, res) => {
       'PLACED',
       30,
       'Within 24 Hours',
-      newOrder.totalAmount || 0.0
+      newOrder.totalAmount || 0.0,
+      newOrder.groupId,
+      newOrder.groupCode
     ]);
 
     if (dbResult && dbResult.insertId) {
@@ -131,21 +137,9 @@ exports.createOrder = async (req, res) => {
     console.warn('MySQL Orders Insert Warning:', dbErr.message);
   }
 
-  store.orders.unshift(newOrder);
-
-  // Send notification to user
-  store.notifications.push({
-    id: store.notifications.length + 1,
-    userId: newOrder.userId,
-    title: 'Order Placed',
-    message: `Your order #${newOrder.orderNumber} has been placed successfully.`,
-    read: false,
-    createdAt: new Date().toISOString()
-  });
-
   res.status(201).json({
     status: 'success',
-    message: 'Order created successfully',
+    message: 'Order created successfully in database',
     data: { order: newOrder }
   });
 };
@@ -164,7 +158,7 @@ exports.getOrders = async (req, res) => {
     sql += ' ORDER BY o.id DESC';
     const dbOrders = await query(sql, params);
 
-    if (dbOrders && dbOrders.length > 0) {
+    if (dbOrders && Array.isArray(dbOrders)) {
       const mapped = dbOrders.map(row => ({
         id: row.id,
         orderNumber: row.order_number,
@@ -183,37 +177,36 @@ exports.getOrders = async (req, res) => {
         paymentMethod: row.payment_method,
         paymentStatus: row.payment_status,
         status: row.status,
+        groupId: row.group_id,
+        groupCode: row.group_code,
         estimatedMinutes: row.estimated_minutes,
         estimatedCompletionTime: row.estimated_completion_time,
         totalAmount: parseFloat(row.total_amount),
         createdAt: row.created_at
       }));
 
+      const p = parseInt(page);
+      const l = parseInt(limit);
+      const paginated = mapped.slice((p - 1) * l, p * l);
+
       return res.json({
         status: 'success',
         count: mapped.length,
-        data: { orders: mapped }
+        page: p,
+        limit: l,
+        data: { orders: paginated }
       });
     }
   } catch (err) {
-    console.warn('MySQL getOrders fallback:', err.message);
+    console.warn('MySQL getOrders warning:', err.message);
   }
-
-  let userOrders = store.orders.filter(o => o.userId === userId);
-  if (status) {
-    userOrders = userOrders.filter(o => o.status === status);
-  }
-
-  const p = parseInt(page);
-  const l = parseInt(limit);
-  const paginated = userOrders.slice((p - 1) * l, p * l);
 
   res.json({
     status: 'success',
-    count: userOrders.length,
-    page: p,
-    limit: l,
-    data: { orders: paginated }
+    count: 0,
+    page: parseInt(page),
+    limit: parseInt(limit),
+    data: { orders: [] }
   });
 };
 
@@ -221,7 +214,7 @@ exports.getActiveOrders = async (req, res) => {
   try {
     const userId = req.user ? req.user.id : 1;
     const dbOrders = await query(
-      `SELECT * FROM orders WHERE user_id = ? AND status IN ('PLACED', 'ACCEPTED', 'PROCESSING', 'PACKING', 'READY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY') ORDER BY id DESC`,
+      `SELECT o.*, m.name as mill_name FROM orders o LEFT JOIN mills m ON o.mill_id = m.id WHERE o.user_id = ? AND o.status IN ('PLACED', 'ACCEPTED', 'PROCESSING', 'PACKING', 'READY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY') ORDER BY o.id DESC`,
       [userId]
     );
     if (dbOrders && Array.isArray(dbOrders)) {
@@ -230,7 +223,7 @@ exports.getActiveOrders = async (req, res) => {
         orderNumber: row.order_number || `#HD-${row.id}`,
         userId: row.user_id,
         millId: row.mill_id,
-        millName: row.mill_id === 102 ? 'Navrang Quality Atta Mill' : 'Shree Ganesh Flour Mill',
+        millName: row.mill_name || 'Shree Ganesh Flour Mill',
         grainSource: row.grain_source,
         grainTypeId: row.grain_type_id,
         grainTypeName: row.grain_type_name,
@@ -241,6 +234,8 @@ exports.getActiveOrders = async (req, res) => {
         paymentMethod: row.payment_method,
         paymentStatus: row.payment_status,
         status: row.status,
+        groupId: row.group_id,
+        groupCode: row.group_code,
         estimatedMinutes: row.estimated_minutes,
         estimatedCompletionTime: row.estimated_completion_time,
         totalAmount: parseFloat(row.total_amount),
@@ -252,25 +247,14 @@ exports.getActiveOrders = async (req, res) => {
     console.warn('MySQL getActiveOrders error:', err.message);
   }
 
-  const activeStatuses = [
-    ORDER_STATUS.PLACED,
-    ORDER_STATUS.ACCEPTED,
-    ORDER_STATUS.PROCESSING,
-    ORDER_STATUS.PACKING,
-    ORDER_STATUS.READY,
-    ORDER_STATUS.READY_FOR_PICKUP,
-    ORDER_STATUS.OUT_FOR_DELIVERY
-  ];
-
-  const activeOrders = store.orders.filter(o => o.userId === req.user.id && activeStatuses.includes(o.status));
-  res.json({ status: 'success', count: activeOrders.length, data: { orders: activeOrders } });
+  res.json({ status: 'success', count: 0, data: { orders: [] } });
 };
 
 exports.getCompletedOrders = async (req, res) => {
   try {
     const userId = req.user ? req.user.id : 1;
     const dbOrders = await query(
-      `SELECT * FROM orders WHERE user_id = ? AND status IN ('DELIVERED', 'PICKED_UP', 'COMPLETED') ORDER BY id DESC`,
+      `SELECT o.*, m.name as mill_name FROM orders o LEFT JOIN mills m ON o.mill_id = m.id WHERE o.user_id = ? AND o.status IN ('DELIVERED', 'PICKED_UP', 'COMPLETED') ORDER BY o.id DESC`,
       [userId]
     );
     if (dbOrders && Array.isArray(dbOrders)) {
@@ -279,7 +263,7 @@ exports.getCompletedOrders = async (req, res) => {
         orderNumber: row.order_number || `#HD-${row.id}`,
         userId: row.user_id,
         millId: row.mill_id,
-        millName: row.mill_id === 102 ? 'Navrang Quality Atta Mill' : 'Shree Ganesh Flour Mill',
+        millName: row.mill_name || 'Shree Ganesh Flour Mill',
         grainSource: row.grain_source,
         grainTypeId: row.grain_type_id,
         grainTypeName: row.grain_type_name,
@@ -290,6 +274,8 @@ exports.getCompletedOrders = async (req, res) => {
         paymentMethod: row.payment_method,
         paymentStatus: row.payment_status,
         status: row.status,
+        groupId: row.group_id,
+        groupCode: row.group_code,
         estimatedMinutes: row.estimated_minutes,
         estimatedCompletionTime: row.estimated_completion_time,
         totalAmount: parseFloat(row.total_amount),
@@ -301,14 +287,23 @@ exports.getCompletedOrders = async (req, res) => {
     console.warn('MySQL getCompletedOrders error:', err.message);
   }
 
-  const completedStatuses = [ORDER_STATUS.DELIVERED, ORDER_STATUS.PICKED_UP, ORDER_STATUS.COMPLETED];
-  const history = store.orders.filter(o => o.userId === req.user.id && completedStatuses.includes(o.status));
-  res.json({ status: 'success', count: history.length, data: { orders: history } });
+  res.json({ status: 'success', count: 0, data: { orders: [] } });
 };
 
 exports.getCancelledOrders = async (req, res) => {
-  const cancelled = store.orders.filter(o => o.userId === req.user.id && (o.status === ORDER_STATUS.CANCELLED || o.status === ORDER_STATUS.REJECTED));
-  res.json({ status: 'success', count: cancelled.length, data: { orders: cancelled } });
+  try {
+    const userId = req.user ? req.user.id : 1;
+    const dbOrders = await query(
+      `SELECT o.*, m.name as mill_name FROM orders o LEFT JOIN mills m ON o.mill_id = m.id WHERE o.user_id = ? AND o.status IN ('CANCELLED', 'REJECTED') ORDER BY o.id DESC`,
+      [userId]
+    );
+    if (dbOrders && Array.isArray(dbOrders)) {
+      return res.json({ status: 'success', count: dbOrders.length, data: { orders: dbOrders } });
+    }
+  } catch (err) {
+    console.warn('MySQL getCancelledOrders error:', err.message);
+  }
+  res.json({ status: 'success', count: 0, data: { orders: [] } });
 };
 
 // Robust order finder that handles numeric IDs, prefixed strings (#HD-..., ORD-...), and safe fallbacks

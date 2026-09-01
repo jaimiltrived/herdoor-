@@ -236,7 +236,7 @@ class MerchantApiService {
         }
       }
     }
-    return MerchantMockData.pendingRequests;
+    return [];
   }
 
   /// Get Active Processing Orders
@@ -264,7 +264,7 @@ class MerchantApiService {
         }
       }
     }
-    return MerchantMockData.activeOrders;
+    return [];
   }
 
   /// Get Ready for Handover / Dispatch Orders
@@ -292,9 +292,7 @@ class MerchantApiService {
         }
       }
     }
-    return MerchantMockData.activeOrders
-        .where((o) => o.statusTag == 'READY FOR PICKUP' || o.statusTag == 'Ready for Pickup')
-        .toList();
+    return [];
   }
 
   /// Get Completed Orders
@@ -322,32 +320,7 @@ class MerchantApiService {
         }
       }
     }
-    return [
-      MerchantOrder(
-        numericId: 1020,
-        orderId: '#HD-1020',
-        customerName: 'Aarav Patel',
-        itemsSummary: '10kg Sharbati Whole Wheat',
-        grainType: 'Sharbati Wheat',
-        quantityText: '10 kg',
-        timeAgo: 'Completed Today, 2:30 PM',
-        statusTag: 'COMPLETED',
-        statusColor: const Color(0xFF2ECC71),
-        timelineSteps: [],
-      ),
-      MerchantOrder(
-        numericId: 1018,
-        orderId: '#HD-1018',
-        customerName: 'Priya Sharma',
-        itemsSummary: '5kg Multigrain Flour',
-        grainType: 'Multigrain Mix',
-        quantityText: '5 kg',
-        timeAgo: 'Completed Today, 1:15 PM',
-        statusTag: 'COMPLETED',
-        statusColor: const Color(0xFF2ECC71),
-        timelineSteps: [],
-      ),
-    ];
+    return [];
   }
 
   /// Accept Order and set completion time ETA
@@ -494,7 +467,7 @@ class MerchantApiService {
         }
       }
     }
-    return MerchantMockData.inventoryItems;
+    return [];
   }
 
   /// Get Low Stock Items
@@ -522,7 +495,7 @@ class MerchantApiService {
         }
       }
     }
-    return MerchantMockData.inventoryItems.where((item) => item.stockKg <= item.minimumStockKg).toList();
+    return [];
   }
 
   /// Create New Inventory Item
@@ -1031,23 +1004,23 @@ class MerchantApiService {
                 headers: _headers,
                 body: jsonEncode({
                   'name': storeName,
-                  if (ownerName != null) 'ownerName': ownerName,
-                  if (phone != null) 'phone': phone,
-                  if (email != null) 'email': email,
+                  'ownerName': ?ownerName,
+                  'phone': ?phone,
+                  'email': ?email,
                   'address': address,
-                  if (city != null) 'city': city,
-                  if (state != null) 'state': state,
-                  if (pincode != null) 'pincode': pincode,
-                  if (capacityKgPerDay != null) 'capacityKgPerDay': capacityKgPerDay,
-                  if (deliveryRadiusKm != null) 'deliveryRadiusKm': deliveryRadiusKm,
-                  if (workingHours != null) 'workingHours': workingHours,
-                  if (services != null) 'services': services,
-                  if (specialty != null) 'specialty': specialty,
-                  if (storeImage != null) 'storeImage': storeImage,
-                  if (chakkiImage != null) 'chakkiImage': chakkiImage,
-                  if (isOpen != null) 'isOpen': isOpen,
-                  if (expressDeliveryEnabled != null) 'expressDeliveryEnabled': expressDeliveryEnabled,
-                  if (selfPickupEnabled != null) 'selfPickupEnabled': selfPickupEnabled,
+                  'city': ?city,
+                  'state': ?state,
+                  'pincode': ?pincode,
+                  'capacityKgPerDay': ?capacityKgPerDay,
+                  'deliveryRadiusKm': ?deliveryRadiusKm,
+                  'workingHours': ?workingHours,
+                  'services': ?services,
+                  'specialty': ?specialty,
+                  'storeImage': ?storeImage,
+                  'chakkiImage': ?chakkiImage,
+                  'isOpen': ?isOpen,
+                  'expressDeliveryEnabled': ?expressDeliveryEnabled,
+                  'selfPickupEnabled': ?selfPickupEnabled,
                 }),
               )
               .timeout(_timeout);
@@ -1078,9 +1051,9 @@ class MerchantApiService {
                 Uri.parse('$baseUrl/shopkeeper/store-images'),
                 headers: _headers,
                 body: jsonEncode({
-                  if (storeImage != null) 'storeImage': storeImage,
-                  if (chakkiImage != null) 'chakkiImage': chakkiImage,
-                  if (bannerImage != null) 'bannerImage': bannerImage,
+                  'storeImage': ?storeImage,
+                  'chakkiImage': ?chakkiImage,
+                  'bannerImage': ?bannerImage,
                 }),
               )
               .timeout(_timeout);

@@ -322,21 +322,24 @@ class AppDrawer extends StatelessWidget {
     required String title,
     required VoidCallback onTap,
   }) {
-    return ListTile(
-      onTap: onTap,
-      dense: true,
-      horizontalTitleGap: 12,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      leading: Icon(icon, color: AppTheme.primaryTerracotta, size: 22),
-      title: Text(
-        title,
-        style: GoogleFonts.plusJakartaSans(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: AppTheme.textPrimary,
+    return Material(
+      color: Colors.transparent,
+      child: ListTile(
+        onTap: onTap,
+        dense: true,
+        horizontalTitleGap: 12,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        leading: Icon(icon, color: AppTheme.primaryTerracotta, size: 22),
+        title: Text(
+          title,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textPrimary,
+          ),
         ),
+        trailing: const Icon(Icons.chevron_right, size: 18, color: AppTheme.textMuted),
       ),
-      trailing: const Icon(Icons.chevron_right, size: 18, color: AppTheme.textMuted),
     );
   }
 }

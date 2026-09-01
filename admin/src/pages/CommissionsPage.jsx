@@ -4,7 +4,7 @@ import { apiService } from '../services/apiService';
 
 export default function CommissionsPage() {
   const [orders, setOrders] = useState([]);
-  const [timeframe, setTimeframe] = useState('This Month');
+  const [timeframe, setTimeframe] = useState('7 Days');
   const [standardRate, setStandardRate] = useState(15);
   const [premiumRate, setPremiumRate] = useState(10);
   const [regions, setRegions] = useState([
@@ -56,13 +56,23 @@ export default function CommissionsPage() {
         { label: 'Week 3', orders: 12, rev: baseComm * 0.72, height: '74%', color: '#E0CD94' },
         { label: 'Week 4', orders: 15, rev: baseComm * 0.85, height: '86%', color: '#6E5616', isPeak: true },
       ];
+    } else if (timeframe === 'This Month') {
+      return [
+        { label: 'Week 1', orders: Math.max(3, Math.round(orders.length * 0.3)), rev: baseComm * 0.4, height: '42%', color: '#EFE6D2' },
+        { label: 'Week 2', orders: Math.max(5, Math.round(orders.length * 0.55)), rev: baseComm * 0.68, height: '66%', color: '#E0CD94' },
+        { label: 'Week 3', orders: Math.max(7, Math.round(orders.length * 0.75)), rev: baseComm * 0.82, height: '80%', color: '#CBA034' },
+        { label: 'Week 4 (Live Peak)', orders: orders.length || 10, rev: baseComm, height: '96%', color: '#6E5616', isPeak: true },
+      ];
     }
-    // This Month default
+    // 7 Days default
     return [
-      { label: 'Week 1', orders: Math.max(3, Math.round(orders.length * 0.3)), rev: baseComm * 0.4, height: '42%', color: '#EFE6D2' },
-      { label: 'Week 2', orders: Math.max(5, Math.round(orders.length * 0.55)), rev: baseComm * 0.68, height: '66%', color: '#E0CD94' },
-      { label: 'Week 3', orders: Math.max(7, Math.round(orders.length * 0.75)), rev: baseComm * 0.82, height: '80%', color: '#CBA034' },
-      { label: 'Week 4 (Live Peak)', orders: orders.length || 10, rev: baseComm, height: '96%', color: '#6E5616', isPeak: true },
+      { label: 'Mon', orders: Math.max(2, Math.round(orders.length * 0.3)), rev: baseComm * 0.35, height: '38%', color: '#EFE6D2' },
+      { label: 'Tue', orders: Math.max(3, Math.round(orders.length * 0.45)), rev: baseComm * 0.5, height: '52%', color: '#EFE6D2' },
+      { label: 'Wed', orders: Math.max(4, Math.round(orders.length * 0.6)), rev: baseComm * 0.65, height: '65%', color: '#E0CD94' },
+      { label: 'Thu', orders: Math.max(5, Math.round(orders.length * 0.75)), rev: baseComm * 0.8, height: '78%', color: '#E0CD94' },
+      { label: 'Fri', orders: Math.max(7, Math.round(orders.length * 0.9)), rev: baseComm * 0.92, height: '88%', color: '#CBA034' },
+      { label: 'Sat', orders: Math.max(8, Math.round(orders.length * 1.05)), rev: baseComm * 1.05, height: '94%', color: '#CBA034' },
+      { label: 'Today (Peak)', orders: orders.length || 10, rev: baseComm * 1.2, height: '100%', color: '#6E5616', isPeak: true },
     ];
   };
 
@@ -145,6 +155,7 @@ export default function CommissionsPage() {
                 onChange={(e) => setTimeframe(e.target.value)}
                 style={{ padding: '6px 12px', borderRadius: '10px', border: '1px solid #ECE4D9', background: '#FAF6F0', fontWeight: 700, fontSize: '0.82rem', outline: 'none' }}
               >
+                <option>7 Days</option>
                 <option>This Month</option>
                 <option>Last Month</option>
                 <option>This Quarter</option>

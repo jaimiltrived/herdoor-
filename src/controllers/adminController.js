@@ -368,6 +368,8 @@ exports.getOrders = async (req, res) => {
         paymentMethod: row.payment_method,
         paymentStatus: row.payment_status,
         status: row.status,
+        groupId: row.group_id,
+        groupCode: row.group_code,
         estimatedMinutes: row.estimated_minutes,
         estimatedCompletionTime: row.estimated_completion_time,
         totalAmount: parseFloat(row.total_amount),

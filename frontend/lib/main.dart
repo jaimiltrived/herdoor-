@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
-import 'models/app_models.dart';
 import 'models/merchant_models.dart';
 import 'screens/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
@@ -10,7 +9,6 @@ import 'screens/delivery/delivery_main_navigation_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  MockData.startGlobalOrderSimulation();
   runApp(const HerDoorApp());
 }
 

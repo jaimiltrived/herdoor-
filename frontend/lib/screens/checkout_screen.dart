@@ -42,13 +42,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
+        return Material(
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -100,8 +99,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               const SizedBox(height: 10),
             ],
           ),
-        );
-      },
+        ),
+      );
+    },
     );
   }
 

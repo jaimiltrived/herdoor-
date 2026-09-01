@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Download, FileText, TrendingUp, CheckCircle2, Info, Wallet, Landmark, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
 
 export default function AccountingPage() {
-  const [timeframe, setTimeframe] = useState('Monthly');
+  const [timeframe, setTimeframe] = useState('7 Days');
 
   const [ledgerEntries, setLedgerEntries] = useState([
     {
@@ -169,23 +169,45 @@ export default function AccountingPage() {
       ];
       return { labels, revData, expData };
     }
-    // Monthly default
-    const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Live (Oct)'];
+    if (timeframe === 'Monthly') {
+      const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Live (Oct)'];
+      const revData = [
+        Math.round(totalRevenue * 0.35),
+        Math.round(totalRevenue * 0.5),
+        Math.round(totalRevenue * 0.65),
+        Math.round(totalRevenue * 0.82),
+        Math.round(totalRevenue * 0.92),
+        totalRevenue,
+      ];
+      const expData = [
+        Math.round(totalExpenses * 0.3),
+        Math.round(totalExpenses * 0.45),
+        Math.round(totalExpenses * 0.58),
+        Math.round(totalExpenses * 0.72),
+        Math.round(totalExpenses * 0.88),
+        totalExpenses,
+      ];
+      return { labels, revData, expData };
+    }
+    // 7 Days default
+    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Live (Today)'];
     const revData = [
-      Math.round(totalRevenue * 0.35),
-      Math.round(totalRevenue * 0.5),
-      Math.round(totalRevenue * 0.65),
-      Math.round(totalRevenue * 0.82),
+      Math.round(totalRevenue * 0.38),
+      Math.round(totalRevenue * 0.52),
+      Math.round(totalRevenue * 0.68),
+      Math.round(totalRevenue * 0.8),
       Math.round(totalRevenue * 0.92),
-      totalRevenue,
+      Math.round(totalRevenue * 1.08),
+      Math.round(totalRevenue * 1.22),
     ];
     const expData = [
-      Math.round(totalExpenses * 0.3),
-      Math.round(totalExpenses * 0.45),
-      Math.round(totalExpenses * 0.58),
-      Math.round(totalExpenses * 0.72),
-      Math.round(totalExpenses * 0.88),
-      totalExpenses,
+      Math.round(totalExpenses * 0.32),
+      Math.round(totalExpenses * 0.46),
+      Math.round(totalExpenses * 0.6),
+      Math.round(totalExpenses * 0.74),
+      Math.round(totalExpenses * 0.85),
+      Math.round(totalExpenses * 0.96),
+      Math.round(totalExpenses * 1.1),
     ];
     return { labels, revData, expData };
   };
@@ -338,6 +360,12 @@ export default function AccountingPage() {
               </div>
               <div className="pill-toggle-container">
                 <button
+                  className={`pill-toggle-btn ${timeframe === '7 Days' ? 'active' : ''}`}
+                  onClick={() => setTimeframe('7 Days')}
+                >
+                  7 Days
+                </button>
+                <button
                   className={`pill-toggle-btn ${timeframe === 'Monthly' ? 'active' : ''}`}
                   onClick={() => setTimeframe('Monthly')}
                 >
@@ -351,117 +379,200 @@ export default function AccountingPage() {
                 </button>
               </div>
             </div>
+            {/* Custom SVG Bar Chart Canvas with Interactive Hover */}
+            {(() => {
+              const svgWidth = 600;
+              const svgHeight = 230;
+              const leftPad = 65;
+              const rightPad = 25;
+              const topPad = 25;
+              const bottomPad = 40;
+              const chartWidth = svgWidth - leftPad - rightPad;
+              const chartHeight = svgHeight - topPad - bottomPad;
 
-            {/* Custom SVG Bar/Line Canvas with Interactive Hover */}
-            <div className="chart-wrapper" style={{ position: 'relative' }}>
-              {hoverPoint && (
-                <div
-                  className="chart-floating-tooltip"
-                  style={{
-                    left: `${(hoverPoint.x / 600) * 100}%`,
-                    top: `${hoverPoint.y}px`,
-                  }}
-                >
-                  <div style={{ color: hoverPoint.color, fontSize: '0.7rem' }}>{hoverPoint.type} • {hoverPoint.label}</div>
-                  <div>₹{hoverPoint.val.toLocaleString('en-IN')}</div>
+              const maxVal = maxScale;
+              const yTicks = [
+                { val: maxVal, text: `₹${(maxVal / 1000000).toFixed(1)}M`, y: topPad },
+                { val: maxVal * 0.75, text: `₹${((maxVal * 0.75) / 1000000).toFixed(1)}M`, y: topPad + chartHeight * 0.25 },
+                { val: maxVal * 0.5, text: `₹${((maxVal * 0.5) / 1000000).toFixed(1)}M`, y: topPad + chartHeight * 0.5 },
+                { val: maxVal * 0.25, text: `₹${((maxVal * 0.25) / 1000000).toFixed(1)}M`, y: topPad + chartHeight * 0.75 },
+                { val: 0, text: '0', y: topPad + chartHeight },
+              ];
+
+              const groupWidth = chartWidth / chartData.labels.length;
+              const barWidth = Math.min(20, groupWidth * 0.28);
+              const barGap = 4;
+
+              const barGroups = chartData.labels.map((lbl, idx) => {
+                const rev = chartData.revData[idx];
+                const exp = chartData.expData[idx];
+
+                const groupCenterX = leftPad + idx * groupWidth + groupWidth / 2;
+                const revHeight = Math.max(4, (rev / maxVal) * chartHeight);
+                const expHeight = Math.max(4, (exp / maxVal) * chartHeight);
+
+                const revX = groupCenterX - barWidth - barGap / 2;
+                const revY = topPad + chartHeight - revHeight;
+
+                const expX = groupCenterX + barGap / 2;
+                const expY = topPad + chartHeight - expHeight;
+
+                return {
+                  idx,
+                  label: lbl,
+                  rev,
+                  exp,
+                  groupCenterX,
+                  revX,
+                  revY,
+                  revHeight,
+                  expX,
+                  expY,
+                  expHeight,
+                  isPeak: idx === chartData.labels.length - 1,
+                };
+              });
+
+              return (
+                <div className="chart-wrapper" style={{ position: 'relative' }}>
+                  {hoverPoint && (
+                    <div
+                      className="chart-floating-tooltip"
+                      style={{
+                        left: `${(hoverPoint.groupCenterX / svgWidth) * 100}%`,
+                        top: `${Math.min(hoverPoint.revY, hoverPoint.expY) + 30}px`,
+                        backgroundColor: 'rgba(38, 33, 30, 0.96)',
+                        borderRadius: '10px',
+                        padding: '10px 14px',
+                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        position: 'absolute',
+                        zIndex: 10,
+                      }}
+                    >
+                      <div style={{ color: '#FF9A93', fontSize: '0.78rem', fontWeight: 800, marginBottom: 4 }}>
+                        {hoverPoint.label} Overview
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.84rem', color: '#F0D47C', fontWeight: 800, marginBottom: 3 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#CBA034', display: 'inline-block' }}></span>
+                        <span>Revenue: ₹{hoverPoint.rev.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.76rem', color: '#FF9A93', fontWeight: 700 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#8C4A3E', display: 'inline-block' }}></span>
+                        <span>Expenses: ₹{hoverPoint.exp.toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="revenue-expenses-svg" style={{ overflow: 'visible', width: '100%', height: '230px' }}>
+                    <defs>
+                      <linearGradient id="accRevGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#CBA034" />
+                        <stop offset="100%" stopColor="#EAD186" />
+                      </linearGradient>
+                      <linearGradient id="accExpGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#8C4A3E" />
+                        <stop offset="100%" stopColor="#B86B5D" />
+                      </linearGradient>
+                    </defs>
+
+                    {/* Grid Lines */}
+                    {yTicks.map((tick, i) => (
+                      <g key={`ytick_${i}`}>
+                        <line
+                          x1={leftPad}
+                          y1={tick.y}
+                          x2={leftPad + chartWidth}
+                          y2={tick.y}
+                          stroke={tick.val === 0 ? '#DAC8B3' : '#ECE4D9'}
+                          strokeWidth={tick.val === 0 ? 1.5 : 1}
+                          strokeDasharray={tick.val === 0 ? undefined : '4 4'}
+                        />
+                        <text
+                          x={leftPad - 10}
+                          y={tick.y + 4}
+                          fontSize="10"
+                          fontWeight="700"
+                          fill="#A59D96"
+                          textAnchor="end"
+                        >
+                          {tick.text}
+                        </text>
+                      </g>
+                    ))}
+
+                    {/* Bars */}
+                    {barGroups.map((grp) => {
+                      const isHovered = hoverPoint?.label === grp.label;
+
+                      return (
+                        <g
+                          key={`grp_${grp.idx}`}
+                          style={{ cursor: 'pointer' }}
+                          onMouseEnter={() => setHoverPoint(grp)}
+                          onMouseLeave={() => setHoverPoint(null)}
+                        >
+                          <rect
+                            x={grp.groupCenterX - groupWidth / 2 + 2}
+                            y={topPad}
+                            width={groupWidth - 4}
+                            height={chartHeight}
+                            fill={isHovered ? 'rgba(203, 160, 52, 0.07)' : 'transparent'}
+                            rx="8"
+                          />
+
+                          <rect
+                            x={grp.revX}
+                            y={grp.revY}
+                            width={barWidth}
+                            height={grp.revHeight}
+                            fill="url(#accRevGrad)"
+                            rx="5"
+                            style={{
+                              transition: 'all 0.3s ease',
+                              filter: isHovered ? 'brightness(1.1) drop-shadow(0 4px 6px rgba(203, 160, 52, 0.3))' : 'none',
+                            }}
+                          />
+
+                          <rect
+                            x={grp.expX}
+                            y={grp.expY}
+                            width={barWidth}
+                            height={grp.expHeight}
+                            fill="url(#accExpGrad)"
+                            rx="5"
+                            style={{
+                              transition: 'all 0.3s ease',
+                              filter: isHovered ? 'brightness(1.1) drop-shadow(0 4px 6px rgba(140, 74, 62, 0.3))' : 'none',
+                            }}
+                          />
+
+                          <text
+                            x={grp.groupCenterX}
+                            y={topPad + chartHeight + 20}
+                            textAnchor="middle"
+                            fontSize={grp.isPeak ? '11.5' : '11'}
+                            fontWeight={grp.isPeak ? '800' : (isHovered ? '700' : '600')}
+                            fill={grp.isPeak ? '#8C4A3E' : (isHovered ? '#2A2421' : '#756D69')}
+                          >
+                            {grp.label}
+                          </text>
+                        </g>
+                      );
+                    })}
+
+                    <line
+                      x1={leftPad}
+                      y1={topPad + chartHeight}
+                      x2={leftPad + chartWidth}
+                      y2={topPad + chartHeight}
+                      stroke="#DAC8B3"
+                      strokeWidth="1.5"
+                    />
+                  </svg>
                 </div>
-              )}
-
-              <svg viewBox="0 0 600 230" className="revenue-expenses-svg" style={{ overflow: 'visible' }}>
-                {/* Grid Lines */}
-                <line x1="40" y1="30" x2="580" y2="30" stroke="#ECE4D9" strokeDasharray="4" />
-                <text x="35" y="34" fontSize="10" fontWeight="700" fill="#A59D96" textAnchor="end">₹{(maxScale / 1000000).toFixed(1)}M</text>
-
-                <line x1="40" y1="75" x2="580" y2="75" stroke="#ECE4D9" strokeDasharray="4" />
-                <text x="35" y="79" fontSize="10" fontWeight="700" fill="#A59D96" textAnchor="end">₹{((maxScale * 0.75) / 1000000).toFixed(1)}M</text>
-
-                <line x1="40" y1="120" x2="580" y2="120" stroke="#ECE4D9" strokeDasharray="4" />
-                <text x="35" y="124" fontSize="10" fontWeight="700" fill="#A59D96" textAnchor="end">₹{((maxScale * 0.5) / 1000000).toFixed(1)}M</text>
-
-                <line x1="40" y1="165" x2="580" y2="165" stroke="#ECE4D9" strokeDasharray="4" />
-                <text x="35" y="169" fontSize="10" fontWeight="700" fill="#A59D96" textAnchor="end">₹{((maxScale * 0.25) / 1000000).toFixed(1)}M</text>
-
-                <line x1="40" y1="200" x2="580" y2="200" stroke="#CBA034" strokeWidth="1.5" />
-                <text x="35" y="204" fontSize="10" fontWeight="700" fill="#A59D96" textAnchor="end">0</text>
-
-                {/* X Labels */}
-                {chartData.labels.map((lbl, idx) => (
-                  <text
-                    key={idx}
-                    x={startX + idx * stepX}
-                    y="218"
-                    fontSize="11"
-                    fill={idx === chartData.labels.length - 1 ? '#8C4A3E' : '#756D69'}
-                    fontWeight={idx === chartData.labels.length - 1 ? 800 : 600}
-                    textAnchor="middle"
-                  >
-                    {lbl}
-                  </text>
-                ))}
-
-                {/* Revenue Line (Olive Green/Gold) */}
-                <path
-                  d={revPath}
-                  fill="none"
-                  stroke="#7A6818"
-                  strokeWidth="3.5"
-                  strokeLinecap="round"
-                  style={{ transition: 'all 0.4s ease' }}
-                />
-
-                {/* Expenses Line (Terracotta) */}
-                <path
-                  d={expPath}
-                  fill="none"
-                  stroke="#8C4A3E"
-                  strokeWidth="3.5"
-                  strokeLinecap="round"
-                  style={{ transition: 'all 0.4s ease' }}
-                />
-
-                {/* Revenue Data Points */}
-                {revPoints.map((pt, i) => (
-                  <circle
-                    key={`r_${i}`}
-                    cx={pt.x}
-                    cy={pt.y}
-                    r={hoverPoint?.label === pt.label && hoverPoint?.type === 'Revenue' ? 7 : (i === revPoints.length - 1 ? 6 : 4)}
-                    fill="#7A6818"
-                    stroke="white"
-                    strokeWidth="2"
-                    className="graph-interactive-node"
-                    onMouseEnter={() => setHoverPoint(pt)}
-                    onMouseLeave={() => setHoverPoint(null)}
-                  />
-                ))}
-
-                {/* Expenses Data Points */}
-                {expPoints.map((pt, i) => (
-                  <circle
-                    key={`e_${i}`}
-                    cx={pt.x}
-                    cy={pt.y}
-                    r={hoverPoint?.label === pt.label && hoverPoint?.type === 'Expenses' ? 7 : (i === expPoints.length - 1 ? 6 : 4)}
-                    fill="#8C4A3E"
-                    stroke="white"
-                    strokeWidth="2"
-                    className="graph-interactive-node"
-                    onMouseEnter={() => setHoverPoint(pt)}
-                    onMouseLeave={() => setHoverPoint(null)}
-                  />
-                ))}
-
-                {/* Pulsing Radar Node on Live Head */}
-                <circle
-                  cx={revPoints[revPoints.length - 1].x}
-                  cy={revPoints[revPoints.length - 1].y}
-                  r="6"
-                  fill="none"
-                  stroke="#7A6818"
-                  strokeWidth="2"
-                  className="live-pulse-radar"
-                />
-              </svg>
+              );
+            })()}
 
               {/* Chart Legend */}
               <div className="chart-legend" style={{ marginTop: 14 }}>
@@ -475,7 +586,6 @@ export default function AccountingPage() {
                 </span>
               </div>
             </div>
-          </div>
 
           {/* General Ledger entries Table (Image 2) */}
           <div className="card table-card">

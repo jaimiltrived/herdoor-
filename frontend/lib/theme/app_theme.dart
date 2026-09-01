@@ -112,6 +112,10 @@ class AppTheme {
           side: const BorderSide(color: borderLight, width: 1),
         ),
       ),
+      listTileTheme: const ListTileThemeData(
+        tileColor: Colors.transparent,
+        selectedTileColor: Colors.transparent,
+      ),
     );
   }
 }

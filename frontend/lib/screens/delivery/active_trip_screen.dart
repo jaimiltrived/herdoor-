@@ -260,16 +260,19 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
   }
 
   Widget _buildQuickTemplateTile(String msg, String name) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: const Icon(Icons.send_rounded, size: 18, color: AppTheme.primaryTerracotta),
-      title: Text(msg, style: GoogleFonts.plusJakartaSans(fontSize: 13)),
-      onTap: () {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Message sent to $name via WhatsApp!')),
-        );
-      },
+    return Material(
+      color: Colors.transparent,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.send_rounded, size: 18, color: AppTheme.primaryTerracotta),
+        title: Text(msg, style: GoogleFonts.plusJakartaSans(fontSize: 13)),
+        onTap: () {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Message sent to $name via WhatsApp!')),
+          );
+        },
+      ),
     );
   }
 
@@ -317,21 +320,24 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
   }
 
   Widget _buildIncidentItem(String title, IconData icon) {
-    return ListTile(
-      leading: Icon(icon, color: AppTheme.primaryTerracotta, size: 20),
-      title: Text(title, style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600)),
-      trailing: const Icon(Icons.chevron_right_rounded, size: 18),
-      onTap: () {
-        Navigator.pop(context);
-        DeliveryApiService.instance.reportIncident(
-          orderId: widget.trip.orderId,
-          type: title,
-          description: 'Rider reported: $title on active trip #${widget.trip.orderNumber}',
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Report logged: $title. Dispatch notified.')),
-        );
-      },
+    return Material(
+      color: Colors.transparent,
+      child: ListTile(
+        leading: Icon(icon, color: AppTheme.primaryTerracotta, size: 20),
+        title: Text(title, style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600)),
+        trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+        onTap: () {
+          Navigator.pop(context);
+          DeliveryApiService.instance.reportIncident(
+            orderId: widget.trip.orderId,
+            type: title,
+            description: 'Rider reported: $title on active trip #${widget.trip.orderNumber}',
+          );
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Report logged: $title. Dispatch notified.')),
+          );
+        },
+      ),
     );
   }
 
@@ -712,6 +718,13 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
             ),
           );
         } else {
+          // Last stop completed — also confirm the main trip orderId for grouped batches
+          if (widget.trip.isBatch && widget.trip.orderId != _activeStop.orderId) {
+            DeliveryApiService.instance.confirmDelivery(
+              widget.trip.orderId,
+              otp: effectiveOtp,
+            );
+          }
           _currentStage = TripStage.completed;
           _navSimulationTimer?.cancel();
           _showCompletionDialog();
@@ -1641,26 +1654,33 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
 
           // Bag Checklist
           Text('Quality & Safety Checklist:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
-          CheckboxListTile(
-            value: _isBagSealed,
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: Text('Eco-friendly Bag Seals Intact', style: GoogleFonts.plusJakartaSans(fontSize: 12)),
-            onChanged: (val) => setState(() => _isBagSealed = val ?? true),
-          ),
-          CheckboxListTile(
-            value: _isMoistureChecked,
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: Text('Moisture Barrier Confirmed Dry', style: GoogleFonts.plusJakartaSans(fontSize: 12)),
-            onChanged: (val) => setState(() => _isMoistureChecked = val ?? true),
-          ),
-          CheckboxListTile(
-            value: _isWeightVerified,
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: Text('Total weight verified (${widget.trip.quantityKg} kg)', style: GoogleFonts.plusJakartaSans(fontSize: 12)),
-            onChanged: (val) => setState(() => _isWeightVerified = val ?? true),
+          Material(
+            color: Colors.transparent,
+            child: Column(
+              children: [
+                CheckboxListTile(
+                  value: _isBagSealed,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Eco-friendly Bag Seals Intact', style: GoogleFonts.plusJakartaSans(fontSize: 12)),
+                  onChanged: (val) => setState(() => _isBagSealed = val ?? true),
+                ),
+                CheckboxListTile(
+                  value: _isMoistureChecked,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Moisture Barrier Confirmed Dry', style: GoogleFonts.plusJakartaSans(fontSize: 12)),
+                  onChanged: (val) => setState(() => _isMoistureChecked = val ?? true),
+                ),
+                CheckboxListTile(
+                  value: _isWeightVerified,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Total weight verified (${widget.trip.quantityKg} kg)', style: GoogleFonts.plusJakartaSans(fontSize: 12)),
+                  onChanged: (val) => setState(() => _isWeightVerified = val ?? true),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 10),
 
@@ -1702,7 +1722,6 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
 
   Widget _buildCustomerDeliverySection() {
     final stop = _activeStop;
-    final isBagScanned = stop.isDelivered;
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -1769,77 +1788,8 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
           ],
           const SizedBox(height: 16),
 
-          // STEP 1: Prominent Scan Customer Bag Barcode Card
-          Text('Step 1: Scan Bag Barcode at Doorstep:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: isBagScanned ? const Color(0xFFE8F8F5) : const Color(0xFFFAF6F0),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isBagScanned ? const Color(0xFF2ECC71) : const Color(0xFFE2D9CC),
-                width: isBagScanned ? 2 : 1,
-              ),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          isBagScanned ? Icons.check_circle_rounded : Icons.qr_code_scanner_rounded,
-                          color: isBagScanned ? const Color(0xFF1E8449) : AppTheme.primaryTerracotta,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              isBagScanned ? '✅ Bag Barcode Verified' : 'Scan Bag to Confirm Drop',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                                color: isBagScanned ? const Color(0xFF1E8449) : AppTheme.textPrimary,
-                              ),
-                            ),
-                            Text(
-                              'Expected Tag: ${stop.barcodeNumber} (${stop.quantityKg} kg)',
-                              style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _openPerOrderBarcodeScanner(stop, isPickup: false),
-                    icon: Icon(isBagScanned ? Icons.check_rounded : Icons.camera_alt_rounded, size: 18, color: Colors.white),
-                    label: Text(
-                      isBagScanned ? 'RE-SCAN BAG BARCODE' : '📷 OPEN CAMERA TO SCAN BAG',
-                      style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isBagScanned ? const Color(0xFF1E8449) : AppTheme.primaryTerracotta,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // STEP 2: Proof of Delivery Actions
-          Text('Step 2: Proof of Delivery Handover (Optional):', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
+          // STEP 1: Proof of Delivery Handover
+          Text('Step 1: Proof of Delivery Handover (Optional):', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -1870,8 +1820,8 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
           ),
           const SizedBox(height: 14),
 
-          // STEP 3: 4-Digit Customer Delivery OTP
-          Text('Step 3: Customer Delivery OTP:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
+          // STEP 2: 4-Digit Customer Delivery OTP
+          Text('Step 2: Customer Delivery OTP:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
           const SizedBox(height: 6),
           TextField(
             controller: _otpController,
@@ -1890,28 +1840,18 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
             width: double.infinity,
             height: 50,
             child: ElevatedButton.icon(
-              onPressed: _isProcessing
-                  ? null
-                  : () {
-                      if (!isBagScanned) {
-                        _openPerOrderBarcodeScanner(stop, isPickup: false);
-                      } else {
-                        _handleConfirmDelivery();
-                      }
-                    },
-              icon: Icon(isBagScanned ? Icons.check_circle_rounded : Icons.qr_code_scanner_rounded, color: Colors.white, size: 20),
+              onPressed: _isProcessing ? null : () => _handleConfirmDelivery(),
+              icon: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
               label: _isProcessing
                   ? const CircularProgressIndicator(color: Colors.white)
                   : Text(
-                      !isBagScanned
-                          ? '📷 SCAN BAG & CONFIRM DROP'
-                          : (_currentStopIndex < _tripStops.length - 1
-                              ? 'CONFIRM DROP & PROCEED TO STOP ${_currentStopIndex + 2}'
-                              : 'CONFIRM DROP & COMPLETE TRIP'),
+                      _currentStopIndex < _tripStops.length - 1
+                          ? 'CONFIRM DROP & PROCEED TO STOP ${_currentStopIndex + 2}'
+                          : 'CONFIRM DROP & COMPLETE TRIP',
                       style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white),
                     ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: isBagScanned ? const Color(0xFF1E8449) : AppTheme.primaryTerracotta,
+                backgroundColor: const Color(0xFF1E8449),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 elevation: 3,
               ),

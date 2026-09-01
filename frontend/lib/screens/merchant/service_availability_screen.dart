@@ -307,40 +307,43 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(color: AppTheme.borderLight),
                         ),
-                        child: Column(
-                          children: [
-                            SwitchListTile(
-                              title: Text(
-                                'Express Doorstep Delivery',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.textPrimary,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: Column(
+                            children: [
+                              SwitchListTile(
+                                title: Text(
+                                  'Express Doorstep Delivery',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.textPrimary,
+                                  ),
                                 ),
+                                subtitle: const Text('Partner delivery riders pick up and deliver to customer home'),
+                                value: _expressDeliveryEnabled,
+                                activeThumbColor: Colors.white,
+                                activeTrackColor: AppTheme.primaryTerracotta,
+                                onChanged: (val) => setState(() => _expressDeliveryEnabled = val),
                               ),
-                              subtitle: const Text('Partner delivery riders pick up and deliver to customer home'),
-                              value: _expressDeliveryEnabled,
-                              activeThumbColor: Colors.white,
-                              activeTrackColor: AppTheme.primaryTerracotta,
-                              onChanged: (val) => setState(() => _expressDeliveryEnabled = val),
-                            ),
-                            const Divider(height: 1),
-                            SwitchListTile(
-                              title: Text(
-                                'Store Self-Pickup',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.textPrimary,
+                              const Divider(height: 1),
+                              SwitchListTile(
+                                title: Text(
+                                  'Store Self-Pickup',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.textPrimary,
+                                  ),
                                 ),
+                                subtitle: const Text('Customers pick up directly from store bins with OTP'),
+                                value: _selfPickupEnabled,
+                                activeThumbColor: Colors.white,
+                                activeTrackColor: AppTheme.primaryTerracotta,
+                                onChanged: (val) => setState(() => _selfPickupEnabled = val),
                               ),
-                              subtitle: const Text('Customers pick up directly from store bins with OTP'),
-                              value: _selfPickupEnabled,
-                              activeThumbColor: Colors.white,
-                              activeTrackColor: AppTheme.primaryTerracotta,
-                              onChanged: (val) => setState(() => _selfPickupEnabled = val),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 24),

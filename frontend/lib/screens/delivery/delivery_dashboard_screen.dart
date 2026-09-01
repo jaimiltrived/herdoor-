@@ -195,6 +195,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           _isOnline = _profile?.isOnline ?? true;
           _earnings = results[1] as RiderEarnings;
           _allTrips = results[2] as List<DeliveryTrip>;
+          _selectedOrderIds.clear();
           _isLoading = false;
         });
       }
@@ -252,7 +253,18 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
 
   Future<void> _acceptOrder(DeliveryTrip trip) async {
     _alertTimer?.cancel();
-    setState(() => _incomingAlertTrip = null);
+    final batchIds = trip.isBatch ? trip.stops.map((s) => s.orderId).toSet() : <int>{};
+    final batchNums = trip.isBatch ? trip.stops.map((s) => s.orderNumber).toSet() : <String>{};
+
+    setState(() {
+      _incomingAlertTrip = null;
+      _selectedOrderIds.remove(trip.orderId);
+      _selectedOrderIds.removeAll(batchIds);
+      _allTrips.removeWhere((t) =>
+          t.orderId == trip.orderId ||
+          t.orderNumber == trip.orderNumber ||
+          (trip.isBatch && (batchIds.contains(t.orderId) || batchNums.contains(t.orderNumber))));
+    });
 
     final success = (trip.isBatch && trip.stops.isNotEmpty)
         ? await DeliveryApiService.instance.acceptGroupTrip(
@@ -1965,7 +1977,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (trip.heavyBagBonus > 0)
+              if (trip.heavyBagBonus > 0) ...[
+                const SizedBox(width: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
@@ -1981,6 +1994,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                     ),
                   ),
                 ),
+              ],
             ],
           ),
           const SizedBox(height: 10),
@@ -1999,25 +2013,35 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.home_outlined, size: 16, color: Color(0xFF0369A1)),
-                        const SizedBox(width: 6),
-                        Text(
-                          '1. PICKUP FROM HOME (RAW GRAINS):',
-                          style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF0369A1), fontWeight: FontWeight.w800),
-                        ),
-                      ],
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE0F2FE),
-                        borderRadius: BorderRadius.circular(6),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          const Icon(Icons.home_outlined, size: 16, color: Color(0xFF0369A1)),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              '1. PICKUP FROM HOME (RAW GRAINS):',
+                              style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF0369A1), fontWeight: FontWeight.w800),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
-                      child: Text(
-                        trip.customerName,
-                        style: GoogleFonts.plusJakartaSans(fontSize: 10, color: const Color(0xFF0284C7), fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE0F2FE),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          trip.customerName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.plusJakartaSans(fontSize: 10, color: const Color(0xFF0284C7), fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ),
                   ],

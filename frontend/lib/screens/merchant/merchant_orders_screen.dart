@@ -110,7 +110,9 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
   }
 
   Future<void> _handleAcceptOrder(MerchantOrder order) async {
-    final orderId = order.numericId ?? 501;
+    final int resolvedId = order.numericId ??
+        int.tryParse(order.orderId.replaceAll(RegExp(r'[^0-9]'), '')) ??
+        501;
     final messenger = ScaffoldMessenger.of(context);
 
     // Update UI state immediately for responsive feel
@@ -128,10 +130,10 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
       ),
     );
 
-    final success = await MerchantApiService.instance.acceptOrder(orderId, estimatedMinutes: 30);
+    final success = await MerchantApiService.instance.acceptOrder(resolvedId, estimatedMinutes: 30);
     if (!mounted) return;
     if (success) {
-      _fetchOrdersData();
+      _fetchOrdersData(showLoading: false);
     }
   }
 

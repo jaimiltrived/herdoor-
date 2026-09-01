@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -31,12 +32,14 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
   List<Map<String, dynamic>> _completedTrips = [];
   List<DeliveryTrip> _nearbyAvailableTrips = [];
   String _selectedPastFilter = 'All';
+  Timer? _realtimeRefreshTimer;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadTripSheetData();
+    _startRealtimeRefresh();
   }
 
   @override
@@ -49,212 +52,94 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
 
   @override
   void dispose() {
+    _realtimeRefreshTimer?.cancel();
+    _realtimeRefreshTimer = null;
     _tabController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadTripSheetData() async {
-    setState(() => _isLoading = true);
+  void _startRealtimeRefresh() {
+    _realtimeRefreshTimer?.cancel();
+    _realtimeRefreshTimer = Timer.periodic(const Duration(seconds: 20), (timer) {
+      if (mounted) {
+        _loadTripSheetData(silentRefresh: true);
+      }
+    });
+  }
+
+  Future<void> _loadTripSheetData({bool silentRefresh = false}) async {
+    if (!silentRefresh) {
+      setState(() => _isLoading = true);
+    }
     try {
       final results = await Future.wait([
         DeliveryApiService.instance.getAssignedTrips(),
         DeliveryApiService.instance.getCompletedTrips(),
         DeliveryApiService.instance.getAvailableTrips(),
       ]);
-      final assigned = results[0] as List<DeliveryTrip>;
-      final completed = results[1] as List<Map<String, dynamic>>;
-      final nearby = results[2] as List<DeliveryTrip>;
+      final assigned = List<DeliveryTrip>.from(results[0] as List<DeliveryTrip>);
+      final completed = List<Map<String, dynamic>>.from(results[1] as List<Map<String, dynamic>>);
+      final nearby = List<DeliveryTrip>.from(results[2] as List<DeliveryTrip>);
 
-      // If activeTrip passed from parent, ensure it's in assigned list
-      if (widget.activeTrip != null && !assigned.any((t) => t.orderId == widget.activeTrip!.orderId)) {
+      // Merge completed trips so recently finished trips are preserved seamlessly
+      final Set<dynamic> completedKeys = completed.map((c) => c['orderId'] ?? c['orderNumber']).toSet();
+      for (var local in _completedTrips) {
+        final key = local['orderId'] ?? local['orderNumber'];
+        if (key != null && !completedKeys.contains(key)) {
+          completed.insert(0, local);
+          completedKeys.add(key);
+        }
+      }
+
+      // If activeTrip passed from parent, ensure it's in assigned list only if not completed
+      if (widget.activeTrip != null &&
+          !completedKeys.contains(widget.activeTrip!.orderId) &&
+          !completedKeys.contains(widget.activeTrip!.orderNumber) &&
+          !assigned.any((t) => t.orderId == widget.activeTrip!.orderId)) {
         assigned.insert(0, widget.activeTrip!);
-      }
-
-      // Default active trips so both Grouped Batch order and Single order show simultaneously
-      if (assigned.length < 2) {
-        final sampleGroupedBatch = DeliveryTrip(
-          orderId: 9991,
-          orderNumber: '#HD-GRP-201',
-          customerName: 'Grouped 2x Batch Trip',
-          customerPhone: '+919811223344',
-          millName: 'Shree Ganesh Flour Mill & Grinding Hub',
-          millAddress: '12 Market Yard, Ellisbridge, Ahmedabad',
-          millPhone: '+919876543211',
-          homePickupAddress: 'Multiple Customer Homes (Satellite, Ellisbridge)',
-          homePickupLandmark: 'Opposite Shell Station & Town Hall',
-          homePickupInstructions: 'Pick up raw wheat & chana grain bags from customer homes, drop at mill for grinding',
-          deliveryAddress: '2-Stop Route: Satellite ➔ Ellisbridge',
-          quantityKg: 20.0,
-          grainTypeName: 'Stacked Batch: 2 Orders (Sharbati + Multigrain)',
-          deliveryFee: 200.0,
-          surgeBonus: 35.0,
-          heavyBagBonus: 30.0,
-          isBatch: true,
-          distanceKm: 2.8,
-          estimatedMins: 22,
-          pickupZone: 'Ellisbridge Central Hub 🔥 High Pool',
-          paymentMode: 'Online Paid (UPI)',
-          status: 'ASSIGNED',
-          pickupPin: '4821',
-          deliveryOtp: '9120',
-          barcodeNumber: 'HD-BAG-GRP-01',
-          stops: [
-            DeliveryTripStop(
-              orderId: 2011,
-              orderNumber: '#HD-2026-1005',
-              customerName: 'Vikram Joshi (Stop 1)',
-              customerPhone: '+919898012345',
-              homePickupAddress: 'Flat 301, Sunrise Arcade, Ellisbridge, Ahmedabad',
-              homePickupLandmark: 'Behind Town Hall',
-              homePickupInstructions: 'Collect 10kg Chana Dal bag from door porch',
-              deliveryAddress: 'Flat 301, Sunrise Arcade, Ellisbridge',
-              quantityKg: 10.0,
-              grainTypeName: 'Desi Chana Besan & Flour (10kg)',
-              deliveryOtp: '7741',
-              pickupPin: '4821',
-              barcodeNumber: 'HD-BAG-1005-01',
-              distanceKm: 1.4,
-              orderPayout: 90.0,
-            ),
-            DeliveryTripStop(
-              orderId: 2012,
-              orderNumber: '#HD-2026-1006',
-              customerName: 'Meera Deshmukh (Stop 2)',
-              customerPhone: '+919876549988',
-              homePickupAddress: 'B-604, Titanium City Centre, 100ft Anandnagar Rd, Ahmedabad',
-              homePickupLandmark: 'Behind Seema Hall',
-              homePickupInstructions: 'Collect 10kg Sharbati grain bag from security desk',
-              deliveryAddress: 'B-604, Titanium City Centre, Anandnagar',
-              quantityKg: 10.0,
-              grainTypeName: 'Sharbati Whole Wheat Atta (10kg)',
-              deliveryOtp: '6182',
-              pickupPin: '4821',
-              barcodeNumber: 'HD-BAG-1006-02',
-              distanceKm: 2.1,
-              orderPayout: 80.0,
-            ),
-          ],
-        );
-
-        if (!assigned.any((t) => t.orderId == sampleGroupedBatch.orderId || t.orderNumber == sampleGroupedBatch.orderNumber)) {
-          assigned.insert(0, sampleGroupedBatch);
-        }
-
-        if (assigned.length < 2) {
-          final sampleSingleTrip = DeliveryTrip(
-            orderId: 502,
-            orderNumber: '#HD-2026-1002',
-            customerName: 'Ramesh Patel',
-            customerPhone: '+919876543210',
-            millName: 'Shree Ganesh Flour Mill',
-            millAddress: '12 Market Yard, Ellisbridge, Ahmedabad',
-            millPhone: '+919876543211',
-            homePickupAddress: 'Flat 402, Shivalik Towers, Ellisbridge, Ahmedabad - 380006',
-            homePickupLandmark: 'Near Central Bank',
-            homePickupInstructions: 'Ring bell 402, raw grain bag kept outside door',
-            deliveryAddress: 'Flat 402, Shivalik Towers, Ahmedabad',
-            quantityKg: 10.0,
-            grainTypeName: 'Wheat (Gehun) Stoneground Flour',
-            deliveryFee: 40.0,
-            distanceKm: 1.8,
-            status: 'ASSIGNED',
-            pickupPin: '4821',
-            deliveryOtp: '7391',
-            barcodeNumber: 'HD-BAG-502-01',
-            stops: [
-              DeliveryTripStop(
-                orderId: 502,
-                orderNumber: '#HD-2026-1002',
-                customerName: 'Ramesh Patel',
-                customerPhone: '+919876543210',
-                homePickupAddress: 'Flat 402, Shivalik Towers, Ellisbridge, Ahmedabad - 380006',
-                deliveryAddress: 'Flat 402, Shivalik Towers, Ahmedabad',
-                quantityKg: 10.0,
-                grainTypeName: 'Wheat (Gehun) Stoneground Flour',
-                barcodeNumber: 'HD-BAG-502-01',
-                orderPayout: 40.0,
-              ),
-            ],
-          );
-          if (!assigned.any((t) => t.orderId == sampleSingleTrip.orderId)) {
-            assigned.add(sampleSingleTrip);
-          }
-        }
-      }
-
-      if (!completed.any((c) => (c['orderNumber'] ?? '').toString().contains('GRP'))) {
-        completed.insert(0, {
-          'orderId': 9991,
-          'orderNumber': '#HD-GRP-201',
-          'customerName': 'Grouped 2x Batch (Vikram Joshi + Meera Deshmukh)',
-          'customerPhone': '+919811223344',
-          'millName': 'Shree Ganesh Flour Mill & Grinding Hub',
-          'millAddress': '12 Market Yard, Ellisbridge, Ahmedabad',
-          'homePickupAddress': 'Multiple Customer Homes (Satellite, Ellisbridge)',
-          'deliveryAddress': '2-Stop Route: Satellite ➔ Ellisbridge',
-          'quantityKg': 20.0,
-          'grainTypeName': 'Stacked Batch: 2 Orders (Sharbati + Multigrain)',
-          'deliveryFee': 170.0,
-          'totalEarned': 200.0,
-          'tipAmount': 30.0,
-          'surgeBonus': 35.0,
-          'distanceKm': 2.8,
-          'isBatch': true,
-          'stopsCount': 2,
-          'status': 'DELIVERED',
-          'deliveredAt': DateTime.now().subtract(const Duration(minutes: 30)).toIso8601String(),
-          'deliveredTimeAgo': '30 mins ago',
-          'customerRating': 5.0,
-          'customerReview': 'Super smooth multi-stop batch delivery. All 2 bags verified and intact.',
-          'barcodeVerified': true,
-          'otpVerified': true,
-          'paymentMode': 'Online Paid (UPI)',
-          'paymentStatus': 'PAID',
-          'stops': [
-            {
-              'orderId': 2011,
-              'orderNumber': '#HD-2026-1005',
-              'customerName': 'Vikram Joshi (Stop 1)',
-              'quantityKg': 10.0,
-              'grainTypeName': 'Desi Chana Besan (10kg)',
-              'deliveryAddress': 'Flat 301, Sunrise Arcade, Ellisbridge',
-              'payout': 90.0,
-            },
-            {
-              'orderId': 2012,
-              'orderNumber': '#HD-2026-1006',
-              'customerName': 'Meera Deshmukh (Stop 2)',
-              'quantityKg': 10.0,
-              'grainTypeName': 'Sharbati Whole Wheat (10kg)',
-              'deliveryAddress': 'B-604, Titanium City Centre, Anandnagar',
-              'payout': 80.0,
-            },
-          ],
-        });
       }
 
       setState(() {
         _assignedTrips = assigned;
         _completedTrips = completed;
-        _nearbyAvailableTrips = nearby.where((n) => !assigned.any((a) => a.orderId == n.orderId)).toList();
-        _isLoading = false;
+        _nearbyAvailableTrips = nearby.where((n) => !assigned.any((a) => a.orderId == n.orderId) && !assigned.any((a) => a.stops.any((s) => s.orderId == n.orderId))).toList();
+        if (!silentRefresh) {
+          _isLoading = false;
+        }
       });
     } catch (_) {
-      setState(() => _isLoading = false);
+      if (!silentRefresh) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   Future<void> _acceptAndAssignTrip(DeliveryTrip trip) async {
+    final batchStopIds = trip.isBatch ? trip.stops.map((s) => s.orderId).toSet() : <int>{};
+    final batchStopNums = trip.isBatch ? trip.stops.map((s) => s.orderNumber).toSet() : <String>{};
+
     setState(() {
-      _nearbyAvailableTrips.removeWhere((t) => t.orderId == trip.orderId);
-      if (!_assignedTrips.any((t) => t.orderId == trip.orderId)) {
+      // Remove the grouped batch or single trip from available
+      _nearbyAvailableTrips.removeWhere((t) {
+        if (t.orderId == trip.orderId) return true;
+        // Also remove any individual orders that are stops in this grouped batch
+        if (trip.isBatch && batchStopIds.contains(t.orderId)) return true;
+        if (trip.isBatch && batchStopNums.contains(t.orderNumber)) return true;
+        return false;
+      });
+
+      if (!_assignedTrips.any((t) => t.orderId == trip.orderId || t.orderNumber == trip.orderNumber)) {
         _assignedTrips.insert(0, trip);
       }
     });
 
+    final batchLabel = trip.isBatch ? 'Grouped Batch' : 'Order';
+    final activeMsg = trip.isBatch
+        ? 'All ${trip.stops.length} stops are now active'
+        : 'Now active';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('⚡ ${trip.isBatch ? "Grouped Batch" : "Order"} ${trip.orderNumber} accepted! Both orders now active in Trip Sheet.'),
+        content: Text('⚡ $batchLabel ${trip.orderNumber} accepted! $activeMsg in Trip Sheet.'),
         backgroundColor: const Color(0xFF1E8449),
         duration: const Duration(seconds: 2),
       ),
@@ -308,37 +193,62 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
   void _handleTripCompletionRealtime(DeliveryTrip trip) {
     setState(() {
       _assignedTrips.removeWhere((t) => t.orderId == trip.orderId || t.orderNumber == trip.orderNumber);
+      // Also remove any individual stops from assigned trips that were part of this batch
+      if (trip.isBatch && trip.stops.isNotEmpty) {
+        final stopIds = trip.stops.map((s) => s.orderId).toSet();
+        final stopNums = trip.stops.map((s) => s.orderNumber).toSet();
+        _assignedTrips.removeWhere((t) => stopIds.contains(t.orderId) || stopNums.contains(t.orderNumber));
+      }
 
       if (trip.isBatch && trip.stops.length > 1) {
-        for (var stop in trip.stops) {
-          if (!_completedTrips.any((c) => c['orderId'] == stop.orderId || c['orderNumber'] == stop.orderNumber)) {
-            _completedTrips.insert(0, {
-              'orderId': stop.orderId,
-              'orderNumber': stop.orderNumber,
-              'customerName': stop.customerName,
-              'customerPhone': stop.customerPhone,
-              'millName': trip.millName,
-              'millAddress': trip.millAddress,
-              'homePickupAddress': stop.homePickupAddress,
-              'deliveryAddress': stop.deliveryAddress,
-              'quantityKg': stop.quantityKg,
-              'grainTypeName': stop.grainTypeName,
-              'deliveryFee': stop.orderPayout,
-              'totalEarned': stop.orderPayout + 20.0,
-              'tipAmount': 10.0,
-              'surgeBonus': 15.0,
-              'distanceKm': stop.distanceKm,
-              'status': 'DELIVERED',
-              'deliveredAt': DateTime.now().toIso8601String(),
-              'deliveredTimeAgo': 'Just now',
-              'customerRating': 5.0,
-              'customerReview': 'Excellent doorstep delivery! Verified barcode tag and fresh grinding.',
-              'barcodeVerified': true,
-              'otpVerified': true,
-              'paymentMode': 'Online (UPI)',
-              'paymentStatus': 'PAID'
-            });
-          }
+        // Add ONE grouped batch entry (NOT split into individual stops)
+        // This preserves the grouped batch view in Past Deliveries with stops breakdown
+        if (!_completedTrips.any((c) => c['orderId'] == trip.orderId || c['orderNumber'] == trip.orderNumber)) {
+          final stopNames = trip.stops.map((s) {
+            final name = s.customerName;
+            // Remove "(Stop N)" suffix if present for cleaner display
+            return name.replaceAll(RegExp(r'\s*\(Stop\s*\d+\)\s*'), '');
+          }).toList();
+
+          _completedTrips.insert(0, {
+            'orderId': trip.orderId,
+            'orderNumber': trip.orderNumber,
+            'customerName': 'Grouped ${trip.stops.length}x Batch (${stopNames.join(' + ')})',
+            'customerPhone': trip.customerPhone,
+            'millName': trip.millName,
+            'millAddress': trip.millAddress,
+            'homePickupAddress': trip.homePickupAddress,
+            'deliveryAddress': trip.deliveryAddress,
+            'quantityKg': trip.stops.fold<double>(0.0, (sum, s) => sum + s.quantityKg),
+            'grainTypeName': trip.grainTypeName,
+            'deliveryFee': trip.deliveryFee,
+            'totalEarned': trip.deliveryFee + trip.surgeBonus + trip.heavyBagBonus,
+            'tipAmount': 30.0,
+            'surgeBonus': trip.surgeBonus,
+            'heavyBagBonus': trip.heavyBagBonus,
+            'distanceKm': trip.distanceKm,
+            'isBatch': true,
+            'stopsCount': trip.stops.length,
+            'status': 'DELIVERED',
+            'deliveredAt': DateTime.now().toIso8601String(),
+            'deliveredTimeAgo': 'Just now',
+            'customerRating': 5.0,
+            'customerReview': 'Super smooth multi-stop batch delivery. All ${trip.stops.length} bags verified and intact.',
+            'barcodeVerified': true,
+            'otpVerified': true,
+            'paymentMode': 'Online Paid (UPI)',
+            'paymentStatus': 'PAID',
+            'stops': trip.stops.map((s) => ({
+              'orderId': s.orderId,
+              'orderNumber': s.orderNumber,
+              'customerName': s.customerName,
+              'quantityKg': s.quantityKg,
+              'grainTypeName': s.grainTypeName,
+              'deliveryAddress': s.deliveryAddress,
+              'payout': s.orderPayout,
+              'orderPayout': s.orderPayout,
+            })).toList(),
+          });
         }
       } else {
         if (!_completedTrips.any((c) => c['orderId'] == trip.orderId || c['orderNumber'] == trip.orderNumber)) {
@@ -371,6 +281,10 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
         }
       }
     });
+
+    if (mounted) {
+      _tabController.animateTo(1);
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

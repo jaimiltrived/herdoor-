@@ -185,29 +185,34 @@ class _DeliveryEarningsScreenState extends State<DeliveryEarningsScreen> {
               Text('Select Payout Method:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 8),
 
-              RadioListTile<String>(
-                value: 'Google Pay UPI',
-                groupValue: selectedMethod,
-                dense: true,
-                title: Text('Google Pay (GPay) UPI', style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600)),
-                subtitle: Text('vikram.rider@oksbi', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary)),
-                onChanged: (val) => setModalState(() => selectedMethod = val!),
-              ),
-              RadioListTile<String>(
-                value: 'PhonePe UPI',
-                groupValue: selectedMethod,
-                dense: true,
-                title: Text('PhonePe UPI', style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600)),
-                subtitle: Text('vikram.rider@ybl', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary)),
-                onChanged: (val) => setModalState(() => selectedMethod = val!),
-              ),
-              RadioListTile<String>(
-                value: 'HDFC Direct Bank Transfer',
-                groupValue: selectedMethod,
-                dense: true,
-                title: Text('HDFC Bank A/c (XX8421)', style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600)),
-                subtitle: Text('IMPS Instant Settlement', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary)),
-                onChanged: (val) => setModalState(() => selectedMethod = val!),
+              Material(
+                color: Colors.transparent,
+                child: RadioGroup<String>(
+                  groupValue: selectedMethod,
+                  onChanged: (val) => setModalState(() => selectedMethod = val ?? selectedMethod),
+                  child: Column(
+                    children: [
+                      RadioListTile<String>(
+                        value: 'Google Pay UPI',
+                        dense: true,
+                        title: Text('Google Pay (GPay) UPI', style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600)),
+                        subtitle: Text('vikram.rider@oksbi', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary)),
+                      ),
+                      RadioListTile<String>(
+                        value: 'PhonePe UPI',
+                        dense: true,
+                        title: Text('PhonePe UPI', style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600)),
+                        subtitle: Text('vikram.rider@ybl', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary)),
+                      ),
+                      RadioListTile<String>(
+                        value: 'HDFC Direct Bank Transfer',
+                        dense: true,
+                        title: Text('HDFC Bank A/c (XX8421)', style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600)),
+                        subtitle: Text('IMPS Instant Settlement', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary)),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
 

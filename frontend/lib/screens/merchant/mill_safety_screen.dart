@@ -260,63 +260,66 @@ class _MillSafetyScreenState extends State<MillSafetyScreen> {
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(color: AppTheme.borderLight),
                         ),
-                        child: Column(
-                          children: [
-                            _buildChecklistTile(
-                              title: 'Mill Stone & Grinder Sanitization',
-                              subtitle: 'Chakki stones cleaned, vacuumed, and sanitized daily',
-                              icon: Icons.cleaning_services_rounded,
-                              value: _chakkiSanitized,
-                              onChanged: (val) {
-                                setState(() => _chakkiSanitized = val);
-                                _recalculateScore();
-                              },
-                            ),
-                            const Divider(height: 1),
-                            _buildChecklistTile(
-                              title: 'Grain Moisture Calibration (< 12%)',
-                              subtitle: 'Raw grain moisture tested to prevent mold formation',
-                              icon: Icons.water_drop_rounded,
-                              value: _moistureCheckPassed,
-                              onChanged: (val) {
-                                setState(() => _moistureCheckPassed = val);
-                                _recalculateScore();
-                              },
-                            ),
-                            const Divider(height: 1),
-                            _buildChecklistTile(
-                              title: 'Dust Extractor & Air Filter Integrity',
-                              subtitle: 'Flour dust extraction system operating at full suction',
-                              icon: Icons.air_rounded,
-                              value: _dustExtractorActive,
-                              onChanged: (val) {
-                                setState(() => _dustExtractorActive = val);
-                                _recalculateScore();
-                              },
-                            ),
-                            const Divider(height: 1),
-                            _buildChecklistTile(
-                              title: 'Eco-Friendly Tamper-Proof Packaging',
-                              subtitle: 'Double-sealed food-grade bags verified before customer dispatch',
-                              icon: Icons.inventory_2_rounded,
-                              value: _ecoPackagingVerified,
-                              onChanged: (val) {
-                                setState(() => _ecoPackagingVerified = val);
-                                _recalculateScore();
-                              },
-                            ),
-                            const Divider(height: 1),
-                            _buildChecklistTile(
-                              title: 'Pest-Free Storage Verification',
-                              subtitle: 'Grain storage bins sealed and inspected by certified audit',
-                              icon: Icons.bug_report_rounded,
-                              value: _pestControlCertified,
-                              onChanged: (val) {
-                                setState(() => _pestControlCertified = val);
-                                _recalculateScore();
-                              },
-                            ),
-                          ],
+                        child: Material(
+                          color: Colors.transparent,
+                          child: Column(
+                            children: [
+                              _buildChecklistTile(
+                                title: 'Mill Stone & Grinder Sanitization',
+                                subtitle: 'Chakki stones cleaned, vacuumed, and sanitized daily',
+                                icon: Icons.cleaning_services_rounded,
+                                value: _chakkiSanitized,
+                                onChanged: (val) {
+                                  setState(() => _chakkiSanitized = val);
+                                  _recalculateScore();
+                                },
+                              ),
+                              const Divider(height: 1),
+                              _buildChecklistTile(
+                                title: 'Grain Moisture Calibration (< 12%)',
+                                subtitle: 'Raw grain moisture tested to prevent mold formation',
+                                icon: Icons.water_drop_rounded,
+                                value: _moistureCheckPassed,
+                                onChanged: (val) {
+                                  setState(() => _moistureCheckPassed = val);
+                                  _recalculateScore();
+                                },
+                              ),
+                              const Divider(height: 1),
+                              _buildChecklistTile(
+                                title: 'Dust Extractor & Air Filter Integrity',
+                                subtitle: 'Flour dust extraction system operating at full suction',
+                                icon: Icons.air_rounded,
+                                value: _dustExtractorActive,
+                                onChanged: (val) {
+                                  setState(() => _dustExtractorActive = val);
+                                  _recalculateScore();
+                                },
+                              ),
+                              const Divider(height: 1),
+                              _buildChecklistTile(
+                                title: 'Eco-Friendly Tamper-Proof Packaging',
+                                subtitle: 'Double-sealed food-grade bags verified before customer dispatch',
+                                icon: Icons.inventory_2_rounded,
+                                value: _ecoPackagingVerified,
+                                onChanged: (val) {
+                                  setState(() => _ecoPackagingVerified = val);
+                                  _recalculateScore();
+                                },
+                              ),
+                              const Divider(height: 1),
+                              _buildChecklistTile(
+                                title: 'Pest-Free Storage Verification',
+                                subtitle: 'Grain storage bins sealed and inspected by certified audit',
+                                icon: Icons.bug_report_rounded,
+                                value: _pestControlCertified,
+                                onChanged: (val) {
+                                  setState(() => _pestControlCertified = val);
+                                  _recalculateScore();
+                                },
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 24),

@@ -397,95 +397,197 @@ export default function DashboardPage({
           </div>
         </div>
 
-        <div style={{ background: '#FAF6F0', borderRadius: 16, border: '1px solid #ECE4D9', padding: '18px 20px', position: 'relative' }}>
-          {/* Floating Interactive Tooltip */}
-          {hoveredPoint && (
-            <div
-              className="chart-floating-tooltip"
-              style={{
-                left: `${(hoveredPoint.x / 840) * 100}%`,
-                top: `${hoveredPoint.y}px`,
-              }}
-            >
-              <div style={{ color: '#FF9A93', fontSize: '0.7rem' }}>{hoveredPoint.label} Telemetry</div>
-              <div>{hoveredPoint.orders} Orders • {hoveredPoint.volume}</div>
-              <div style={{ color: '#2ECC71', fontSize: '0.7rem', marginTop: 2 }}>{hoveredPoint.fulfillment} Fulfillment SLA</div>
-            </div>
-          )}
+        {(() => {
+          const maxOrderVal = Math.max(...timelineData.map(d => d.orders), 10);
+          const maxScale = Math.ceil((maxOrderVal * 1.15) / 5) * 5;
 
-          <svg viewBox="0 0 840 160" style={{ width: '100%', height: '160px', overflow: 'visible' }}>
-            <defs>
-              <linearGradient id="dashVelocityGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#8C4A3E" stopOpacity="0.30" />
-                <stop offset="100%" stopColor="#8C4A3E" stopOpacity="0.0" />
-              </linearGradient>
-            </defs>
-            <line x1="45" y1="30" x2="820" y2="30" stroke="#ECE4D9" strokeDasharray="3,3" />
-            <line x1="45" y1="70" x2="820" y2="70" stroke="#ECE4D9" strokeDasharray="3,3" />
-            <line x1="45" y1="110" x2="820" y2="110" stroke="#ECE4D9" strokeDasharray="3,3" />
-            <line x1="45" y1="150" x2="820" y2="150" stroke="#D5C9B8" strokeWidth="1.5" />
-            <line x1="45" y1="45" x2="820" y2="45" stroke="#1E8449" strokeWidth="2" strokeDasharray="6,6" />
+          const svgWidth = 840;
+          const svgHeight = 220;
+          const leftPad = 60;
+          const rightPad = 25;
+          const topPad = 25;
+          const bottomPad = 40;
+          const chartWidth = svgWidth - leftPad - rightPad;
+          const chartHeight = svgHeight - topPad - bottomPad;
 
-            <path
-              d={areaD}
-              fill="url(#dashVelocityGrad)"
-              style={{ transition: 'all 0.4s ease' }}
-            />
-            <path
-              d={pathD}
-              fill="none"
-              stroke="#8C4A3E"
-              strokeWidth="3.5"
-              strokeLinecap="round"
-              style={{ transition: 'all 0.4s ease' }}
-            />
+          const yTicks = [
+            { val: maxScale, y: topPad },
+            { val: Math.round(maxScale * 0.66), y: topPad + chartHeight * 0.34 },
+            { val: Math.round(maxScale * 0.33), y: topPad + chartHeight * 0.67 },
+            { val: 0, y: topPad + chartHeight },
+          ];
 
-            {/* Calculated Data Points with Hover Detection */}
-            {calculatedPoints.map((pt, i) => (
-              <g
-                key={i}
-                onMouseEnter={() => setHoveredPoint(pt)}
-                onMouseLeave={() => setHoveredPoint(null)}
-                style={{ cursor: 'pointer' }}
-              >
-                <circle
-                  cx={pt.x}
-                  cy={pt.y}
-                  r={hoveredPoint?.label === pt.label ? 7 : (i === calculatedPoints.length - 1 ? 6 : 4.5)}
-                  fill={i === calculatedPoints.length - 1 ? '#1E8449' : '#8C4A3E'}
-                  stroke="white"
-                  strokeWidth="2.5"
-                  className="graph-interactive-node"
+          const groupWidth = chartWidth / timelineData.length;
+          const barWidth = Math.min(26, groupWidth * 0.32);
+
+          const barData = timelineData.map((item, idx) => {
+            const groupCenterX = leftPad + idx * groupWidth + groupWidth / 2;
+            const barHeight = Math.max(4, (item.orders / maxScale) * chartHeight);
+            const barX = groupCenterX - barWidth / 2;
+            const barY = topPad + chartHeight - barHeight;
+            const isPeak = idx === timelineData.length - 1;
+
+            return {
+              ...item,
+              idx,
+              groupCenterX,
+              barX,
+              barY,
+              barHeight,
+              isPeak,
+            };
+          });
+
+          return (
+            <div style={{ background: '#FAF6F0', borderRadius: 16, border: '1px solid #ECE4D9', padding: '18px 20px', position: 'relative' }}>
+              {hoveredPoint && (
+                <div
+                  className="chart-floating-tooltip"
+                  style={{
+                    left: `${(hoveredPoint.groupCenterX / svgWidth) * 100}%`,
+                    top: `${hoveredPoint.barY + 40}px`,
+                    backgroundColor: 'rgba(38, 33, 30, 0.96)',
+                    borderRadius: '10px',
+                    padding: '10px 14px',
+                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    position: 'absolute',
+                    zIndex: 10,
+                  }}
+                >
+                  <div style={{ color: '#FF9A93', fontSize: '0.78rem', fontWeight: 800, marginBottom: 4 }}>
+                    {hoveredPoint.label} Telemetry
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.84rem', color: '#FFFFFF', fontWeight: 800, marginBottom: 3 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#8C4A3E', display: 'inline-block' }}></span>
+                    <span>Volume: {hoveredPoint.orders} Orders ({hoveredPoint.volume})</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.76rem', color: '#2ECC71', fontWeight: 700 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#1E8449', display: 'inline-block' }}></span>
+                    <span>SLA: {hoveredPoint.fulfillment} Rate</span>
+                  </div>
+                </div>
+              )}
+
+              <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: '100%', height: '220px', overflow: 'visible' }}>
+                <defs>
+                  <linearGradient id="dashBarGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#8C4A3E" />
+                    <stop offset="100%" stopColor="#B86B5D" />
+                  </linearGradient>
+                  <linearGradient id="dashPeakGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#1E8449" />
+                    <stop offset="100%" stopColor="#2ECC71" />
+                  </linearGradient>
+                </defs>
+
+                {/* Y-Axis Horizontal Gridlines & Tick Labels */}
+                {yTicks.map((tick, i) => (
+                  <g key={`ytick_${i}`}>
+                    <line
+                      x1={leftPad}
+                      y1={tick.y}
+                      x2={leftPad + chartWidth}
+                      y2={tick.y}
+                      stroke={tick.val === 0 ? '#DAC8B3' : '#ECE4D9'}
+                      strokeWidth={tick.val === 0 ? 1.5 : 1}
+                      strokeDasharray={tick.val === 0 ? undefined : '4 4'}
+                    />
+                    <text
+                      x={leftPad - 10}
+                      y={tick.y + 4}
+                      textAnchor="end"
+                      fontSize="10.5"
+                      fontWeight="600"
+                      fill="#8A817C"
+                    >
+                      {tick.val}
+                    </text>
+                  </g>
+                ))}
+
+                {/* Bars */}
+                {barData.map((item) => {
+                  const isHovered = hoveredPoint?.label === item.label;
+
+                  return (
+                    <g
+                      key={`bar_${item.idx}`}
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={() => setHoveredPoint(item)}
+                      onMouseLeave={() => setHoveredPoint(null)}
+                    >
+                      <rect
+                        x={item.groupCenterX - groupWidth / 2 + 2}
+                        y={topPad}
+                        width={groupWidth - 4}
+                        height={chartHeight}
+                        fill={isHovered ? 'rgba(140, 74, 62, 0.07)' : 'transparent'}
+                        rx="8"
+                      />
+
+                      <rect
+                        x={item.barX}
+                        y={item.barY}
+                        width={barWidth}
+                        height={item.barHeight}
+                        fill={item.isPeak ? 'url(#dashPeakGrad)' : 'url(#dashBarGrad)'}
+                        rx="5"
+                        style={{
+                          transition: 'all 0.3s ease',
+                          filter: isHovered ? 'brightness(1.1) drop-shadow(0 4px 6px rgba(140, 74, 62, 0.3))' : 'none',
+                        }}
+                      />
+
+                      <text
+                        x={item.groupCenterX}
+                        y={item.barY - 6}
+                        textAnchor="middle"
+                        fontSize="9.5"
+                        fontWeight={isHovered || item.isPeak ? '800' : '600'}
+                        fill={item.isPeak ? '#1E8449' : (isHovered ? '#8C4A3E' : '#756D69')}
+                      >
+                        {item.orders}
+                      </text>
+
+                      {item.isPeak && (
+                        <circle
+                          cx={item.groupCenterX}
+                          cy={item.barY}
+                          r="4"
+                          fill="#1E8449"
+                          stroke="#FFF"
+                          strokeWidth="1.5"
+                          className="live-pulse-radar"
+                        />
+                      )}
+
+                      <text
+                        x={item.groupCenterX}
+                        y={topPad + chartHeight + 20}
+                        textAnchor="middle"
+                        fontSize={item.isPeak ? '11.5' : '11'}
+                        fontWeight={item.isPeak ? '800' : (isHovered ? '700' : '600')}
+                        fill={item.isPeak ? '#8C4A3E' : (isHovered ? '#2A2421' : '#756D69')}
+                      >
+                        {item.label}
+                      </text>
+                    </g>
+                  );
+                })}
+
+                <line
+                  x1={leftPad}
+                  y1={topPad + chartHeight}
+                  x2={leftPad + chartWidth}
+                  y2={topPad + chartHeight}
+                  stroke="#DAC8B3"
+                  strokeWidth="1.5"
                 />
-              </g>
-            ))}
-
-            {/* Pulsating Real-Time Radar Beacon on Latest Node */}
-            <circle
-              cx={latestPt.x}
-              cy={latestPt.y}
-              r="6"
-              fill="none"
-              stroke="#1E8449"
-              strokeWidth="2"
-              className="live-pulse-radar"
-            />
-          </svg>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#756D69', marginTop: 8, fontWeight: 600, paddingLeft: 45, paddingRight: 8 }}>
-            {calculatedPoints.map((pt, idx) => (
-              <span
-                key={idx}
-                style={{
-                  color: idx === calculatedPoints.length - 1 ? '#8C4A3E' : '#756D69',
-                  fontWeight: idx === calculatedPoints.length - 1 ? 800 : 600,
-                }}
-              >
-                {pt.label}
-              </span>
-            ))}
-          </div>
-        </div>
+              </svg>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Active Processing Queue & Orders Table */}

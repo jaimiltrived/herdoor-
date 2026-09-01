@@ -120,6 +120,10 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
   }
 
   Future<void> _handleAcceptOrder(MerchantOrder order) async {
+    final int resolvedId = order.numericId ??
+        int.tryParse(order.orderId.replaceAll(RegExp(r'[^0-9]'), '')) ??
+        501;
+
     setState(() {
       order.statusTag = 'IN PROGRESS';
       order.statusColor = const Color(0xFFCBA034);
@@ -127,8 +131,7 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
       _metrics.activeOrders += 1;
     });
 
-    final orderId = order.numericId ?? 501;
-    final success = await MerchantApiService.instance.acceptOrder(orderId, estimatedMinutes: 30);
+    final success = await MerchantApiService.instance.acceptOrder(resolvedId, estimatedMinutes: 30);
     if (mounted) {
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -137,7 +140,7 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
             content: Text('✅ Order ${order.orderId} Accepted! Customer notified.'),
           ),
         );
-        _loadDashboardData();
+        _loadDashboardData(showLoading: false);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -655,10 +658,12 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
   }
 
   Widget _buildDashboardCardAction(BuildContext context, MerchantOrder order) {
-    final status = order.statusTag;
-    final orderId = order.numericId ?? 501;
+    final status = order.statusTag.toUpperCase();
+    final int orderId = order.numericId ??
+        int.tryParse(order.orderId.replaceAll(RegExp(r'[^0-9]'), '')) ??
+        501;
 
-    if (status == 'NEW' || status == 'New Request') {
+    if (status == 'NEW' || status == 'NEW REQUEST' || status == 'PLACED' || status == 'PENDING') {
       return SizedBox(
         width: double.infinity,
         height: 44,
@@ -671,19 +676,22 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
           child: Text('Accept Order', style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
         ),
       );
-    } else if (status == 'IN PROGRESS') {
+    } else if (status == 'IN PROGRESS' || status == 'ACCEPTED' || status == 'CONFIRMED' || status == 'PROCESSING' || status == 'MILLING') {
       return SizedBox(
         width: double.infinity,
         height: 44,
         child: ElevatedButton.icon(
           onPressed: () async {
             final messenger = ScaffoldMessenger.of(context);
+            setState(() {
+              order.statusTag = 'PACKING';
+            });
             await MerchantApiService.instance.transitionOrderStatus(orderId, 'packing');
             if (!mounted) return;
             messenger.showSnackBar(
               SnackBar(backgroundColor: const Color(0xFF2ECC71), content: Text('⚙️ Order ${order.orderId} moved to Packing!')),
             );
-            _loadDashboardData();
+            _loadDashboardData(showLoading: false);
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF6E5616),
@@ -700,12 +708,15 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
         child: ElevatedButton.icon(
           onPressed: () async {
             final messenger = ScaffoldMessenger.of(context);
+            setState(() {
+              order.statusTag = 'READY FOR PICKUP';
+            });
             await MerchantApiService.instance.transitionOrderStatus(orderId, 'ready');
             if (!mounted) return;
             messenger.showSnackBar(
               SnackBar(backgroundColor: const Color(0xFF2ECC71), content: Text('✅ Order ${order.orderId} marked Ready!')),
             );
-            _loadDashboardData();
+            _loadDashboardData(showLoading: false);
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF2ECC71),

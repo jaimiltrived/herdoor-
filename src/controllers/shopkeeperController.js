@@ -20,7 +20,7 @@ async function getLiveOrders(millId) {
     }
     sql += ' ORDER BY id DESC';
     const dbOrders = await query(sql, params);
-    if (dbOrders && Array.isArray(dbOrders) && dbOrders.length > 0) {
+    if (dbOrders && Array.isArray(dbOrders)) {
       return dbOrders.map(row => ({
         id: row.id,
         orderNumber: row.order_number || `#HD-${row.id}`,
@@ -40,6 +40,8 @@ async function getLiveOrders(millId) {
         paymentMethod: row.payment_method,
         paymentStatus: row.payment_status,
         status: row.status,
+        groupId: row.group_id,
+        groupCode: row.group_code,
         estimatedMinutes: row.estimated_minutes,
         estimatedCompletionTime: row.estimated_completion_time,
         totalAmount: parseFloat(row.total_amount) || 0.0,
@@ -47,14 +49,10 @@ async function getLiveOrders(millId) {
       }));
     }
   } catch (err) {
-    console.warn('MySQL getLiveOrders Error, falling back to memory store:', err.message);
+    console.warn('MySQL getLiveOrders Error:', err.message);
   }
 
-  // Fallback to store
-  if (millId) {
-    return store.orders.filter(o => o.millId === millId);
-  }
-  return store.orders;
+  return [];
 }
 
 function enrichOrder(o) {
@@ -344,8 +342,9 @@ exports.getRevenue = async (req, res) => {
  * @route POST /api/v1/shopkeeper/orders/:orderId/accept
  */
 exports.acceptOrder = async (req, res) => {
+  const rawParam = (req.params.orderId || '').toString().trim();
+  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam) || 501;
   const order = findOrder(req.params.orderId);
-  const orderId = order ? order.id : (parseInt(req.params.orderId) || 501);
   const { estimatedCompletionMinutes = 30, estimatedCompletionTime } = req.body;
 
   try {
@@ -358,11 +357,13 @@ exports.acceptOrder = async (req, res) => {
     order.status = ORDER_STATUS.ACCEPTED;
     order.estimatedMinutes = estimatedCompletionMinutes;
     order.estimatedCompletionTime = estimatedCompletionTime || new Date(Date.now() + estimatedCompletionMinutes * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    order.timeline.push({
-      status: ORDER_STATUS.ACCEPTED,
-      timestamp: new Date().toISOString(),
-      note: `Accepted by mill owner (ETA: ${order.estimatedCompletionTime})`
-    });
+    if (order.timeline) {
+      order.timeline.push({
+        status: ORDER_STATUS.ACCEPTED,
+        timestamp: new Date().toISOString(),
+        note: `Accepted by mill owner (ETA: ${order.estimatedCompletionTime})`
+      });
+    }
   }
 
   const liveOrders = await getLiveOrders();
@@ -376,8 +377,9 @@ exports.acceptOrder = async (req, res) => {
  * @route POST /api/v1/shopkeeper/orders/:orderId/reject
  */
 exports.rejectOrder = async (req, res) => {
+  const rawParam = (req.params.orderId || '').toString().trim();
+  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam) || 501;
   const order = findOrder(req.params.orderId);
-  const orderId = order ? order.id : (parseInt(req.params.orderId) || 501);
   const { reason = 'Capacity exceeded' } = req.body;
 
   try {
@@ -388,11 +390,13 @@ exports.rejectOrder = async (req, res) => {
 
   if (order) {
     order.status = ORDER_STATUS.REJECTED;
-    order.timeline.push({
-      status: ORDER_STATUS.REJECTED,
-      timestamp: new Date().toISOString(),
-      note: `Rejected by mill owner: ${reason}`
-    });
+    if (order.timeline) {
+      order.timeline.push({
+        status: ORDER_STATUS.REJECTED,
+        timestamp: new Date().toISOString(),
+        note: `Rejected by mill owner: ${reason}`
+      });
+    }
   }
 
   const liveOrders = await getLiveOrders();
@@ -406,8 +410,9 @@ exports.rejectOrder = async (req, res) => {
  * @route PUT /api/v1/shopkeeper/orders/:orderId/completion-time
  */
 exports.setCompletionTime = async (req, res) => {
+  const rawParam = (req.params.orderId || '').toString().trim();
+  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam) || 501;
   const order = findOrder(req.params.orderId);
-  const orderId = order ? order.id : (parseInt(req.params.orderId) || 501);
   const { estimatedCompletionMinutes, estimatedCompletionTime } = req.body;
 
   try {
@@ -434,8 +439,9 @@ exports.setCompletionTime = async (req, res) => {
  * @route POST /api/v1/shopkeeper/orders/:orderId/start or /processing
  */
 exports.startProcessing = async (req, res) => {
+  const rawParam = (req.params.orderId || '').toString().trim();
+  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam) || 501;
   const order = findOrder(req.params.orderId);
-  const orderId = order ? order.id : (parseInt(req.params.orderId) || 501);
 
   try {
     await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.PROCESSING, orderId]);
@@ -445,11 +451,13 @@ exports.startProcessing = async (req, res) => {
 
   if (order) {
     order.status = ORDER_STATUS.PROCESSING;
-    order.timeline.push({
-      status: ORDER_STATUS.PROCESSING,
-      timestamp: new Date().toISOString(),
-      note: 'Chakki grinding started'
-    });
+    if (order.timeline) {
+      order.timeline.push({
+        status: ORDER_STATUS.PROCESSING,
+        timestamp: new Date().toISOString(),
+        note: 'Chakki grinding started'
+      });
+    }
   }
 
   const liveOrders = await getLiveOrders();
@@ -463,8 +471,9 @@ exports.startProcessing = async (req, res) => {
  * @route POST /api/v1/shopkeeper/orders/:orderId/packing
  */
 exports.startPacking = async (req, res) => {
+  const rawParam = (req.params.orderId || '').toString().trim();
+  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam) || 501;
   const order = findOrder(req.params.orderId);
-  const orderId = order ? order.id : (parseInt(req.params.orderId) || 501);
 
   try {
     await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.PACKING, orderId]);
@@ -474,11 +483,13 @@ exports.startPacking = async (req, res) => {
 
   if (order) {
     order.status = ORDER_STATUS.PACKING;
-    order.timeline.push({
-      status: ORDER_STATUS.PACKING,
-      timestamp: new Date().toISOString(),
-      note: 'Flour packing & bagging started'
-    });
+    if (order.timeline) {
+      order.timeline.push({
+        status: ORDER_STATUS.PACKING,
+        timestamp: new Date().toISOString(),
+        note: 'Flour packing & bagging started'
+      });
+    }
   }
 
   const liveOrders = await getLiveOrders();
@@ -492,8 +503,9 @@ exports.startPacking = async (req, res) => {
  * @route POST /api/v1/shopkeeper/orders/:orderId/ready
  */
 exports.markReady = async (req, res) => {
+  const rawParam = (req.params.orderId || '').toString().trim();
+  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam) || 501;
   const order = findOrder(req.params.orderId);
-  const orderId = order ? order.id : (parseInt(req.params.orderId) || 501);
 
   const nextStatus = (order && order.fulfillmentType === FULFILLMENT_TYPES.PICKUP)
     ? ORDER_STATUS.READY_FOR_PICKUP
@@ -507,11 +519,13 @@ exports.markReady = async (req, res) => {
 
   if (order) {
     order.status = nextStatus;
-    order.timeline.push({
-      status: nextStatus,
-      timestamp: new Date().toISOString(),
-      note: `Order packed and ready for ${order.fulfillmentType ? order.fulfillmentType.toLowerCase() : 'fulfillment'}`
-    });
+    if (order.timeline) {
+      order.timeline.push({
+        status: nextStatus,
+        timestamp: new Date().toISOString(),
+        note: `Order packed and ready for ${order.fulfillmentType ? order.fulfillmentType.toLowerCase() : 'fulfillment'}`
+      });
+    }
   }
 
   const liveOrders = await getLiveOrders();

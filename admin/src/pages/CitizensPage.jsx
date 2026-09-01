@@ -301,12 +301,103 @@ export default function CitizensPage() {
         {/* Right Cards: Acquisition Trend & Geographic Heatmap */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Acquisition Trend Card */}
-          <div className="card">
-            <h3 className="card-title" style={{ fontSize: '0.9rem', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '14px' }}>Acquisition Trend</h3>
-            <svg viewBox="0 0 300 120" style={{ width: '100%', height: '120px' }}>
-              <path d="M 10,90 Q 60,70 110,80 T 210,40 T 290,20" fill="none" stroke="#6E5616" strokeWidth="2.5" />
-              <circle cx="290" cy="20" r="4" fill="#6E5616" />
-            </svg>
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 className="card-title" style={{ fontSize: '0.85rem', letterSpacing: '0.5px', textTransform: 'uppercase', margin: 0 }}>
+                Acquisition Velocity
+              </h3>
+              <span style={{ fontSize: '0.72rem', color: '#1E8449', fontWeight: 800, background: '#E8F8F0', padding: '2px 7px', borderRadius: 6 }}>
+                +18.4%
+              </span>
+            </div>
+
+            {(() => {
+              const data = [
+                { label: 'W1', val: 12 },
+                { label: 'W2', val: 19 },
+                { label: 'W3', val: 28 },
+                { label: 'W4', val: 38 },
+                { label: 'W5', val: 52 },
+              ];
+              const maxVal = 60;
+              const svgWidth = 280;
+              const svgHeight = 130;
+              const leftPad = 32;
+              const rightPad = 10;
+              const topPad = 15;
+              const bottomPad = 25;
+              const chartWidth = svgWidth - leftPad - rightPad;
+              const chartHeight = svgHeight - topPad - bottomPad;
+              const groupWidth = chartWidth / data.length;
+              const barWidth = 18;
+
+              return (
+                <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: '100%', height: '130px', overflow: 'visible' }}>
+                  <defs>
+                    <linearGradient id="citAcqGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#8C4A3E" />
+                      <stop offset="100%" stopColor="#B86B5D" />
+                    </linearGradient>
+                    <linearGradient id="citPeakGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#1E8449" />
+                      <stop offset="100%" stopColor="#2ECC71" />
+                    </linearGradient>
+                  </defs>
+
+                  {/* Horizontal gridlines & Y-axis labels */}
+                  <line x1={leftPad} y1={topPad} x2={leftPad + chartWidth} y2={topPad} stroke="#ECE4D9" strokeDasharray="3 3" />
+                  <text x={leftPad - 6} y={topPad + 3} textAnchor="end" fontSize="9" fontWeight="700" fill="#A59D96">60</text>
+
+                  <line x1={leftPad} y1={topPad + chartHeight * 0.5} x2={leftPad + chartWidth} y2={topPad + chartHeight * 0.5} stroke="#ECE4D9" strokeDasharray="3 3" />
+                  <text x={leftPad - 6} y={topPad + chartHeight * 0.5 + 3} textAnchor="end" fontSize="9" fontWeight="700" fill="#A59D96">30</text>
+
+                  <line x1={leftPad} y1={topPad + chartHeight} x2={leftPad + chartWidth} y2={topPad + chartHeight} stroke="#DAC8B3" strokeWidth="1.5" />
+                  <text x={leftPad - 6} y={topPad + chartHeight + 3} textAnchor="end" fontSize="9" fontWeight="700" fill="#A59D96">0</text>
+
+                  {/* Bars */}
+                  {data.map((d, idx) => {
+                    const groupCenterX = leftPad + idx * groupWidth + groupWidth / 2;
+                    const barHeight = Math.max(4, (d.val / maxVal) * chartHeight);
+                    const barX = groupCenterX - barWidth / 2;
+                    const barY = topPad + chartHeight - barHeight;
+                    const isPeak = idx === data.length - 1;
+
+                    return (
+                      <g key={d.label}>
+                        <rect
+                          x={barX}
+                          y={barY}
+                          width={barWidth}
+                          height={barHeight}
+                          fill={isPeak ? 'url(#citPeakGrad)' : 'url(#citAcqGrad)'}
+                          rx="4"
+                        />
+                        <text
+                          x={groupCenterX}
+                          y={barY - 4}
+                          textAnchor="middle"
+                          fontSize="8.5"
+                          fontWeight={isPeak ? '800' : '600'}
+                          fill={isPeak ? '#1E8449' : '#756D69'}
+                        >
+                          {d.val}
+                        </text>
+                        <text
+                          x={groupCenterX}
+                          y={topPad + chartHeight + 15}
+                          textAnchor="middle"
+                          fontSize="9.5"
+                          fontWeight={isPeak ? '800' : '600'}
+                          fill={isPeak ? '#8C4A3E' : '#756D69'}
+                        >
+                          {d.label}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </svg>
+              );
+            })()}
           </div>
 
           {/* Geographic Heatmap Card */}

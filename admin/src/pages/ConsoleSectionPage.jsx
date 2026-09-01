@@ -37,7 +37,7 @@ export default function ConsoleSectionPage({
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const [timeframe, setTimeframe] = useState('week');
 
-  // Dynamic curve calculator for console section graphs
+  // Dynamic bar series calculator for console section graphs
   const getDynamicConsoleSeries = (svgWidth = 840) => {
     const itemCount = items.length || 8;
     let labels = [];
@@ -54,26 +54,65 @@ export default function ConsoleSectionPage({
       factors = [0.5, 0.9, 1.4, 2.0];
     }
 
-    const startX = svgWidth > 600 ? 55 : 45;
-    const endX = svgWidth - 25;
-    const stepX = (endX - startX) / (labels.length - 1);
+    const calculatedCounts = factors.map(f => Math.max(1, Math.round(itemCount * f)));
+    const maxVal = Math.max(...calculatedCounts, 10);
+    const maxScale = Math.ceil((maxVal * 1.15) / 5) * 5;
+
+    const leftPad = svgWidth > 600 ? 55 : 45;
+    const rightPad = 25;
+    const topPad = 25;
+    const bottomPad = 40;
+    const svgHeight = 220;
+    const chartWidth = svgWidth - leftPad - rightPad;
+    const chartHeight = svgHeight - topPad - bottomPad;
+
+    const groupWidth = chartWidth / labels.length;
+    const barWidth = Math.min(26, groupWidth * 0.36);
 
     const points = labels.map((lbl, idx) => {
-      const x = startX + idx * stepX;
+      const groupCenterX = leftPad + idx * groupWidth + groupWidth / 2;
+      const count = calculatedCounts[idx];
+      const barHeight = Math.max(4, (count / maxScale) * chartHeight);
+      const barX = groupCenterX - barWidth / 2;
+      const barY = topPad + chartHeight - barHeight;
       const progress = idx / (labels.length - 1);
-      const y = 135 - progress * 105;
-      const count = Math.max(1, Math.round(itemCount * factors[idx]));
-      return { x, y, label: lbl, count, pct: Math.min(100, Math.round(65 + progress * 34)) };
+      const isPeak = idx === labels.length - 1;
+
+      return {
+        idx,
+        label: lbl,
+        count,
+        pct: Math.min(100, Math.round(65 + progress * 34)),
+        groupCenterX,
+        barX,
+        barY,
+        barHeight,
+        isPeak,
+      };
     });
 
-    let pathD = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 0; i < points.length - 1; i++) {
-      const cpX = (points[i].x + points[i + 1].x) / 2;
-      pathD += ` C ${cpX} ${points[i].y}, ${cpX} ${points[i + 1].y}, ${points[i + 1].x} ${points[i + 1].y}`;
-    }
-    const areaD = `${pathD} L ${points[points.length - 1].x} 150 L ${points[0].x} 150 Z`;
+    const yTicks = [
+      { val: maxScale, y: topPad, text: `${maxScale}` },
+      { val: Math.round(maxScale * 0.66), y: topPad + chartHeight * 0.34, text: `${Math.round(maxScale * 0.66)}` },
+      { val: Math.round(maxScale * 0.33), y: topPad + chartHeight * 0.67, text: `${Math.round(maxScale * 0.33)}` },
+      { val: 0, y: topPad + chartHeight, text: '0' },
+    ];
 
-    return { points, pathD, areaD };
+    return {
+      points,
+      yTicks,
+      leftPad,
+      rightPad,
+      topPad,
+      bottomPad,
+      chartWidth,
+      chartHeight,
+      groupWidth,
+      barWidth,
+      maxScale,
+      svgWidth,
+      svgHeight,
+    };
   };
 
   const fullSeries = getDynamicConsoleSeries(840);
@@ -438,24 +477,39 @@ export default function ConsoleSectionPage({
               </div>
             </div>
 
-            {/* Full-width SVG Canvas */}
+            {/* Full-width SVG Bar Canvas */}
             <div style={{ background: '#FAF6F0', borderRadius: 16, border: '1px solid #ECE4D9', padding: '18px 20px', position: 'relative' }}>
               {/* Floating Tooltip */}
               {hoveredPoint && (
                 <div
                   className="chart-floating-tooltip"
                   style={{
-                    left: `${(hoveredPoint.x / 840) * 100}%`,
-                    top: `${hoveredPoint.y}px`,
+                    left: `${(hoveredPoint.groupCenterX / fullSeries.svgWidth) * 100}%`,
+                    top: `${hoveredPoint.barY + 30}px`,
+                    backgroundColor: 'rgba(38, 33, 30, 0.96)',
+                    borderRadius: '10px',
+                    padding: '10px 14px',
+                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    position: 'absolute',
+                    zIndex: 10,
                   }}
                 >
-                  <div style={{ color: '#FF9A93', fontSize: '0.7rem' }}>{hoveredPoint.label} Telemetry</div>
-                  <div>{hoveredPoint.count} Records Processed</div>
-                  <div style={{ color: '#2ECC71', fontSize: '0.7rem', marginTop: 2 }}>{hoveredPoint.pct}% Efficiency SLA</div>
+                  <div style={{ color: '#FF9A93', fontSize: '0.78rem', fontWeight: 800, marginBottom: 4 }}>
+                    {hoveredPoint.label} Telemetry
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.84rem', color: '#FFFFFF', fontWeight: 800, marginBottom: 3 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#8C4A3E', display: 'inline-block' }}></span>
+                    <span>Volume: {hoveredPoint.count} Records Processed</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.76rem', color: '#2ECC71', fontWeight: 700 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#1E8449', display: 'inline-block' }}></span>
+                    <span>SLA: {hoveredPoint.pct}% Resolution Index</span>
+                  </div>
                 </div>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                 <div style={{ display: 'flex', gap: 16, fontSize: '0.78rem', fontWeight: 700 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#8C4A3E' }}>
                     <span style={{ width: 10, height: 10, borderRadius: 3, background: '#8C4A3E' }}></span> {chartConfig.m1}
@@ -464,96 +518,138 @@ export default function ConsoleSectionPage({
                     <span style={{ width: 10, height: 2, background: '#CBA034' }}></span> {chartConfig.m2}
                   </span>
                 </div>
-                <span style={{ fontSize: '0.75rem', color: '#1E8449', fontWeight: 700, background: '#E8F8F0', padding: '2px 8px', borderRadius: 6 }}>
+                <span style={{ fontSize: '0.75rem', color: '#1E8449', fontWeight: 700, background: '#E8F8F0', padding: '3px 9px', borderRadius: 8 }}>
                   {chartConfig.growth}
                 </span>
               </div>
 
-              <svg viewBox="0 0 840 160" style={{ width: '100%', height: '170px', overflow: 'visible' }}>
+              <svg viewBox={`0 0 ${fullSeries.svgWidth} ${fullSeries.svgHeight}`} style={{ width: '100%', height: '220px', overflow: 'visible' }}>
                 <defs>
-                  <linearGradient id={`gradient_full_${title.replace(/\s+/g, '')}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="#8C4A3E" stopOpacity="0.25" />
-                    <stop offset="100%" stopColor="#8C4A3E" stopOpacity="0.0" />
+                  <linearGradient id={`grad_full_${title.replace(/\s+/g, '')}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#8C4A3E" />
+                    <stop offset="100%" stopColor="#B86B5D" />
+                  </linearGradient>
+                  <linearGradient id={`grad_peak_${title.replace(/\s+/g, '')}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#1E8449" />
+                    <stop offset="100%" stopColor="#2ECC71" />
                   </linearGradient>
                 </defs>
 
-                {/* Y-Axis Scale Labels */}
-                <text x="36" y="34" textAnchor="end" fontSize="10" fontWeight="700" fill="#756D69">100%</text>
-                <text x="36" y="74" textAnchor="end" fontSize="10" fontWeight="700" fill="#756D69">75%</text>
-                <text x="36" y="114" textAnchor="end" fontSize="10" fontWeight="700" fill="#756D69">50%</text>
-                <text x="36" y="152" textAnchor="end" fontSize="10" fontWeight="700" fill="#756D69">0%</text>
-
-                {/* Grid Lines */}
-                <line x1="45" y1="30" x2="840" y2="30" stroke="#ECE4D9" strokeDasharray="3,3" />
-                <line x1="45" y1="70" x2="840" y2="70" stroke="#ECE4D9" strokeDasharray="3,3" />
-                <line x1="45" y1="110" x2="840" y2="110" stroke="#ECE4D9" strokeDasharray="3,3" />
-
-                {/* X-Axis Baseline & Y-Axis Axis Line */}
-                <line x1="45" y1="20" x2="45" y2="150" stroke="#D5C9B8" strokeWidth="1.5" />
-                <line x1="45" y1="150" x2="840" y2="150" stroke="#D5C9B8" strokeWidth="1.5" />
-
-                {/* Target SLA Line */}
-                <line x1="45" y1="45" x2="840" y2="45" stroke="#CBA034" strokeWidth="2" strokeDasharray="6,6" />
-
-                {/* Area Fill */}
-                <path
-                  d={fullSeries.areaD}
-                  fill={`url(#gradient_full_${title.replace(/\s+/g, '')})`}
-                  style={{ transition: 'all 0.4s ease' }}
-                />
-
-                {/* Trend Curve */}
-                <path
-                  d={fullSeries.pathD}
-                  fill="none"
-                  stroke="#8C4A3E"
-                  strokeWidth="3.5"
-                  strokeLinecap="round"
-                  style={{ transition: 'all 0.4s ease' }}
-                />
-
-                {/* Data points */}
-                {fullSeries.points.map((pt, i) => (
-                  <circle
-                    key={i}
-                    cx={pt.x}
-                    cy={pt.y}
-                    r={hoveredPoint?.label === pt.label ? 7 : (i === fullSeries.points.length - 1 ? 6 : 4.5)}
-                    fill={i === fullSeries.points.length - 1 ? '#1E8449' : '#8C4A3E'}
-                    stroke="white"
-                    strokeWidth="2"
-                    className="graph-interactive-node"
-                    onMouseEnter={() => setHoveredPoint(pt)}
-                    onMouseLeave={() => setHoveredPoint(null)}
-                  />
+                {/* Y-Axis Grid Lines & Scale Labels */}
+                {fullSeries.yTicks.map((tick, i) => (
+                  <g key={`ytick_full_${i}`}>
+                    <line
+                      x1={fullSeries.leftPad}
+                      y1={tick.y}
+                      x2={fullSeries.leftPad + fullSeries.chartWidth}
+                      y2={tick.y}
+                      stroke={tick.val === 0 ? '#DAC8B3' : '#ECE4D9'}
+                      strokeWidth={tick.val === 0 ? 1.5 : 1}
+                      strokeDasharray={tick.val === 0 ? undefined : '4 4'}
+                    />
+                    <text
+                      x={fullSeries.leftPad - 10}
+                      y={tick.y + 4}
+                      textAnchor="end"
+                      fontSize="10"
+                      fontWeight="700"
+                      fill="#756D69"
+                    >
+                      {tick.text}
+                    </text>
+                  </g>
                 ))}
 
-                {/* Pulsing Radar Node on Live Head */}
-                <circle
-                  cx={fullSeries.points[fullSeries.points.length - 1].x}
-                  cy={fullSeries.points[fullSeries.points.length - 1].y}
-                  r="6"
-                  fill="none"
-                  stroke="#1E8449"
+                {/* Target SLA Guideline */}
+                <line
+                  x1={fullSeries.leftPad}
+                  y1={fullSeries.topPad + fullSeries.chartHeight * 0.2}
+                  x2={fullSeries.leftPad + fullSeries.chartWidth}
+                  y2={fullSeries.topPad + fullSeries.chartHeight * 0.2}
+                  stroke="#CBA034"
                   strokeWidth="2"
-                  className="live-pulse-radar"
+                  strokeDasharray="6 6"
+                />
+
+                {/* Bars */}
+                {fullSeries.points.map((pt) => {
+                  const isHovered = hoveredPoint?.label === pt.label;
+
+                  return (
+                    <g
+                      key={`bar_full_${pt.idx}`}
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={() => setHoveredPoint(pt)}
+                      onMouseLeave={() => setHoveredPoint(null)}
+                    >
+                      <rect
+                        x={pt.groupCenterX - fullSeries.groupWidth / 2 + 2}
+                        y={fullSeries.topPad}
+                        width={fullSeries.groupWidth - 4}
+                        height={fullSeries.chartHeight}
+                        fill={isHovered ? 'rgba(140, 74, 62, 0.07)' : 'transparent'}
+                        rx="8"
+                      />
+
+                      <rect
+                        x={pt.barX}
+                        y={pt.barY}
+                        width={fullSeries.barWidth}
+                        height={pt.barHeight}
+                        fill={pt.isPeak ? `url(#grad_peak_${title.replace(/\s+/g, '')})` : `url(#grad_full_${title.replace(/\s+/g, '')})`}
+                        rx="5"
+                        style={{
+                          transition: 'all 0.3s ease',
+                          filter: isHovered ? 'brightness(1.1) drop-shadow(0 4px 6px rgba(140, 74, 62, 0.3))' : 'none',
+                        }}
+                      />
+
+                      <text
+                        x={pt.groupCenterX}
+                        y={pt.barY - 6}
+                        textAnchor="middle"
+                        fontSize="9.5"
+                        fontWeight={isHovered || pt.isPeak ? '800' : '600'}
+                        fill={pt.isPeak ? '#1E8449' : (isHovered ? '#8C4A3E' : '#756D69')}
+                      >
+                        {pt.count}
+                      </text>
+
+                      {pt.isPeak && (
+                        <circle
+                          cx={pt.groupCenterX}
+                          cy={pt.barY}
+                          r="4"
+                          fill="#1E8449"
+                          stroke="#FFF"
+                          strokeWidth="1.5"
+                          className="live-pulse-radar"
+                        />
+                      )}
+
+                      <text
+                        x={pt.groupCenterX}
+                        y={fullSeries.topPad + fullSeries.chartHeight + 20}
+                        textAnchor="middle"
+                        fontSize={pt.isPeak ? '11.5' : '11'}
+                        fontWeight={pt.isPeak ? '800' : (isHovered ? '700' : '600')}
+                        fill={pt.isPeak ? '#8C4A3E' : (isHovered ? '#2A2421' : '#756D69')}
+                      >
+                        {pt.label}
+                      </text>
+                    </g>
+                  );
+                })}
+
+                <line
+                  x1={fullSeries.leftPad}
+                  y1={fullSeries.topPad + fullSeries.chartHeight}
+                  x2={fullSeries.leftPad + fullSeries.chartWidth}
+                  y2={fullSeries.topPad + fullSeries.chartHeight}
+                  stroke="#DAC8B3"
+                  strokeWidth="1.5"
                 />
               </svg>
-
-              {/* X-axis labels */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#756D69', marginTop: 8, fontWeight: 600, paddingLeft: 45, paddingRight: 8 }}>
-                {fullSeries.points.map((pt, idx) => (
-                  <span
-                    key={idx}
-                    style={{
-                      color: idx === fullSeries.points.length - 1 ? '#8C4A3E' : '#756D69',
-                      fontWeight: idx === fullSeries.points.length - 1 ? 800 : 600,
-                    }}
-                  >
-                    {pt.label}
-                  </span>
-                ))}
-              </div>
             </div>
           </div>
         </>
@@ -603,22 +699,38 @@ export default function ConsoleSectionPage({
                 </div>
               </div>
 
-              {/* SVG Graph Canvas */}
+              {/* SVG Bar Chart Canvas */}
               <div style={{ background: '#FAF6F0', borderRadius: 16, border: '1px solid #ECE4D9', padding: '18px 20px', position: 'relative' }}>
                 {hoveredPoint && (
                   <div
                     className="chart-floating-tooltip"
                     style={{
-                      left: `${(hoveredPoint.x / 540) * 100}%`,
-                      top: `${hoveredPoint.y}px`,
+                      left: `${(hoveredPoint.groupCenterX / sideSeries.svgWidth) * 100}%`,
+                      top: `${hoveredPoint.barY + 30}px`,
+                      backgroundColor: 'rgba(38, 33, 30, 0.96)',
+                      borderRadius: '10px',
+                      padding: '10px 14px',
+                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      position: 'absolute',
+                      zIndex: 10,
                     }}
                   >
-                    <div style={{ color: '#FF9A93', fontSize: '0.7rem' }}>{hoveredPoint.label} Telemetry</div>
-                    <div>{hoveredPoint.count} Records Processed</div>
+                    <div style={{ color: '#FF9A93', fontSize: '0.78rem', fontWeight: 800, marginBottom: 4 }}>
+                      {hoveredPoint.label} Telemetry
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.84rem', color: '#FFFFFF', fontWeight: 800, marginBottom: 3 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#8C4A3E', display: 'inline-block' }}></span>
+                      <span>Volume: {hoveredPoint.count} Records Processed</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.76rem', color: '#2ECC71', fontWeight: 700 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#1E8449', display: 'inline-block' }}></span>
+                      <span>SLA: {hoveredPoint.pct}% Resolution Index</span>
+                    </div>
                   </div>
                 )}
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                   <div style={{ display: 'flex', gap: 16, fontSize: '0.78rem', fontWeight: 700 }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#8C4A3E' }}>
                       <span style={{ width: 10, height: 10, borderRadius: 3, background: '#8C4A3E' }}></span> {chartConfig.m1}
@@ -627,96 +739,138 @@ export default function ConsoleSectionPage({
                       <span style={{ width: 10, height: 2, background: '#CBA034' }}></span> {chartConfig.m2}
                     </span>
                   </div>
-                  <span style={{ fontSize: '0.75rem', color: '#1E8449', fontWeight: 700, background: '#E8F8F0', padding: '2px 8px', borderRadius: 6 }}>
+                  <span style={{ fontSize: '0.75rem', color: '#1E8449', fontWeight: 700, background: '#E8F8F0', padding: '3px 9px', borderRadius: 8 }}>
                     {chartConfig.growth}
                   </span>
                 </div>
 
-                <svg viewBox="0 0 540 160" style={{ width: '100%', height: '160px', overflow: 'visible' }}>
+                <svg viewBox={`0 0 ${sideSeries.svgWidth} ${sideSeries.svgHeight}`} style={{ width: '100%', height: '220px', overflow: 'visible' }}>
                   <defs>
                     <linearGradient id={`gradient_${title.replace(/\s+/g, '')}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stopColor="#8C4A3E" stopOpacity="0.25" />
-                      <stop offset="100%" stopColor="#8C4A3E" stopOpacity="0.0" />
+                      <stop offset="0%" stopColor="#8C4A3E" />
+                      <stop offset="100%" stopColor="#B86B5D" />
+                    </linearGradient>
+                    <linearGradient id={`gradient_peak_${title.replace(/\s+/g, '')}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#1E8449" />
+                      <stop offset="100%" stopColor="#2ECC71" />
                     </linearGradient>
                   </defs>
 
-                  {/* Y-Axis Scale Labels */}
-                  <text x="32" y="34" textAnchor="end" fontSize="10" fontWeight="700" fill="#756D69">100%</text>
-                  <text x="32" y="74" textAnchor="end" fontSize="10" fontWeight="700" fill="#756D69">75%</text>
-                  <text x="32" y="114" textAnchor="end" fontSize="10" fontWeight="700" fill="#756D69">50%</text>
-                  <text x="32" y="152" textAnchor="end" fontSize="10" fontWeight="700" fill="#756D69">0%</text>
-
-                  {/* Grid Lines */}
-                  <line x1="40" y1="30" x2="540" y2="30" stroke="#ECE4D9" strokeDasharray="3,3" />
-                  <line x1="40" y1="70" x2="540" y2="70" stroke="#ECE4D9" strokeDasharray="3,3" />
-                  <line x1="40" y1="110" x2="540" y2="110" stroke="#ECE4D9" strokeDasharray="3,3" />
-
-                  {/* X-Axis Baseline & Y-Axis Axis Line */}
-                  <line x1="40" y1="20" x2="40" y2="150" stroke="#D5C9B8" strokeWidth="1.5" />
-                  <line x1="40" y1="150" x2="540" y2="150" stroke="#D5C9B8" strokeWidth="1.5" />
+                  {/* Y-Axis Grid Lines & Scale Labels */}
+                  {sideSeries.yTicks.map((tick, i) => (
+                    <g key={`ytick_side_${i}`}>
+                      <line
+                        x1={sideSeries.leftPad}
+                        y1={tick.y}
+                        x2={sideSeries.leftPad + sideSeries.chartWidth}
+                        y2={tick.y}
+                        stroke={tick.val === 0 ? '#DAC8B3' : '#ECE4D9'}
+                        strokeWidth={tick.val === 0 ? 1.5 : 1}
+                        strokeDasharray={tick.val === 0 ? undefined : '4 4'}
+                      />
+                      <text
+                        x={sideSeries.leftPad - 10}
+                        y={tick.y + 4}
+                        textAnchor="end"
+                        fontSize="10"
+                        fontWeight="700"
+                        fill="#756D69"
+                      >
+                        {tick.text}
+                      </text>
+                    </g>
+                  ))}
 
                   {/* Target SLA Line */}
-                  <line x1="40" y1="45" x2="540" y2="45" stroke="#CBA034" strokeWidth="2" strokeDasharray="6,6" />
-
-                  {/* Area Fill */}
-                  <path
-                    d={sideSeries.areaD}
-                    fill={`url(#gradient_${title.replace(/\s+/g, '')})`}
-                    style={{ transition: 'all 0.4s ease' }}
-                  />
-
-                  {/* Trend Curve */}
-                  <path
-                    d={sideSeries.pathD}
-                    fill="none"
-                    stroke="#8C4A3E"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                    style={{ transition: 'all 0.4s ease' }}
-                  />
-
-                  {/* Data points */}
-                  {sideSeries.points.map((pt, i) => (
-                    <circle
-                      key={i}
-                      cx={pt.x}
-                      cy={pt.y}
-                      r={hoveredPoint?.label === pt.label ? 7 : (i === sideSeries.points.length - 1 ? 6 : 4.5)}
-                      fill={i === sideSeries.points.length - 1 ? '#1E8449' : '#8C4A3E'}
-                      stroke="white"
-                      strokeWidth="2"
-                      className="graph-interactive-node"
-                      onMouseEnter={() => setHoveredPoint(pt)}
-                      onMouseLeave={() => setHoveredPoint(null)}
-                    />
-                  ))}
-
-                  {/* Radar beacon on live head */}
-                  <circle
-                    cx={sideSeries.points[sideSeries.points.length - 1].x}
-                    cy={sideSeries.points[sideSeries.points.length - 1].y}
-                    r="6"
-                    fill="none"
-                    stroke="#1E8449"
+                  <line
+                    x1={sideSeries.leftPad}
+                    y1={sideSeries.topPad + sideSeries.chartHeight * 0.2}
+                    x2={sideSeries.leftPad + sideSeries.chartWidth}
+                    y2={sideSeries.topPad + sideSeries.chartHeight * 0.2}
+                    stroke="#CBA034"
                     strokeWidth="2"
-                    className="live-pulse-radar"
+                    strokeDasharray="6 6"
+                  />
+
+                  {/* Bars */}
+                  {sideSeries.points.map((pt) => {
+                    const isHovered = hoveredPoint?.label === pt.label;
+
+                    return (
+                      <g
+                        key={`bar_side_${pt.idx}`}
+                        style={{ cursor: 'pointer' }}
+                        onMouseEnter={() => setHoveredPoint(pt)}
+                        onMouseLeave={() => setHoveredPoint(null)}
+                      >
+                        <rect
+                          x={pt.groupCenterX - sideSeries.groupWidth / 2 + 2}
+                          y={sideSeries.topPad}
+                          width={sideSeries.groupWidth - 4}
+                          height={sideSeries.chartHeight}
+                          fill={isHovered ? 'rgba(140, 74, 62, 0.07)' : 'transparent'}
+                          rx="8"
+                        />
+
+                        <rect
+                          x={pt.barX}
+                          y={pt.barY}
+                          width={sideSeries.barWidth}
+                          height={pt.barHeight}
+                          fill={pt.isPeak ? `url(#gradient_peak_${title.replace(/\s+/g, '')})` : `url(#gradient_${title.replace(/\s+/g, '')})`}
+                          rx="5"
+                          style={{
+                            transition: 'all 0.3s ease',
+                            filter: isHovered ? 'brightness(1.1) drop-shadow(0 4px 6px rgba(140, 74, 62, 0.3))' : 'none',
+                          }}
+                        />
+
+                        <text
+                          x={pt.groupCenterX}
+                          y={pt.barY - 6}
+                          textAnchor="middle"
+                          fontSize="9.5"
+                          fontWeight={isHovered || pt.isPeak ? '800' : '600'}
+                          fill={pt.isPeak ? '#1E8449' : (isHovered ? '#8C4A3E' : '#756D69')}
+                        >
+                          {pt.count}
+                        </text>
+
+                        {pt.isPeak && (
+                          <circle
+                            cx={pt.groupCenterX}
+                            cy={pt.barY}
+                            r="4"
+                            fill="#1E8449"
+                            stroke="#FFF"
+                            strokeWidth="1.5"
+                            className="live-pulse-radar"
+                          />
+                        )}
+
+                        <text
+                          x={pt.groupCenterX}
+                          y={sideSeries.topPad + sideSeries.chartHeight + 20}
+                          textAnchor="middle"
+                          fontSize={pt.isPeak ? '11.5' : '11'}
+                          fontWeight={pt.isPeak ? '800' : (isHovered ? '700' : '600')}
+                          fill={pt.isPeak ? '#8C4A3E' : (isHovered ? '#2A2421' : '#756D69')}
+                        >
+                          {pt.label}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  <line
+                    x1={sideSeries.leftPad}
+                    y1={sideSeries.topPad + sideSeries.chartHeight}
+                    x2={sideSeries.leftPad + sideSeries.chartWidth}
+                    y2={sideSeries.topPad + sideSeries.chartHeight}
+                    stroke="#DAC8B3"
+                    strokeWidth="1.5"
                   />
                 </svg>
-
-                {/* X-axis labels */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#756D69', marginTop: 8, fontWeight: 600, paddingLeft: 40, paddingRight: 4 }}>
-                  {sideSeries.points.map((pt, idx) => (
-                    <span
-                      key={idx}
-                      style={{
-                        color: idx === sideSeries.points.length - 1 ? '#8C4A3E' : '#756D69',
-                        fontWeight: idx === sideSeries.points.length - 1 ? 800 : 600,
-                      }}
-                    >
-                      {pt.label}
-                    </span>
-                  ))}
-                </div>
               </div>
             </div>
           </div>

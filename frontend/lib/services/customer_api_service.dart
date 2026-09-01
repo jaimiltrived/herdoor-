@@ -423,7 +423,7 @@ class CustomerApiService {
         body: jsonEncode({
           'storeName': storeName,
           'phone': phone,
-          if (email != null) 'email': email,
+          'email': ?email,
           'address': address,
           'city': city ?? 'Ahmedabad',
           'state': state ?? 'Gujarat',
@@ -435,9 +435,9 @@ class CustomerApiService {
           'workingHours': workingHours ?? '08:00 AM - 08:00 PM',
           'services': services ?? ['Flour Grinding', 'Packing', 'Home Delivery'],
           'specialty': specialty ?? 'Fresh Stone Ground Flour',
-          if (storeImage != null) 'storeImage': storeImage,
-          if (licenseDocument != null) 'licenseDocument': licenseDocument,
-          if (licenseNumber != null) 'licenseNumber': licenseNumber,
+          'storeImage': ?storeImage,
+          'licenseDocument': ?licenseDocument,
+          'licenseNumber': ?licenseNumber,
         }),
       );
 

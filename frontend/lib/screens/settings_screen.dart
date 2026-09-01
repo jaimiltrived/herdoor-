@@ -194,13 +194,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildSettingCard(List<Widget> children) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.borderLight),
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppTheme.borderLight),
+        ),
+        child: Column(children: children),
       ),
-      child: Column(children: children),
     );
   }
 
