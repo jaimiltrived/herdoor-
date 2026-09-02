@@ -89,21 +89,37 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
     }
 
     final firstTrip = selectedTrips.first;
+    final uniqueCustomerNames = combinedStops.map((s) => s.customerName).toSet().toList();
+    final customerSummary = uniqueCustomerNames.length == 1
+        ? '${uniqueCustomerNames.first} • ${combinedStops.length} Orders'
+        : uniqueCustomerNames.join(' + ');
+    final grainSummaries = selectedTrips.map((t) => t.grainTypeName.split('(').first.trim()).toSet().join(' + ');
+
+    final uniqueSeq = 8000 + (DateTime.now().millisecondsSinceEpoch % 1000);
+    final uniqueBatchCode = '#HD-POOL-${selectedTrips.length}X-$uniqueSeq';
 
     final combinedTrip = DeliveryTrip(
       orderId: firstTrip.orderId,
-      orderNumber: '#HD-POOL-${selectedTrips.length}X',
-      customerName: '${combinedStops.length} Customers (Driver Pooled)',
+      orderNumber: uniqueBatchCode,
+      customerName: 'Grouped ${selectedTrips.length}x Batch ($customerSummary)',
       customerPhone: firstTrip.customerPhone,
       millName: firstTrip.millName,
       millAddress: firstTrip.millAddress,
       millPhone: firstTrip.millPhone,
-      deliveryAddress: '${combinedStops.length}-Stop Pooled Route (${firstTrip.pickupZone})',
+      homePickupAddress: firstTrip.isLeg1GrainPickup
+          ? 'Multiple Customer Homes (${combinedStops.length} Pickups)'
+          : firstTrip.millAddress,
+      deliveryAddress: firstTrip.isLeg1GrainPickup
+          ? firstTrip.millAddress
+          : 'Multi-Stop Delivery (${combinedStops.length} Customer Homes)',
       quantityKg: totalKg,
-      grainTypeName: 'Combined Batch (${combinedStops.length} Bags • ${totalKg.toStringAsFixed(1)} kg)',
+      grainTypeName: 'Stacked Batch: ${selectedTrips.length} Orders ($grainSummaries)',
       deliveryFee: totalFee,
       distanceKm: maxDistance,
       status: 'READY',
+      legType: firstTrip.legType,
+      isHomeGrainPickup: firstTrip.isHomeGrainPickup,
+      tripBadge: firstTrip.isLeg1GrainPickup ? '🌾 Grouped Grain Pickup' : '🍞 Grouped Flour Delivery',
       pickupPin: firstTrip.pickupPin,
       deliveryOtp: combinedStops.first.deliveryOtp,
       barcodeNumber: firstTrip.barcodeNumber,
@@ -150,21 +166,42 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
 
   void _startRealtimeLiveSync() {
     _realtimeSyncTimer?.cancel();
-    _realtimeSyncTimer = Timer.periodic(const Duration(seconds: 20), (timer) async {
+    _realtimeSyncTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
       if (!mounted || !_isOnline) return;
       try {
-        final trips = await DeliveryApiService.instance.getAvailableTrips(
-          maxRadiusKm: _selectedRadiusKm,
-          vehicleType: _selectedVehicle,
-        );
-        final earnings = await DeliveryApiService.instance.getEarnings();
+        final results = await Future.wait([
+          DeliveryApiService.instance.getAvailableTrips(
+            maxRadiusKm: _selectedRadiusKm,
+            vehicleType: _selectedVehicle,
+            forceRefresh: true,
+          ),
+          DeliveryApiService.instance.getEarnings(),
+          DeliveryApiService.instance.getAssignedTrips(),
+        ]);
+        final trips = results[0] as List<DeliveryTrip>;
+        final earnings = results[1] as RiderEarnings;
+        final assigned = results[2] as List<DeliveryTrip>;
+
+        final assignedIds = assigned.map((a) => a.orderId).toSet();
+        final assignedNums = assigned.map((a) => a.orderNumber).toSet();
+        for (var a in assigned) {
+          assignedIds.addAll(a.stops.map((s) => s.orderId));
+          assignedNums.addAll(a.stops.map((s) => s.orderNumber));
+        }
+
+        final filteredTrips = trips.where((t) {
+          if (assignedIds.contains(t.orderId) || assignedNums.contains(t.orderNumber)) return false;
+          if (t.isBatch && t.stops.any((s) => assignedIds.contains(s.orderId) || assignedNums.contains(s.orderNumber))) return false;
+          return true;
+        }).toList();
+
         if (mounted) {
           final previousIds = _allTrips.map((t) => t.orderId).toSet();
-          final newTrips = trips.where((t) => !previousIds.contains(t.orderId)).toList();
+          final newTrips = filteredTrips.where((t) => !previousIds.contains(t.orderId)).toList();
 
-          if (newTrips.isNotEmpty || trips.length != _allTrips.length) {
+          if (newTrips.isNotEmpty || filteredTrips.length != _allTrips.length) {
             setState(() {
-              _allTrips = trips;
+              _allTrips = filteredTrips;
               _earnings = earnings;
             });
 
@@ -181,20 +218,38 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
     setState(() => _isLoading = true);
     try {
       final results = await Future.wait([
-        DeliveryApiService.instance.getRiderProfile(),
-        DeliveryApiService.instance.getEarnings(),
+        DeliveryApiService.instance.getRiderProfile(forceRefresh: true),
+        DeliveryApiService.instance.getEarnings(forceRefresh: true),
         DeliveryApiService.instance.getAvailableTrips(
           maxRadiusKm: _selectedRadiusKm,
           vehicleType: _selectedVehicle,
+          forceRefresh: true,
         ),
+        DeliveryApiService.instance.getAssignedTrips(),
       ]);
+
+      final trips = results[2] as List<DeliveryTrip>;
+      final assigned = results[3] as List<DeliveryTrip>;
+
+      final assignedIds = assigned.map((a) => a.orderId).toSet();
+      final assignedNums = assigned.map((a) => a.orderNumber).toSet();
+      for (var a in assigned) {
+        assignedIds.addAll(a.stops.map((s) => s.orderId));
+        assignedNums.addAll(a.stops.map((s) => s.orderNumber));
+      }
+
+      final filteredTrips = trips.where((t) {
+        if (assignedIds.contains(t.orderId) || assignedNums.contains(t.orderNumber)) return false;
+        if (t.isBatch && t.stops.any((s) => assignedIds.contains(s.orderId) || assignedNums.contains(s.orderNumber))) return false;
+        return true;
+      }).toList();
 
       if (mounted) {
         setState(() {
           _profile = results[0] as RiderProfile;
           _isOnline = _profile?.isOnline ?? true;
           _earnings = results[1] as RiderEarnings;
-          _allTrips = results[2] as List<DeliveryTrip>;
+          _allTrips = filteredTrips;
           _selectedOrderIds.clear();
           _isLoading = false;
         });

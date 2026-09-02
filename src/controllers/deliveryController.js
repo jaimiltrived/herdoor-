@@ -1,5 +1,4 @@
 const bcrypt = require('bcryptjs');
-const store = require('../store/dataStore');
 const { query } = require('../config/database');
 const { generateToken } = require('../utils/jwt');
 const { ROLES, ORDER_STATUS, DELIVERY_STATUS } = require('../constants/enums');
@@ -11,14 +10,8 @@ const { ROLES, ORDER_STATUS, DELIVERY_STATUS } = require('../constants/enums');
 exports.deliveryLogin = async (req, res) => {
   const { phone, email, password } = req.body;
   try {
-    let users = await query('SELECT * FROM users WHERE (phone = ? OR email = ?) AND role = "DELIVERY" LIMIT 1', [phone || '', email || '']);
-    let user = users && users[0];
-    if (!user) {
-      user = store.users.find(
-        u => (u.phone === phone || u.email === email || (email && u.email.toLowerCase() === email.toLowerCase())) &&
-             u.role === ROLES.DELIVERY
-      );
-    }
+    const users = await query('SELECT * FROM users WHERE (phone = ? OR email = ?) AND role = "DELIVERY" LIMIT 1', [phone || '', email || '']);
+    const user = users && users[0];
     if (!user || !bcrypt.compareSync(password, user.password)) {
       return res.status(401).json({ status: 'error', message: 'Invalid delivery partner credentials' });
     }
@@ -59,13 +52,13 @@ exports.deliveryLogin = async (req, res) => {
 exports.getDeliveryProfile = async (req, res) => {
   try {
     const users = await query('SELECT * FROM users WHERE id = ? LIMIT 1', [req.user.id]);
-    const user = (users && users[0]) || store.users.find(u => u.id === req.user.id);
+    const user = users && users[0];
     if (!user) {
-      return res.status(404).json({ status: 'error', message: 'Rider profile not found' });
+      return res.status(404).json({ status: 'error', message: 'Rider profile not found in database' });
     }
 
     const tripCountRes = await query('SELECT COUNT(*) as count FROM deliveries WHERE delivery_person_id = ? AND status = "DELIVERED"', [req.user.id]);
-    const totalTrips = (tripCountRes && tripCountRes[0]) ? tripCountRes[0].count : (user.total_trips || user.totalTrips || 0);
+    const totalTrips = (tripCountRes && tripCountRes[0]) ? tripCountRes[0].count : (user.total_trips || 0);
 
     res.json({
       status: 'success',
@@ -80,31 +73,13 @@ exports.getDeliveryProfile = async (req, res) => {
           vehicleType: user.vehicle_type || user.vehicleType || 'Electric Scooter',
           rating: parseFloat(user.rating) || 4.9,
           totalTrips: totalTrips,
-          isOnline: Boolean(user.is_online ?? user.isOnline ?? true)
+          isOnline: Boolean(user.is_online ?? true)
         }
       }
     });
   } catch (err) {
     console.warn('getDeliveryProfile error:', err.message);
-    const user = store.users.find(u => u.id === req.user.id);
-    if (!user) return res.status(404).json({ status: 'error', message: 'Rider profile not found' });
-    res.json({
-      status: 'success',
-      data: {
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          phone: user.phone,
-          role: user.role,
-          vehicleNumber: user.vehicleNumber,
-          vehicleType: user.vehicleType,
-          rating: user.rating || 4.8,
-          totalTrips: user.totalTrips || 0,
-          isOnline: user.isOnline ?? true
-        }
-      }
-    });
+    return res.status(500).json({ status: 'error', message: 'Database profile error' });
   }
 };
 
@@ -118,10 +93,6 @@ exports.updateOnlineStatus = async (req, res) => {
     await query('UPDATE users SET is_online = ? WHERE id = ?', [isOnline ? 1 : 0, req.user.id]);
   } catch (err) {
     console.warn('updateOnlineStatus db warning:', err.message);
-  }
-  const user = store.users.find(u => u.id === req.user.id);
-  if (user) {
-    user.isOnline = !!isOnline;
   }
 
   res.json({
@@ -145,11 +116,11 @@ exports.getAvailableTrips = async (req, res) => {
       LEFT JOIN mills m ON o.mill_id = m.id
       LEFT JOIN addresses a ON o.address_id = a.id
       WHERE (
-        -- Leg 1: Customer's own grain -> only when merchant has ACCEPTED, CONFIRMED, or is PROCESSING
-        (o.grain_source = 'CUSTOMER' AND o.status IN ('ACCEPTED', 'CONFIRMED', 'PROCESSING', 'READY', 'READY_FOR_PICKUP'))
+        -- Leg 1: When shopkeeper accepts order -> Driver picks up raw grain from Customer Home and drops at Flour Mill
+        (o.grain_source = 'CUSTOMER' AND o.status IN ('ACCEPTED', 'CONFIRMED', 'PROCESSING'))
         OR
-        -- Leg 2: Mill's grain or completed flour -> only when READY
-        (o.grain_source != 'CUSTOMER' AND o.status IN ('READY', 'READY_FOR_PICKUP'))
+        -- Leg 2: When shopkeeper marks ready -> Driver picks up freshly milled flour from Flour Mill and delivers to Customer Home
+        (o.status IN ('READY', 'READY_FOR_PICKUP'))
       )
       AND o.status NOT IN ('DELIVERED', 'COMPLETED', 'CANCELLED', 'ASSIGNED', 'OUT_FOR_DELIVERY')
       AND o.id NOT IN (
@@ -252,97 +223,6 @@ exports.getAvailableTrips = async (req, res) => {
     console.warn('MySQL getAvailableTrips query warning:', err.message);
   }
 
-  // In-memory fallback if database query returns no rows
-  if (!availableOrders || availableOrders.length === 0) {
-    const validMemOrders = store.orders.filter(o => {
-      // Exclude delivered, completed, cancelled, assigned, or out for delivery orders
-      if (['DELIVERED', 'COMPLETED', 'CANCELLED', 'ASSIGNED', 'OUT_FOR_DELIVERY'].includes(o.status)) {
-        return false;
-      }
-      const isAssignedOrDeliveredInStore = store.deliveries.some(
-        d => (d.orderId === o.id || d.orderId === o.orderNumber) &&
-             ['ASSIGNED', 'PICKED_UP_FROM_MILL', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(d.status)
-      );
-      if (isAssignedOrDeliveredInStore) {
-        return false;
-      }
-
-      const isCust = (o.grainSource || 'CUSTOMER').toUpperCase() === 'CUSTOMER';
-      if (isCust) {
-        return ['ACCEPTED', 'CONFIRMED', 'PROCESSING', 'READY', 'READY_FOR_PICKUP'].includes(o.status);
-      } else {
-        return ['READY', 'READY_FOR_PICKUP'].includes(o.status);
-      }
-    });
-
-    availableOrders = validMemOrders.map((o, idx) => {
-      const isCust = (o.grainSource || 'CUSTOMER').toUpperCase() === 'CUSTOMER';
-      const isLeg1 = isCust && ['ACCEPTED', 'CONFIRMED', 'PROCESSING'].includes(o.status);
-      const custAddress = 'Flat 402, Shivalik Towers, Satellite Road, Ahmedabad';
-      const millAddress = '12 Market Yard, Ellisbridge, Ahmedabad';
-      const legType = isLeg1 ? 'LEG_1_GRAIN_PICKUP' : 'LEG_2_FLOUR_DELIVERY';
-
-      return {
-        orderId: o.id,
-        orderNumber: o.orderNumber || `#HD-${o.id}`,
-        customerName: o.customerName || 'Customer',
-        customerPhone: o.customerPhone || '+919876543210',
-        millName: 'Shree Ganesh Flour Mill & Grinding Hub',
-        millAddress: millAddress,
-        millPhone: '+919876543211',
-        homePickupAddress: custAddress,
-        homePickupLandmark: isLeg1 ? 'Near Customer Main Gate' : 'Behind Town Hall',
-        homePickupInstructions: isLeg1
-          ? 'Pick up raw grain bag from customer doorstep and drop at flour mill for milling.'
-          : 'Pick up freshly milled & sealed flour from flour mill and deliver to customer home.',
-        isHomeGrainPickup: isLeg1,
-        legType,
-        tripBadge: isLeg1 ? '🌾 Grain Pickup (Home ➔ Mill)' : '🍞 Flour Delivery (Mill ➔ Home)',
-        originTitle: isLeg1 ? 'Customer Home (Pick up Grain)' : 'Flour Mill (Pick up Flour)',
-        destinationTitle: isLeg1 ? 'Flour Mill (Drop Grain for Milling)' : 'Customer Doorstep (Deliver Flour)',
-        pickupAddress: isLeg1 ? custAddress : millAddress,
-        deliveryAddress: isLeg1 ? millAddress : custAddress,
-        quantityKg: parseFloat(o.quantityKg) || 5.0,
-        grainTypeName: o.grainTypeName || 'Fresh Stone Ground Flour',
-        deliveryFee: 45.0 + ((idx % 2 === 0) ? 25.0 : 15.0),
-        estimatedDeliveryFee: 45.0 + ((idx % 2 === 0) ? 25.0 : 15.0),
-        surgeBonus: (idx % 2 === 0) ? 25.0 : 15.0,
-        heavyBagBonus: 0.0,
-        isBatch: false,
-        batchOrderCount: 1,
-        groupId: o.groupId || null,
-        groupCode: o.groupCode || null,
-        distanceKm: 2.1,
-        estimatedMins: 16,
-        pickupZone: isLeg1 ? 'Satellite / Residential Cluster' : 'Ellisbridge Mill Hub',
-        paymentMode: o.paymentMethod || 'UPI',
-        status: o.status,
-        pickupPin: o.pickupPin || '4821',
-        deliveryOtp: o.deliveryOtp || '7391',
-        barcodeNumber: `HD-BAG-${o.id}-01`,
-        stops: [
-          {
-            orderId: o.id,
-            orderNumber: o.orderNumber || `#HD-${o.id}`,
-            customerName: o.customerName || 'Customer',
-            customerPhone: o.customerPhone || '+919876543210',
-            homePickupAddress: custAddress,
-            homePickupLandmark: isLeg1 ? 'Near Customer Main Gate' : 'Behind Town Hall',
-            homePickupInstructions: 'Pick up bag',
-            deliveryAddress: isLeg1 ? millAddress : custAddress,
-            quantityKg: parseFloat(o.quantityKg) || 5.0,
-            grainTypeName: o.grainTypeName || 'Fresh Stone Ground Flour',
-            deliveryOtp: o.deliveryOtp || '7391',
-            pickupPin: o.pickupPin || '4821',
-            barcodeNumber: `HD-BAG-${o.id}-01`,
-            distanceKm: 2.1,
-            orderPayout: 45.0 + ((idx % 2 === 0) ? 25.0 : 15.0),
-          }
-        ]
-      };
-    });
-  }
-
   res.json({
     status: 'success',
     count: availableOrders.length,
@@ -354,8 +234,13 @@ exports.getAvailableTrips = async (req, res) => {
  * @desc Get All Deliveries / Trips
  * @route GET /api/v1/delivery/orders
  */
-exports.getDeliveryOrders = (req, res) => {
-  res.json({ status: 'success', count: store.deliveries.length, data: { deliveries: store.deliveries } });
+exports.getDeliveryOrders = async (req, res) => {
+  try {
+    const rows = await query('SELECT * FROM deliveries ORDER BY id DESC');
+    return res.json({ status: 'success', count: rows.length, data: { deliveries: rows } });
+  } catch (err) {
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
 };
 
 /**
@@ -479,82 +364,269 @@ exports.getAssignedOrders = async (req, res) => {
 
 /**
  * @desc Get Completed / Previous Delivered Trips & Orders from Pure Database
+ *       Fetches full completed history directly from MySQL orders and deliveries tables.
  * @route GET /api/v1/delivery/completed
  */
 exports.getCompletedTrips = async (req, res) => {
-  let dbCompleted = [];
+  let dbOrders = [];
+  let dbDeliveries = [];
+
   try {
-    dbCompleted = await query(`
-      SELECT d.*, o.order_number, o.customer_name, o.customer_phone, o.grain_type_name, o.quantity_kg, o.group_id, o.group_code as order_group_code,
-             m.name as mill_name, m.address as mill_address, m.phone as mill_phone
+    // 1. Fetch all completed orders from orders table joined with mills & addresses
+    dbOrders = await query(`
+      SELECT o.*, 
+             m.name as mill_name, m.address as mill_address, m.phone as mill_phone,
+             a.address_line1, a.address_line2, a.city, a.pincode,
+             d.delivery_fee as d_fee, d.stops_data as d_stops_data, d.updated_at as d_updated_at
+      FROM orders o
+      LEFT JOIN mills m ON o.mill_id = m.id
+      LEFT JOIN addresses a ON o.address_id = a.id
+      LEFT JOIN deliveries d ON d.order_id = o.id
+      WHERE o.status IN ('DELIVERED', 'COMPLETED')
+      ORDER BY COALESCE(d.updated_at, o.updated_at, o.created_at) DESC, o.id DESC
+    `);
+  } catch (err) {
+    console.warn('MySQL getCompletedTrips orders query warning:', err.message);
+  }
+
+  try {
+    // 2. Fetch any standalone multi-stop deliveries records (e.g. #HD-POOL-6X with stops_data)
+    dbDeliveries = await query(`
+      SELECT d.*, m.name as mill_name, m.address as mill_address, m.phone as mill_phone
       FROM deliveries d
       LEFT JOIN orders o ON d.order_id = o.id
       LEFT JOIN mills m ON o.mill_id = m.id
-      WHERE d.status = 'DELIVERED'
+      WHERE d.status = 'DELIVERED' AND (d.is_batch = 1 OR d.stops_data IS NOT NULL)
       ORDER BY d.updated_at DESC
     `);
   } catch (err) {
-    console.warn('MySQL getCompletedTrips warning:', err.message);
+    console.warn('MySQL getCompletedTrips deliveries query warning:', err.message);
   }
 
-  const completedTrips = dbCompleted.map((d, idx) => {
+  const completedTrips = [];
+  const processedOrderIds = new Set();
+  const processedGroupKeys = new Set();
+
+  // Helper to format real time-ago
+  const formatTimeAgo = (dateVal) => {
+    if (!dateVal) return 'Recently';
+    const diffMs = Date.now() - new Date(dateVal).getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    const diffHrs = Math.floor(diffMins / 60);
+    if (diffHrs < 24) return `${diffHrs} hr ago`;
+    const diffDays = Math.floor(diffHrs / 24);
+    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  };
+
+  // 3. Process grouped orders from dbOrders first
+  const groupedOrdersMap = new Map();
+  for (const o of (dbOrders || [])) {
+    const groupKey = o.group_code || (o.group_id ? `HD-GRP-${o.group_id}` : null);
+    if (groupKey) {
+      if (!groupedOrdersMap.has(groupKey)) groupedOrdersMap.set(groupKey, []);
+      groupedOrdersMap.get(groupKey).push(o);
+    }
+  }
+
+  // A. Add Grouped Batch Runs
+  for (const [groupKey, ordersInGroup] of groupedOrdersMap.entries()) {
+    if (ordersInGroup.length > 1) {
+      processedGroupKeys.add(groupKey);
+      ordersInGroup.forEach(o => processedOrderIds.add(o.id));
+
+      const firstOrder = ordersInGroup[0];
+      const uniqueNames = [...new Set(ordersInGroup.map(o => (o.customer_name || 'Customer').trim()))];
+      const customerSummary = uniqueNames.length === 1
+        ? `${uniqueNames[0]} • ${ordersInGroup.length} Orders`
+        : uniqueNames.join(' + ');
+
+      const totalKg = ordersInGroup.reduce((sum, o) => sum + (parseFloat(o.quantity_kg) || 5.0), 0.0);
+      const totalEarned = 150.0 + (ordersInGroup.length * 50.0);
+
+      const stops = ordersInGroup.map((o, idx) => {
+        const custAddr = o.address_line1
+          ? `${o.address_line1}${o.address_line2 ? ', ' + o.address_line2 : ''}, ${o.city || 'Ahmedabad'}`
+          : 'Flat 402, Shivalik Towers, Satellite Road, Ahmedabad';
+        const stopPayout = 70.0 + (idx * 10.0);
+        return {
+          orderId: o.id,
+          orderNumber: o.order_number || `#HD-${o.id}`,
+          customerName: o.customer_name || 'Customer',
+          quantityKg: parseFloat(o.quantity_kg) || 5.0,
+          grainTypeName: o.grain_type_name || 'Fresh Milled Flour',
+          deliveryAddress: custAddr,
+          payout: stopPayout,
+          orderPayout: stopPayout
+        };
+      });
+
+      completedTrips.push({
+        orderId: firstOrder.id,
+        orderNumber: groupKey,
+        customerName: `Grouped ${ordersInGroup.length}x Batch (${customerSummary})`,
+        customerPhone: firstOrder.customer_phone || '+919876543210',
+        millName: firstOrder.mill_name || 'Shree Ganesh Flour Mill & Grinding Hub',
+        millAddress: firstOrder.mill_address || '12 Market Yard, Ellisbridge, Ahmedabad',
+        millPhone: firstOrder.mill_phone || '+919876543211',
+        homePickupAddress: 'Multiple Customer Homes (Satellite, Ellisbridge)',
+        deliveryAddress: firstOrder.address_line1 ? `${firstOrder.address_line1}, ${firstOrder.city || 'Ahmedabad'}` : 'Customer Address, Ahmedabad',
+        quantityKg: totalKg,
+        grainTypeName: `Stacked Batch: ${ordersInGroup.length} Orders (${ordersInGroup.map(o => o.grain_type_name || 'Flour').slice(0, 2).join(' + ')})`,
+        deliveryFee: totalEarned - 20.0,
+        totalEarned: totalEarned,
+        tipAmount: 30.0,
+        surgeBonus: 20.0,
+        heavyBagBonus: totalKg >= 15 ? 25.0 : 0.0,
+        distanceKm: 2.8,
+        isBatch: true,
+        stopsCount: ordersInGroup.length,
+        status: 'DELIVERED',
+        groupId: firstOrder.group_id || null,
+        groupCode: firstOrder.group_code || groupKey,
+        deliveredAt: firstOrder.d_updated_at || firstOrder.updated_at || firstOrder.created_at || new Date().toISOString(),
+        deliveredTimeAgo: formatTimeAgo(firstOrder.d_updated_at || firstOrder.updated_at || firstOrder.created_at),
+        customerRating: 5.0,
+        customerReview: 'Super smooth multi-stop batch delivery. All bags verified and intact.',
+        barcodeVerified: true,
+        otpVerified: true,
+        paymentMode: 'Online Paid (UPI)',
+        paymentStatus: 'PAID',
+        stops: stops
+      });
+    }
+  }
+
+  // B. Add Standalone Completed Orders
+  for (const o of (dbOrders || [])) {
+    if (processedOrderIds.has(o.id)) continue;
+    processedOrderIds.add(o.id);
+
+    const custAddr = o.address_line1
+      ? `${o.address_line1}${o.address_line2 ? ', ' + o.address_line2 : ''}, ${o.city || 'Ahmedabad'}`
+      : 'Flat 402, Shivalik Towers, Satellite Road, Ahmedabad';
+    const kg = parseFloat(o.quantity_kg) || 5.0;
+    const earned = parseFloat(o.d_fee) || (kg >= 10 ? 115.0 : 75.0);
+
+    completedTrips.push({
+      orderId: o.id,
+      orderNumber: o.order_number || `#HD-${o.id}`,
+      customerName: o.customer_name || 'Customer',
+      customerPhone: o.customer_phone || '+919876543210',
+      millName: o.mill_name || 'Shree Ganesh Flour Mill & Grinding Hub',
+      millAddress: o.mill_address || '12 Market Yard, Ellisbridge, Ahmedabad',
+      millPhone: o.mill_phone || '+919876543211',
+      homePickupAddress: custAddr,
+      deliveryAddress: custAddr,
+      quantityKg: kg,
+      grainTypeName: o.grain_type_name || 'Fresh Stone Ground Flour',
+      deliveryFee: earned - 20.0,
+      totalEarned: earned,
+      tipAmount: 20.0,
+      surgeBonus: 15.0,
+      heavyBagBonus: kg >= 10 ? 20.0 : 0.0,
+      distanceKm: 2.1,
+      isBatch: false,
+      stopsCount: 1,
+      status: 'DELIVERED',
+      groupId: o.group_id || null,
+      groupCode: o.group_code || null,
+      deliveredAt: o.d_updated_at || o.updated_at || o.created_at || new Date().toISOString(),
+      deliveredTimeAgo: formatTimeAgo(o.d_updated_at || o.updated_at || o.created_at),
+      customerRating: 5.0,
+      customerReview: 'Delivered fresh warm flour on time! Verified seal.',
+      barcodeVerified: true,
+      otpVerified: true,
+      paymentMode: o.payment_method ? `${o.payment_method} (PAID)` : 'Online Paid (UPI)',
+      paymentStatus: 'PAID',
+      stops: [
+        {
+          orderId: o.id,
+          orderNumber: o.order_number || `#HD-${o.id}`,
+          customerName: o.customer_name || 'Customer',
+          quantityKg: kg,
+          grainTypeName: o.grain_type_name || 'Fresh Flour',
+          deliveryAddress: custAddr,
+          payout: earned,
+          orderPayout: earned
+        }
+      ]
+    });
+  }
+
+  // C. Add extra rich batch records from dbDeliveries if not already included
+  for (const d of (dbDeliveries || [])) {
+    const dGroupCode = d.group_code || (d.order_id ? `#HD-${d.order_id}` : null);
+    if (dGroupCode && (processedGroupKeys.has(dGroupCode) || completedTrips.some(t => t.orderNumber === dGroupCode))) {
+      continue;
+    }
+
     let parsedStops = [];
     if (d.stops_data) {
       try {
-        const raw = d.stops_data;
-        parsedStops = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        parsedStops = parsedStops.map(s => ({
-          orderId: s.orderId ?? s.order_id ?? s.id ?? 0,
-          orderNumber: s.orderNumber ?? s.order_number ?? `#HD-${s.orderId ?? s.order_id ?? '0'}`,
-          customerName: s.customerName ?? s.customer_name ?? 'Customer',
-          quantityKg: parseFloat(s.quantityKg ?? s.quantity_kg ?? s.quantity ?? 10.0),
-          grainTypeName: s.grainTypeName ?? s.grain_type_name ?? s.grainType ?? 'Fresh Flour',
-          deliveryAddress: s.deliveryAddress ?? s.delivery_address ?? 'Ahmedabad',
-          payout: parseFloat(s.payout ?? s.orderPayout ?? s.order_payout ?? s.deliveryFee ?? s.delivery_fee ?? 80.0),
-          orderPayout: parseFloat(s.orderPayout ?? s.order_payout ?? s.payout ?? s.deliveryFee ?? s.delivery_fee ?? 80.0),
-        }));
-      } catch (_) {
-        parsedStops = [];
-      }
+        const raw = typeof d.stops_data === 'string' ? JSON.parse(d.stops_data) : d.stops_data;
+        if (Array.isArray(raw)) {
+          parsedStops = raw.map(s => ({
+            orderId: s.orderId ?? s.order_id ?? s.id ?? 0,
+            orderNumber: s.orderNumber ?? s.order_number ?? `#HD-${s.orderId ?? '0'}`,
+            customerName: s.customerName ?? s.customer_name ?? 'Customer',
+            quantityKg: parseFloat(s.quantityKg ?? s.quantity_kg ?? 5.0),
+            grainTypeName: s.grainTypeName ?? s.grain_type_name ?? 'Fresh Flour',
+            deliveryAddress: s.deliveryAddress ?? s.delivery_address ?? 'Ahmedabad',
+            payout: parseFloat(s.payout ?? s.orderPayout ?? 65.0),
+            orderPayout: parseFloat(s.orderPayout ?? s.payout ?? 65.0)
+          }));
+        }
+      } catch (_) {}
     }
 
-    const isBatch = Boolean(d.is_batch) || parsedStops.length > 1;
-    const totalEarned = parseFloat(d.delivery_fee) || (isBatch ? 200.0 : 85.0);
+    if (parsedStops.length > 1 || d.is_batch) {
+      const stopCount = parsedStops.length > 0 ? parsedStops.length : 2;
+      const totalEarned = parseFloat(d.delivery_fee) || 260.0;
+      const totalKg = parsedStops.reduce((sum, s) => sum + s.quantityKg, 0.0) || 20.0;
 
-    return {
-      orderId: d.order_id,
-      orderNumber: d.group_code || d.order_group_code || d.order_number || `#HD-${d.order_id}`,
-      customerName: isBatch
-        ? `Grouped ${parsedStops.length > 0 ? parsedStops.length : 2}x Batch (${parsedStops.map(s => s.customerName || 'Customer').join(' + ')})`
-        : (d.customer_name || 'Customer'),
-      customerPhone: d.customer_phone || '+919876543210',
-      millName: d.mill_name || 'Shree Ganesh Flour Mill & Grinding Hub',
-      millAddress: d.mill_address || '12 Market Yard, Ellisbridge, Ahmedabad',
-      millPhone: d.mill_phone || '+919876543211',
-      homePickupAddress: isBatch ? 'Multiple Customer Homes (Satellite, Ellisbridge)' : (d.pickup_address || 'Flat 402, Shivalik Towers, Ellisbridge'),
-      deliveryAddress: d.delivery_address || 'Customer Address, Ahmedabad',
-      quantityKg: isBatch ? (parsedStops.length > 0 ? parsedStops.reduce((sum, s) => sum + (parseFloat(s.quantityKg) || 10.0), 0.0) : 20.0) : (parseFloat(d.quantity_kg) || 5.0),
-      grainTypeName: isBatch ? `Stacked Batch: ${parsedStops.length > 0 ? parsedStops.length : 2} Orders (Sharbati + Multigrain)` : (d.grain_type_name || 'Fresh Stone Ground Flour'),
-      deliveryFee: totalEarned - 20.0,
-      totalEarned: totalEarned,
-      tipAmount: 20.0,
-      surgeBonus: 20.0,
-      distanceKm: 2.8,
-      isBatch: isBatch,
-      stopsCount: parsedStops.length > 0 ? parsedStops.length : 2,
-      status: 'DELIVERED',
-      groupId: d.group_id,
-      groupCode: d.group_code,
-      deliveredAt: d.updated_at || new Date().toISOString(),
-      deliveredTimeAgo: `${idx + 1} hr ago`,
-      customerRating: 5.0,
-      customerReview: 'Delivered super fresh warm flour on time! Perfect grinding quality.',
-      barcodeVerified: true,
-      otpVerified: true,
-      paymentMode: 'Online Paid (UPI)',
-      paymentStatus: 'PAID',
-      stops: parsedStops
-    };
+      completedTrips.push({
+        orderId: d.order_id || 9000,
+        orderNumber: d.group_code || `#HD-POOL-${stopCount}X`,
+        customerName: `Grouped ${stopCount}x Batch (${parsedStops.length > 0 ? parsedStops.map(s => s.customerName).join(' + ') : 'Multi-Stop Delivery'})`,
+        customerPhone: '+919876543210',
+        millName: d.mill_name || 'Shree Ganesh Flour Mill & Grinding Hub',
+        millAddress: d.mill_address || '12 Market Yard, Ellisbridge, Ahmedabad',
+        millPhone: d.mill_phone || '+919876543211',
+        homePickupAddress: 'Multiple Customer Homes (Satellite, Ellisbridge)',
+        deliveryAddress: d.delivery_address || 'Customer Address, Ahmedabad',
+        quantityKg: totalKg,
+        grainTypeName: `Stacked Batch: ${stopCount} Orders (Sharbati + Multigrain)`,
+        deliveryFee: totalEarned - 20.0,
+        totalEarned: totalEarned,
+        tipAmount: 20.0,
+        surgeBonus: 20.0,
+        heavyBagBonus: 20.0,
+        distanceKm: 2.8,
+        isBatch: true,
+        stopsCount: stopCount,
+        status: 'DELIVERED',
+        groupId: d.group_id || null,
+        groupCode: d.group_code || null,
+        deliveredAt: d.updated_at || new Date().toISOString(),
+        deliveredTimeAgo: formatTimeAgo(d.updated_at),
+        customerRating: 5.0,
+        customerReview: 'Delivered super fresh warm flour on time! Perfect grinding quality.',
+        barcodeVerified: true,
+        otpVerified: true,
+        paymentMode: 'Online Paid (UPI)',
+        paymentStatus: 'PAID',
+        stops: parsedStops
+      });
+    }
+  }
+
+  // Sort completed trips by real deliveredAt timestamp descending (newest first)
+  completedTrips.sort((a, b) => {
+    const ta = new Date(a.deliveredAt || 0).getTime();
+    const tb = new Date(b.deliveredAt || 0).getTime();
+    return tb - ta;
   });
 
   res.json({
@@ -563,45 +635,55 @@ exports.getCompletedTrips = async (req, res) => {
     data: {
       trips: completedTrips,
       totalDeliveredCount: completedTrips.length,
+      totalOrdersCount: dbOrders ? dbOrders.length : completedTrips.length,
       totalEarnings: completedTrips.reduce((sum, t) => sum + (t.totalEarned || 0), 0)
     }
   });
 };
 
-// Robust order finder that handles numeric IDs, prefixed strings (#HD-..., ORD-...), and safe fallbacks
-function findOrder(param) {
-  if (!param) return null;
-  const paramStr = param.toString().trim();
-  const numericOnly = parseInt(paramStr.replace(/[^0-9]/g, ''));
-  const intVal = parseInt(paramStr);
-
-  return store.orders.find(o => {
-    if (!isNaN(intVal) && o.id === intVal) return true;
-    if (!isNaN(numericOnly) && o.id === numericOnly) return true;
-    if (o.orderNumber && (
-      o.orderNumber === paramStr ||
-      o.orderNumber === `#${paramStr}` ||
-      `#${o.orderNumber}` === paramStr ||
-      o.orderNumber.replace(/[^0-9]/g, '') === paramStr.replace(/[^0-9]/g, '')
-    )) return true;
-    return false;
-  }) || store.orders.find(o => o.id === 501 || o.id === 502) || store.orders[0];
-}
-
 /**
  * @desc Get Delivery Order Details by Order ID
  * @route GET /api/v1/delivery/orders/:orderId
  */
-exports.getDeliveryOrderById = (req, res) => {
-  const order = findOrder(req.params.orderId);
-  const orderId = order ? order.id : parseInt(req.params.orderId);
-  const delivery = store.deliveries.find(d => d.orderId === orderId);
+exports.getDeliveryOrderById = async (req, res) => {
+  const param = req.params.orderId;
+  try {
+    const numId = parseInt(String(param).replace(/[^0-9]/g, ''));
+    const rows = await query(`
+      SELECT o.*, d.status as delivery_status, d.delivery_person_name, d.delivery_person_phone, d.delivery_fee,
+             d.pickup_pin, d.delivery_otp, d.group_code, d.stops_data,
+             m.name as mill_name, m.address as mill_address, m.phone as mill_phone,
+             a.address_line1, a.address_line2, a.city, a.pincode
+      FROM orders o
+      LEFT JOIN deliveries d ON d.order_id = o.id
+      LEFT JOIN mills m ON o.mill_id = m.id
+      LEFT JOIN addresses a ON o.address_id = a.id
+      WHERE o.id = ? OR o.order_number = ?
+      LIMIT 1
+    `, [numId || 0, String(param)]);
 
-  if (!delivery && !order) {
-    return res.status(404).json({ status: 'error', message: 'Delivery record not found' });
+    if (rows && rows.length > 0) {
+      const o = rows[0];
+      return res.json({
+        status: 'success',
+        data: {
+          order: o,
+          delivery: {
+            orderId: o.id,
+            status: o.delivery_status || o.status,
+            deliveryPersonName: o.delivery_person_name,
+            deliveryPersonPhone: o.delivery_person_phone,
+            deliveryFee: o.delivery_fee || 45.0,
+            groupCode: o.group_code,
+            stopsData: o.stops_data
+          }
+        }
+      });
+    }
+  } catch (err) {
+    console.warn('MySQL getDeliveryOrderById error:', err.message);
   }
-
-  res.json({ status: 'success', data: { delivery, order } });
+  return res.status(404).json({ status: 'error', message: 'Order not found in database' });
 };
 
 /**
@@ -609,87 +691,71 @@ exports.getDeliveryOrderById = (req, res) => {
  * @route POST /api/v1/delivery/orders/:orderId/accept
  */
 exports.acceptDelivery = async (req, res) => {
-  const order = findOrder(req.params.orderId);
+  const param = req.params.orderId;
+  const numId = parseInt(String(param).replace(/[^0-9]/g, ''));
+  const driverName = req.user?.name || 'Vikram Delivery Agent';
+  const driverPhone = req.user?.phone || '+919876543212';
+  const driverId = req.user?.id || 3;
 
-  if (!order) {
-    return res.status(404).json({ status: 'error', message: 'Order not found' });
-  }
-
-  const orderId = order.id;
-  const mill = store.mills.find(m => m.id === order.millId);
-  const addr = store.addresses.find(a => a.id === order.addressId);
-
-  const user = store.users.find(u => u.id === req.user.id);
-  const driverName = req.user.name || (user ? user.name : 'Vikram Delivery Agent');
-  const driverPhone = req.user.phone || (user ? user.phone : '+919876543212');
-  const driverVehicle = user && user.vehicleNumber
-    ? `${user.vehicleType || 'Electric Scooter'} #${user.vehicleNumber}`
-    : 'Electric Scooter #GJ-01-AB-1234';
-  let delivery = store.deliveries.find(d => d.orderId === orderId);
-
-  if (!delivery) {
-    delivery = {
-      id: 800 + store.deliveries.length + 1,
-      orderId,
-      deliveryPersonId: req.user.id,
-      deliveryPersonName: driverName,
-      deliveryPersonPhone: driverPhone,
-      vehicleNumber: driverVehicle,
-      status: DELIVERY_STATUS.ASSIGNED,
-      pickupAddress: mill ? `${mill.name}, ${mill.address}` : 'Flour Mill',
-      deliveryAddress: addr ? `${addr.addressLine1}, ${addr.addressLine2}, ${addr.city}` : 'Customer Address',
-      currentLatitude: 23.0225,
-      currentLongitude: 72.5714,
-      pickupPin: order.pickupPin || '4821',
-      deliveryOtp: order.deliveryOtp || '7391',
-      deliveryFee: 45.0,
-      estimatedMinutes: 20,
-      updatedAt: new Date().toISOString()
-    };
-    store.deliveries.push(delivery);
-  } else {
-    delivery.deliveryPersonId = req.user.id;
-    delivery.deliveryPersonName = driverName;
-    delivery.deliveryPersonPhone = driverPhone;
-    delivery.vehicleNumber = driverVehicle;
-    delivery.status = DELIVERY_STATUS.ASSIGNED;
-    delivery.updatedAt = new Date().toISOString();
-  }
-
-  // Update order with assigned driver
-  order.deliveryPersonId = req.user.id;
-  order.deliveryPersonName = driverName;
-  order.deliveryPersonPhone = driverPhone;
-  order.deliveryPersonVehicle = driverVehicle;
-  order.driverAssigned = {
-    name: driverName,
-    phone: driverPhone,
-    vehicle: driverVehicle,
-    status: DELIVERY_STATUS.ASSIGNED,
-    pin: order.pickupPin || '4821'
-  };
-
-  // Real-time Database Persistence
   try {
-    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.ACCEPTED, orderId]);
-    await syncDeliveryToDb({
-      orderId,
-      deliveryPersonId: req.user.id || 3,
-      deliveryPersonName: driverName,
-      deliveryPersonPhone: driverPhone,
-      status: DELIVERY_STATUS.ASSIGNED,
-      pickupAddress: delivery.pickupAddress,
-      deliveryAddress: delivery.deliveryAddress,
-      pickupPin: order.pickupPin || '4821',
-      deliveryOtp: order.deliveryOtp || '7391',
-      deliveryFee: delivery.deliveryFee || 45.0,
-      estimatedMinutes: 20
-    });
-  } catch (dbErr) {
-    console.warn('MySQL acceptDelivery order update warning:', dbErr.message);
-  }
+    const orders = await query(`
+      SELECT o.*, m.name as mill_name, m.address as mill_address,
+             a.address_line1, a.address_line2, a.city
+      FROM orders o
+      LEFT JOIN mills m ON o.mill_id = m.id
+      LEFT JOIN addresses a ON o.address_id = a.id
+      WHERE o.id = ? OR o.order_number = ?
+      LIMIT 1
+    `, [numId || 0, String(param)]);
 
-  res.json({ status: 'success', message: 'Delivery task accepted', data: { delivery, order } });
+    if (!orders || orders.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Order not found in database' });
+    }
+
+    const order = orders[0];
+    const orderId = order.id;
+    const millAddr = order.mill_address || 'Shree Ganesh Flour Mill, 12 Market Yard, Ellisbridge';
+    const custAddr = order.address_line1 ? `${order.address_line1}, ${order.city || 'Ahmedabad'}` : 'Flat 402, Shivalik Towers, Satellite Road';
+
+    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.ASSIGNED, orderId]);
+
+    const existingDel = await query('SELECT id FROM deliveries WHERE order_id = ? LIMIT 1', [orderId]);
+    if (existingDel && existingDel.length > 0) {
+      await query(`
+        UPDATE deliveries SET
+          delivery_person_id = ?,
+          delivery_person_name = ?,
+          delivery_person_phone = ?,
+          status = 'ASSIGNED',
+          updated_at = NOW()
+        WHERE order_id = ?
+      `, [driverId, driverName, driverPhone, orderId]);
+    } else {
+      await query(`
+        INSERT INTO deliveries
+          (order_id, delivery_person_id, delivery_person_name, delivery_person_phone, status, pickup_address, delivery_address, current_latitude, current_longitude, pickup_pin, delivery_otp, delivery_fee, estimated_minutes, created_at, updated_at)
+        VALUES
+          (?, ?, ?, ?, 'ASSIGNED', ?, ?, 23.0225, 72.5714, ?, ?, 45.0, 20, NOW(), NOW())
+      `, [orderId, driverId, driverName, driverPhone, millAddr, custAddr, order.pickup_pin || '4821', order.delivery_otp || '7391']);
+    }
+
+    return res.json({
+      status: 'success',
+      message: 'Delivery task accepted and saved to database',
+      data: {
+        orderId,
+        delivery: {
+          orderId,
+          deliveryPersonId: driverId,
+          deliveryPersonName: driverName,
+          status: 'ASSIGNED'
+        }
+      }
+    });
+  } catch (err) {
+    console.error('MySQL acceptDelivery error:', err.message);
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
 };
 
 /**
@@ -698,89 +764,130 @@ exports.acceptDelivery = async (req, res) => {
  */
 exports.acceptGroupDelivery = async (req, res) => {
   const { groupCode, orderIds, stops, totalFee } = req.body;
-  const primaryId = Array.isArray(orderIds) && orderIds.length > 0 ? parseInt(orderIds[0]) : 505;
-  const driverName = req.user.name || 'Vikram Delivery Agent';
-  const driverPhone = req.user.phone || '+919876543212';
+  const driverName = req.user?.name || 'Vikram Delivery Agent';
+  const driverPhone = req.user?.phone || '+919876543212';
   const stopsJson = JSON.stringify(stops || []);
-  const resolvedGroupCode = groupCode || '#HD-GRP-201';
 
-  // 1. Update in-memory store for all batched order IDs
+  // 1. Extract all numeric IDs and string order numbers
+  const allOrderNumbers = new Set();
+  const allNumericIds = new Set();
+
   if (Array.isArray(orderIds)) {
     orderIds.forEach(id => {
-      const parsedId = parseInt(id);
-      const inMem = store.orders.find(o => o.id === parsedId || o.orderNumber === id);
-      if (inMem) {
-        inMem.status = ORDER_STATUS.ASSIGNED;
-        inMem.groupId = primaryId;
-        inMem.groupCode = resolvedGroupCode;
-      }
-      let del = store.deliveries.find(d => d.orderId === parsedId);
-      if (!del) {
-        store.deliveries.push({
-          id: 800 + store.deliveries.length + 1,
-          orderId: parsedId,
-          deliveryPersonId: req.user.id || 3,
-          deliveryPersonName: driverName,
-          deliveryPersonPhone: driverPhone,
-          status: DELIVERY_STATUS.ASSIGNED,
-          isBatch: true,
-          groupCode: resolvedGroupCode,
-          updatedAt: new Date().toISOString()
-        });
-      } else {
-        del.status = DELIVERY_STATUS.ASSIGNED;
-        del.isBatch = true;
-        del.groupCode = resolvedGroupCode;
-        del.updatedAt = new Date().toISOString();
+      if (typeof id === 'number' && !isNaN(id)) {
+        allNumericIds.add(id);
+      } else if (typeof id === 'string') {
+        allOrderNumbers.add(id);
+        const num = parseInt(id.replace(/[^0-9]/g, ''));
+        if (!isNaN(num) && num > 0) allNumericIds.add(num);
       }
     });
   }
 
-  // 2. Update MySQL database for all batched order IDs
+  if (Array.isArray(stops)) {
+    stops.forEach(s => {
+      if (s.orderId && typeof s.orderId === 'number' && !isNaN(s.orderId)) {
+        allNumericIds.add(s.orderId);
+      }
+      if (s.orderNumber && typeof s.orderNumber === 'string') {
+        allOrderNumbers.add(s.orderNumber);
+      }
+    });
+  }
+
+  const idArray = Array.from(allNumericIds);
+  const numStrArray = Array.from(allOrderNumbers);
+
+  // 2. Auto-generate a guaranteed unique sequential Group ID (INT) & unique Group Code
+  let uniqueGroupId = null;
   try {
-    const existing = await query('SELECT id FROM deliveries WHERE order_id = ? LIMIT 1', [primaryId]);
-    if (existing && existing.length > 0) {
-      await query(`
-        UPDATE deliveries SET
-          delivery_person_id = ?,
-          delivery_person_name = ?,
-          delivery_person_phone = ?,
-          status = 'ASSIGNED',
-          is_batch = 1,
-          batch_order_count = ?,
-          group_code = ?,
-          stops_data = ?,
-          delivery_fee = ?,
-          updated_at = NOW()
-        WHERE order_id = ?
-      `, [req.user.id || 3, driverName, driverPhone, (stops || []).length || 2, resolvedGroupCode, stopsJson, totalFee || 200.0, primaryId]);
-    } else {
-      await query(`
-        INSERT INTO deliveries
-          (order_id, delivery_person_id, delivery_person_name, delivery_person_phone, status, pickup_address, delivery_address, current_latitude, current_longitude, pickup_pin, delivery_otp, delivery_fee, estimated_minutes, is_batch, batch_order_count, group_code, stops_data, created_at, updated_at)
-        VALUES
-          (?, ?, ?, ?, 'ASSIGNED', 'Shree Ganesh Flour Mill & Grinding Hub', 'Multi-Stop Group Route', 23.0225, 72.5714, '4821', '9120', ?, 22, 1, ?, ?, ?, NOW(), NOW())
-      `, [primaryId, req.user.id || 3, driverName, driverPhone, totalFee || 200.0, (stops || []).length || 2, resolvedGroupCode, stopsJson]);
+    const maxRes = await query('SELECT COALESCE(MAX(group_id), 8000) AS max_id FROM orders');
+    const nextVal = (maxRes && maxRes[0] && maxRes[0].max_id) ? parseInt(maxRes[0].max_id) + 1 : (8001 + Math.floor(Math.random() * 500));
+    uniqueGroupId = nextVal >= 8001 ? nextVal : 8001;
+  } catch (_) {
+    uniqueGroupId = 8001 + (Date.now() % 90000);
+  }
+
+  const stopCount = (stops && Array.isArray(stops) && stops.length > 0) ? stops.length : (allNumericIds.size || 2);
+  let resolvedGroupCode = (groupCode && groupCode.trim().length > 0) ? groupCode.trim() : '';
+  if (!resolvedGroupCode || resolvedGroupCode === '#HD-POOL-2X' || resolvedGroupCode === '#HD-GRP-201' || (resolvedGroupCode.startsWith('#HD-POOL-') && resolvedGroupCode.split('-').length <= 3)) {
+    resolvedGroupCode = `#HD-POOL-${stopCount}X-${uniqueGroupId}`;
+  }
+
+  // 3. Update MySQL database for all batched orders with UNIQUE group_id & group_code
+  let dbPrimaryId = idArray[0] || uniqueGroupId;
+  try {
+    let whereClauses = [];
+    let queryParams = [];
+
+    if (idArray.length > 0) {
+      whereClauses.push(`id IN (${idArray.map(() => '?').join(',')})`);
+      queryParams.push(...idArray);
+    }
+    if (numStrArray.length > 0) {
+      whereClauses.push(`order_number IN (${numStrArray.map(() => '?').join(',')})`);
+      queryParams.push(...numStrArray);
     }
 
-    if (Array.isArray(orderIds) && orderIds.length > 0) {
-      const placeholders = orderIds.map(() => '?').join(',');
-      await query(`UPDATE orders SET status = 'ASSIGNED', group_code = ?, group_id = ?, updated_at = NOW() WHERE id IN (${placeholders})`, [resolvedGroupCode, primaryId, ...orderIds]);
+    let matchedDbOrders = [];
+    if (whereClauses.length > 0) {
+      matchedDbOrders = await query(`SELECT id, order_number FROM orders WHERE ${whereClauses.join(' OR ')}`, queryParams);
+    }
 
-      // Ensure every order has a corresponding delivery row marked ASSIGNED
-      for (const oId of orderIds) {
-        const parsedOId = parseInt(oId);
-        if (parsedOId !== primaryId) {
-          const subExisting = await query('SELECT id FROM deliveries WHERE order_id = ? LIMIT 1', [parsedOId]);
+    if (matchedDbOrders && matchedDbOrders.length > 0) {
+      dbPrimaryId = matchedDbOrders[0].id;
+      const targetIds = matchedDbOrders.map(o => o.id);
+      const updatePlaceholders = targetIds.map(() => '?').join(',');
+
+      // Update unique group_code and unique group_id on all batched orders in MySQL
+      await query(`
+        UPDATE orders 
+        SET status = 'ASSIGNED', 
+            group_code = ?, 
+            group_id = ?, 
+            updated_at = NOW() 
+        WHERE id IN (${updatePlaceholders})
+      `, [resolvedGroupCode, uniqueGroupId, ...targetIds]);
+
+      // Update / insert primary batch delivery record
+      const existing = await query('SELECT id FROM deliveries WHERE order_id = ? LIMIT 1', [dbPrimaryId]);
+      if (existing && existing.length > 0) {
+        await query(`
+          UPDATE deliveries SET
+            delivery_person_id = ?,
+            delivery_person_name = ?,
+            delivery_person_phone = ?,
+            status = 'ASSIGNED',
+            is_batch = 1,
+            batch_order_count = ?,
+            group_code = ?,
+            stops_data = ?,
+            delivery_fee = ?,
+            updated_at = NOW()
+          WHERE order_id = ?
+        `, [req.user?.id || 3, driverName, driverPhone, matchedDbOrders.length, resolvedGroupCode, stopsJson, totalFee || 200.0, dbPrimaryId]);
+      } else {
+        await query(`
+          INSERT INTO deliveries
+            (order_id, delivery_person_id, delivery_person_name, delivery_person_phone, status, pickup_address, delivery_address, current_latitude, current_longitude, pickup_pin, delivery_otp, delivery_fee, estimated_minutes, is_batch, batch_order_count, group_code, stops_data, created_at, updated_at)
+          VALUES
+            (?, ?, ?, ?, 'ASSIGNED', 'Shree Ganesh Flour Mill & Grinding Hub', 'Multi-Stop Group Route', 23.0225, 72.5714, '4821', '9120', ?, 22, 1, ?, ?, ?, NOW(), NOW())
+        `, [dbPrimaryId, req.user?.id || 3, driverName, driverPhone, totalFee || 200.0, matchedDbOrders.length, resolvedGroupCode, stopsJson]);
+      }
+
+      // Ensure every order has a corresponding delivery row with unique group_code set
+      for (const orderRow of matchedDbOrders) {
+        if (orderRow.id !== dbPrimaryId) {
+          const subExisting = await query('SELECT id FROM deliveries WHERE order_id = ? LIMIT 1', [orderRow.id]);
           if (subExisting && subExisting.length > 0) {
-            await query(`UPDATE deliveries SET status = 'ASSIGNED', delivery_person_id = ?, group_code = ?, updated_at = NOW() WHERE order_id = ?`, [req.user.id || 3, resolvedGroupCode, parsedOId]);
+            await query(`UPDATE deliveries SET status = 'ASSIGNED', delivery_person_id = ?, group_code = ?, updated_at = NOW() WHERE order_id = ?`, [req.user?.id || 3, resolvedGroupCode, orderRow.id]);
           } else {
             await query(`
               INSERT INTO deliveries
                 (order_id, delivery_person_id, delivery_person_name, delivery_person_phone, status, pickup_address, delivery_address, current_latitude, current_longitude, pickup_pin, delivery_otp, delivery_fee, estimated_minutes, is_batch, batch_order_count, group_code, created_at, updated_at)
               VALUES
                 (?, ?, ?, ?, 'ASSIGNED', 'Shree Ganesh Flour Mill & Grinding Hub', 'Multi-Stop Group Route', 23.0225, 72.5714, '4821', '9120', 45.0, 22, 1, 1, ?, NOW(), NOW())
-            `, [parsedOId, req.user.id || 3, driverName, driverPhone, resolvedGroupCode]);
+            `, [orderRow.id, req.user?.id || 3, driverName, driverPhone, resolvedGroupCode]);
           }
         }
       }
@@ -794,8 +901,9 @@ exports.acceptGroupDelivery = async (req, res) => {
     message: 'Multi-stop grouped batch order accepted and stored in database',
     data: {
       groupCode: resolvedGroupCode,
-      orderIds: orderIds || [505, 506],
-      stopsCount: (stops || []).length || 2,
+      groupId: uniqueGroupId,
+      orderIds: Array.from(allNumericIds),
+      stopsCount: stopCount,
       totalFee: totalFee || 200.0
     }
   });
@@ -889,65 +997,38 @@ exports.markPickedUp = async (req, res) => {
     return res.status(404).json({ status: 'error', message: 'Invalid order ID' });
   }
 
-  const { pin } = req.body;
-
-  // Accept any known master PIN for smooth pickup flow
-  const providedPin = String(pin || '4821').trim();
-  const isMasterPin = ['4821', '1234', '9999', '0000', '1942', '8210', '3321'].includes(providedPin);
-
-  if (!isMasterPin) {
-    try {
-      const dbOrder = await query('SELECT pickup_pin FROM orders WHERE id = ? LIMIT 1', [orderId]);
-      if (dbOrder && dbOrder.length > 0 && dbOrder[0].pickup_pin) {
-        const expectedPin = String(dbOrder[0].pickup_pin).trim();
-        if (providedPin !== expectedPin) {
-          console.warn(`PIN mismatch for order ${orderId}: expected ${expectedPin}, got ${providedPin} — allowing via fallback`);
-        }
-      }
-    } catch (_) {}
-  }
-
-  // Update in-memory store if exists
-  const inMemOrder = store.orders.find(o => o.id === orderId);
-  if (inMemOrder) {
-    inMemOrder.status = ORDER_STATUS.OUT_FOR_DELIVERY;
-    if (inMemOrder.timeline) {
-      inMemOrder.timeline.push({
-        status: ORDER_STATUS.OUT_FOR_DELIVERY,
-        timestamp: new Date().toISOString(),
-        note: 'Picked up from mill by delivery partner'
-      });
-    }
-  }
-
-  const delivery = store.deliveries.find(d => d.orderId === orderId);
-  if (delivery) {
-    delivery.status = DELIVERY_STATUS.PICKED_UP_FROM_MILL;
-    delivery.updatedAt = new Date().toISOString();
-  }
-
   // Real-time Database Persistence
   try {
-    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.OUT_FOR_DELIVERY, orderId]);
+    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ? OR order_number = ?', [ORDER_STATUS.OUT_FOR_DELIVERY, orderId, paramStr]);
     await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.OUT_FOR_DELIVERY, orderId]);
 
-    // For grouped batch: update all orders in batch to OUT_FOR_DELIVERY and group delivery to IN_TRANSIT
-    const groupRows = await query('SELECT group_id FROM orders WHERE id = ? AND group_id IS NOT NULL LIMIT 1', [orderId]);
-    if (groupRows && groupRows.length > 0 && groupRows[0].group_id) {
-      await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE group_id = ?', [ORDER_STATUS.OUT_FOR_DELIVERY, groupRows[0].group_id]);
-      await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.OUT_FOR_DELIVERY, groupRows[0].group_id]);
+    // For grouped batch: update all orders in batch to OUT_FOR_DELIVERY
+    const groupRows = await query('SELECT group_id, group_code FROM orders WHERE id = ? OR order_number = ? LIMIT 1', [orderId, paramStr]);
+    if (groupRows && groupRows.length > 0) {
+      const dbGroupId = groupRows[0].group_id;
+      const dbGroupCode = groupRows[0].group_code;
+      if (dbGroupId) {
+        await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE group_id = ?', [ORDER_STATUS.OUT_FOR_DELIVERY, dbGroupId]);
+        await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.OUT_FOR_DELIVERY, dbGroupId]);
+      }
+      if (dbGroupCode) {
+        await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE group_code = ?', [ORDER_STATUS.OUT_FOR_DELIVERY, dbGroupCode]);
+        await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE group_code = ?', [DELIVERY_STATUS.OUT_FOR_DELIVERY, dbGroupCode]);
+      }
     }
   } catch (dbErr) {
     console.warn('MySQL markPickedUp update warning:', dbErr.message);
   }
 
-  const resDelivery = delivery || {
-    orderId,
-    status: DELIVERY_STATUS.PICKED_UP_FROM_MILL,
-    updatedAt: new Date().toISOString()
-  };
-
-  res.json({ status: 'success', message: 'Order picked up from mill', data: { delivery: resDelivery, order: inMemOrder, orderId } });
+  res.json({
+    status: 'success',
+    message: 'Order picked up from mill and stored in database',
+    data: {
+      orderId,
+      status: DELIVERY_STATUS.OUT_FOR_DELIVERY,
+      updatedAt: new Date().toISOString()
+    }
+  });
 };
 
 /**
@@ -958,54 +1039,51 @@ exports.markOutForDelivery = async (req, res) => {
   const paramStr = (req.params.orderId || '').toString().trim();
   const orderId = parseInt(paramStr.replace(/[^0-9]/g, ''));
 
-  // Update in-memory store if exists
-  const inMemOrder = store.orders.find(o => o.id === orderId);
-  if (inMemOrder) {
-    inMemOrder.status = ORDER_STATUS.OUT_FOR_DELIVERY;
-  }
-
-  const delivery = store.deliveries.find(d => d.orderId === orderId);
-  if (delivery) {
-    delivery.status = DELIVERY_STATUS.OUT_FOR_DELIVERY;
-    delivery.updatedAt = new Date().toISOString();
-  }
-
   // Real-time Database Persistence
   try {
-    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.OUT_FOR_DELIVERY, orderId]);
+    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ? OR order_number = ?', [ORDER_STATUS.OUT_FOR_DELIVERY, orderId, paramStr]);
     await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.OUT_FOR_DELIVERY, orderId]);
 
-    // For grouped batch: also update the group delivery record
-    const groupRows = await query('SELECT group_id FROM orders WHERE id = ? AND group_id IS NOT NULL LIMIT 1', [orderId]);
-    if (groupRows && groupRows.length > 0 && groupRows[0].group_id) {
-      await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.OUT_FOR_DELIVERY, groupRows[0].group_id]);
+    const groupRows = await query('SELECT group_id, group_code FROM orders WHERE id = ? OR order_number = ? LIMIT 1', [orderId, paramStr]);
+    if (groupRows && groupRows.length > 0) {
+      const dbGroupId = groupRows[0].group_id;
+      const dbGroupCode = groupRows[0].group_code;
+      if (dbGroupId) {
+        await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE group_id = ?', [ORDER_STATUS.OUT_FOR_DELIVERY, dbGroupId]);
+        await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.OUT_FOR_DELIVERY, dbGroupId]);
+      }
+      if (dbGroupCode) {
+        await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE group_code = ?', [ORDER_STATUS.OUT_FOR_DELIVERY, dbGroupCode]);
+        await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE group_code = ?', [DELIVERY_STATUS.OUT_FOR_DELIVERY, dbGroupCode]);
+      }
     }
-  } catch (dbErr) {}
+  } catch (dbErr) {
+    console.warn('MySQL markOutForDelivery update warning:', dbErr.message);
+  }
 
-  const resDelivery = delivery || {
-    orderId,
-    status: DELIVERY_STATUS.OUT_FOR_DELIVERY,
-    updatedAt: new Date().toISOString()
-  };
-
-  res.json({ status: 'success', message: 'Order marked out for delivery', data: { delivery: resDelivery, order: inMemOrder, orderId } });
+  res.json({
+    status: 'success',
+    message: 'Order marked out for delivery in database',
+    data: {
+      orderId,
+      status: DELIVERY_STATUS.OUT_FOR_DELIVERY,
+      updatedAt: new Date().toISOString()
+    }
+  });
 };
 
 /**
  * @desc Update Live Rider Location & Telemetry Stream
  * @route POST /api/v1/delivery/orders/:orderId/location or /api/v1/delivery/location
  */
-exports.updateLocation = (req, res) => {
+exports.updateLocation = async (req, res) => {
   const orderId = req.params.orderId ? parseInt(req.params.orderId) : null;
   const {
     latitude,
     longitude,
     speed,
     heading,
-    etaSeconds,
-    distanceMeters,
-    stage,
-    trafficCondition
+    etaSeconds
   } = req.body;
 
   if (latitude === undefined || longitude === undefined) {
@@ -1015,32 +1093,17 @@ exports.updateLocation = (req, res) => {
   const latNum = parseFloat(latitude);
   const lngNum = parseFloat(longitude);
 
-  if (orderId) {
-    const delivery = store.deliveries.find(d => d.orderId === orderId);
-    if (delivery) {
-      delivery.currentLatitude = latNum;
-      delivery.currentLongitude = lngNum;
-      if (speed !== undefined) delivery.speedKmH = parseInt(speed);
-      if (heading !== undefined) delivery.heading = heading;
-      if (etaSeconds !== undefined) delivery.etaSeconds = parseInt(etaSeconds);
-      if (distanceMeters !== undefined) delivery.distanceMeters = parseInt(distanceMeters);
-      if (stage !== undefined) delivery.tripStage = stage;
-      if (trafficCondition !== undefined) delivery.trafficCondition = trafficCondition;
-      delivery.updatedAt = new Date().toISOString();
+  try {
+    if (orderId && !isNaN(orderId)) {
+      await query('UPDATE deliveries SET current_latitude = ?, current_longitude = ?, updated_at = NOW() WHERE order_id = ?', [latNum, lngNum, orderId]);
     }
-  }
-
-  // Also update user's last known location
-  const rider = store.users.find(u => u.id === req.user.id);
-  if (rider) {
-    rider.lastLatitude = latNum;
-    rider.lastLongitude = lngNum;
-    rider.lastActiveAt = new Date().toISOString();
+  } catch (err) {
+    console.warn('updateLocation MySQL warning:', err.message);
   }
 
   res.json({
     status: 'success',
-    message: 'Live telemetry synced',
+    message: 'Live telemetry synced to database',
     data: {
       latitude: latNum,
       longitude: lngNum,
@@ -1048,6 +1111,48 @@ exports.updateLocation = (req, res) => {
       heading: heading || 'NE',
       etaSeconds: etaSeconds || 180,
       timestamp: new Date().toISOString()
+    }
+  });
+};
+
+/**
+ * @desc Confirm Grain Dropped at Mill by Driver (Leg 1 complete: Home → Mill)
+ *       Order status becomes PROCESSING so shopkeeper sees it in PENDING (milling queue).
+ *       Does NOT set DELIVERED — flour is not ready yet, mill must grind first.
+ * @route POST /api/v1/delivery/orders/:orderId/grain-drop
+ */
+exports.markGrainDroppedAtMill = async (req, res) => {
+  const paramStr = (req.params.orderId || '').toString().trim();
+  const numId = parseInt(paramStr.replace(/[^0-9]/g, ''));
+  const effectiveId = !isNaN(numId) && numId > 0 ? numId : null;
+
+  try {
+    if (effectiveId) {
+      // Set order to PROCESSING — grain is now at mill, milling in progress
+      // Shopkeeper Pending tab filters: ACCEPTED | PROCESSING | PACKING → this keeps it there
+      await query(
+        'UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?',
+        [ORDER_STATUS.PROCESSING, effectiveId]
+      );
+      // Mark the Leg 1 delivery row as completed (it's done — grain was transported)
+      await query(
+        'UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ? AND status IN (?, ?, ?)',
+        ['GRAIN_DROPPED', effectiveId, 'ASSIGNED', 'OUT_FOR_DELIVERY', 'PICKED_UP_FROM_MILL']
+      );
+    }
+  } catch (dbErr) {
+    console.warn('MySQL markGrainDroppedAtMill warning:', dbErr.message);
+  }
+
+  res.json({
+    status: 'success',
+    message: 'Grain dropped at mill. Order is now in milling queue (Pending). Leg 1 complete.',
+    data: {
+      orderId: effectiveId || paramStr,
+      orderStatus: ORDER_STATUS.PROCESSING,
+      legCompleted: 'LEG_1_GRAIN_PICKUP',
+      nextStep: 'Shopkeeper will mill the grain and mark Ready for Pickup to trigger Leg 2 delivery.',
+      updatedAt: new Date().toISOString()
     }
   });
 };
@@ -1064,58 +1169,29 @@ exports.markDelivered = async (req, res) => {
   const { otp } = req.body;
   const providedOtp = String(otp || '7391').trim();
 
-  // 1. Update in-memory store
-  const matchedOrders = store.orders.filter(o =>
-    (effectiveId && o.id === effectiveId) ||
-    o.orderNumber === paramStr ||
-    (o.groupCode && o.groupCode === paramStr) ||
-    (effectiveId && o.groupId && o.groupId === effectiveId)
-  );
-
-  matchedOrders.forEach(ord => {
-    ord.status = ORDER_STATUS.DELIVERED;
-    ord.paymentStatus = 'PAID';
-    if (ord.timeline) {
-      ord.timeline.push({
-        status: ORDER_STATUS.DELIVERED,
-        timestamp: new Date().toISOString(),
-        note: 'Delivered to customer successfully'
-      });
-    }
-  });
-
-  // Also update store.deliveries
-  store.deliveries.forEach(d => {
-    if (
-      (effectiveId && d.orderId === effectiveId) ||
-      d.orderId === paramStr ||
-      (d.groupCode && d.groupCode === paramStr)
-    ) {
-      d.status = DELIVERY_STATUS.DELIVERED;
-      d.updatedAt = new Date().toISOString();
-    }
-  });
-
-  // Increment rider trips
-  const rider = store.users.find(u => u.id === req.user.id);
-  if (rider) {
-    rider.totalTrips = (rider.totalTrips || 0) + (matchedOrders.length || 1);
-  }
-
-  // 2. Real-time Database Persistence
+  // Real-time Database Persistence
   try {
+    const whereConditions = [];
+    const queryParams = [];
     if (effectiveId) {
-      // Mark THIS order as delivered
-      await query('UPDATE orders SET status = ?, payment_status = ?, updated_at = NOW() WHERE id = ? OR order_number = ?', [ORDER_STATUS.DELIVERED, 'PAID', effectiveId, paramStr]);
+      whereConditions.push('id = ?');
+      queryParams.push(effectiveId);
+    }
+    if (paramStr) {
+      whereConditions.push('order_number = ?');
+      queryParams.push(paramStr);
+    }
 
-      // Mark the delivery record for this exact order_id
-      await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.DELIVERED, effectiveId]);
-
-      // For grouped batch orders: check if this order belongs to a group or is the group primary
-      const groupRows = await query('SELECT group_id, group_code FROM orders WHERE (id = ? OR order_number = ?) LIMIT 1', [effectiveId, paramStr]);
+    if (whereConditions.length > 0) {
+      const groupRows = await query(`SELECT id, group_id, group_code FROM orders WHERE ${whereConditions.join(' OR ')} LIMIT 1`, queryParams);
       if (groupRows && groupRows.length > 0) {
-        const dbGroupId = groupRows[0].group_id;
-        const dbGroupCode = groupRows[0].group_code;
+        const row = groupRows[0];
+        const dbGroupId = row.group_id;
+        const dbGroupCode = row.group_code;
+
+        await query('UPDATE orders SET status = ?, payment_status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.DELIVERED, 'PAID', row.id]);
+        await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.DELIVERED, row.id]);
+
         if (dbGroupId) {
           await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.DELIVERED, dbGroupId]);
           await query('UPDATE orders SET status = ?, payment_status = ?, updated_at = NOW() WHERE group_id = ?', [ORDER_STATUS.DELIVERED, 'PAID', dbGroupId]);
@@ -1132,14 +1208,9 @@ exports.markDelivered = async (req, res) => {
 
   res.json({
     status: 'success',
-    message: 'Order delivered successfully',
+    message: 'Order delivered and payment marked in database',
     data: {
       orderId: effectiveId || paramStr,
-      delivery: {
-        orderId: effectiveId || paramStr,
-        status: DELIVERY_STATUS.DELIVERED,
-        updatedAt: new Date().toISOString()
-      },
       status: DELIVERY_STATUS.DELIVERED,
       updatedAt: new Date().toISOString()
     }
@@ -1150,34 +1221,33 @@ exports.markDelivered = async (req, res) => {
  * @desc Get Live Tracking for Delivery ID
  * @route GET /api/v1/delivery/tracking/:deliveryId
  */
-exports.getDeliveryTracking = (req, res) => {
+exports.getDeliveryTracking = async (req, res) => {
   const deliveryId = parseInt(req.params.deliveryId);
-  const delivery = store.deliveries.find(d => d.id === deliveryId);
-
-  if (!delivery) {
-    return res.status(404).json({ status: 'error', message: 'Delivery record not found' });
+  try {
+    const rows = await query('SELECT * FROM deliveries WHERE id = ? OR order_id = ? LIMIT 1', [deliveryId || 0, deliveryId || 0]);
+    if (rows && rows.length > 0) {
+      return res.json({ status: 'success', data: { delivery: rows[0] } });
+    }
+  } catch (err) {
+    console.warn('MySQL getDeliveryTracking error:', err.message);
   }
-
-  res.json({ status: 'success', data: { delivery } });
+  return res.status(404).json({ status: 'error', message: 'Delivery record not found' });
 };
 
 /**
  * @desc Update Delivery Status Manually
  * @route PUT /api/v1/delivery/:deliveryId/status
  */
-exports.updateDeliveryStatus = (req, res) => {
+exports.updateDeliveryStatus = async (req, res) => {
   const deliveryId = parseInt(req.params.deliveryId);
   const { status } = req.body;
-  const delivery = store.deliveries.find(d => d.id === deliveryId);
-
-  if (!delivery) {
-    return res.status(404).json({ status: 'error', message: 'Delivery record not found' });
+  try {
+    await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE id = ? OR order_id = ?', [status, deliveryId || 0, deliveryId || 0]);
+    return res.json({ status: 'success', message: 'Delivery status updated in database', data: { deliveryId, status } });
+  } catch (err) {
+    console.warn('MySQL updateDeliveryStatus error:', err.message);
+    return res.status(500).json({ status: 'error', message: err.message });
   }
-
-  delivery.status = status;
-  delivery.updatedAt = new Date().toISOString();
-
-  res.json({ status: 'success', message: 'Delivery status updated', data: { delivery } });
 };
 
 /**

@@ -677,6 +677,39 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
   }
 
   Future<void> _handleConfirmDelivery() async {
+    final isLeg1GrainDrop = widget.trip.isHomeGrainPickup;
+
+    if (isLeg1GrainDrop) {
+      // ── Leg 1: Driver drops raw grain at the mill ──
+      // Do NOT call confirmDelivery (that sets DELIVERED).
+      // Call confirmGrainDropAtMill → sets PROCESSING → shopkeeper sees it in Pending tab.
+      setState(() => _isProcessing = true);
+
+      final res = await DeliveryApiService.instance.confirmGrainDropAtMill(
+        _activeStop.orderId,
+      );
+
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+
+      if (res['success'] == true) {
+        setState(() {
+          _currentStage = TripStage.completed;
+        });
+        _navSimulationTimer?.cancel();
+        _showGrainDropCompletionDialog();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message'] ?? 'Grain drop confirmation failed'),
+            backgroundColor: const Color(0xFFC0392B),
+          ),
+        );
+      }
+      return;
+    }
+
+    // ── Leg 2: Driver delivers milled flour to customer home ──
     final enteredOtp = _otpController.text.trim();
     final effectiveOtp = enteredOtp.isNotEmpty
         ? enteredOtp
@@ -744,6 +777,69 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
         ),
       );
     }
+  }
+
+  void _showGrainDropCompletionDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F8F5),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.grain_rounded, color: Color(0xFF1E8449), size: 38),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '🌾 Grain Delivered to Mill!',
+              style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Raw grain has been handed over to the flour mill.\n\nThe shopkeeper will start milling. Once ready, a new delivery trip (Flour → Home) will appear on the radar.',
+              style: GoogleFonts.plusJakartaSans(fontSize: 13, color: Colors.grey.shade600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: const Color(0xFFF9F5EF), borderRadius: BorderRadius.circular(12)),
+              child: Text(
+                '+₹${widget.trip.deliveryFee.toStringAsFixed(0)} Leg 1 Payout Credited',
+                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14, color: const Color(0xFF1E8449)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryTerracotta,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              if (widget.onTripCompleted != null) {
+                widget.onTripCompleted!();
+              } else if (Navigator.canPop(context)) {
+                Navigator.pop(context);
+              }
+            },
+            child: Text('Done', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showCompletionDialog() {

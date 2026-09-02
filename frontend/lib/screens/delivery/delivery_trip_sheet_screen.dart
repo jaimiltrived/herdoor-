@@ -85,9 +85,23 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
       final Set<dynamic> completedKeys = completed.map((c) => c['orderId'] ?? c['orderNumber']).toSet();
       for (var local in _completedTrips) {
         final key = local['orderId'] ?? local['orderNumber'];
-        if (key != null && !completedKeys.contains(key)) {
+        final orderNum = local['orderNumber'];
+        final localStops = (local['stops'] is List) ? (local['stops'] as List) : [];
+
+        // If not in completed, insert at top
+        if (key != null && !completedKeys.contains(key) && !completedKeys.contains(orderNum)) {
           completed.insert(0, local);
           completedKeys.add(key);
+          if (orderNum != null) completedKeys.add(orderNum);
+        } else if (localStops.isNotEmpty) {
+          // If server returned a flattened/incomplete item without stops, replace with rich local version
+          final existingIdx = completed.indexWhere((c) => c['orderId'] == key || c['orderNumber'] == orderNum || c['orderNumber'] == key);
+          if (existingIdx != -1) {
+            final existingStops = (completed[existingIdx]['stops'] is List) ? (completed[existingIdx]['stops'] as List) : [];
+            if (existingStops.length < localStops.length) {
+              completed[existingIdx] = local;
+            }
+          }
         }
       }
 
@@ -97,6 +111,30 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
           !completedKeys.contains(widget.activeTrip!.orderNumber) &&
           !assigned.any((t) => t.orderId == widget.activeTrip!.orderId)) {
         assigned.insert(0, widget.activeTrip!);
+      }
+
+      // Sort by real deliveredAt timestamp so newest deliveries always appear first
+      completed.sort((a, b) {
+        final ta = DateTime.tryParse(a['deliveredAt']?.toString() ?? '') ?? DateTime(2000);
+        final tb = DateTime.tryParse(b['deliveredAt']?.toString() ?? '') ?? DateTime(2000);
+        return tb.compareTo(ta); // newest first
+      });
+
+      // Recompute time-ago labels using real timestamps
+      for (final c in completed) {
+        final deliveredAt = DateTime.tryParse(c['deliveredAt']?.toString() ?? '');
+        if (deliveredAt != null) {
+          final diff = DateTime.now().difference(deliveredAt);
+          if (diff.inMinutes < 1) {
+            c['deliveredTimeAgo'] = 'Just now';
+          } else if (diff.inMinutes < 60) {
+            c['deliveredTimeAgo'] = '${diff.inMinutes} min ago';
+          } else if (diff.inHours < 24) {
+            c['deliveredTimeAgo'] = '${diff.inHours} hr ago';
+          } else {
+            c['deliveredTimeAgo'] = '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
+          }
+        }
       }
 
       setState(() {
@@ -204,16 +242,19 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
         // Add ONE grouped batch entry (NOT split into individual stops)
         // This preserves the grouped batch view in Past Deliveries with stops breakdown
         if (!_completedTrips.any((c) => c['orderId'] == trip.orderId || c['orderNumber'] == trip.orderNumber)) {
-          final stopNames = trip.stops.map((s) {
+          final uniqueStopNames = trip.stops.map((s) {
             final name = s.customerName;
-            // Remove "(Stop N)" suffix if present for cleaner display
-            return name.replaceAll(RegExp(r'\s*\(Stop\s*\d+\)\s*'), '');
-          }).toList();
+            return name.replaceAll(RegExp(r'\s*\(Stop\s*\d+\)\s*'), '').trim();
+          }).toSet().toList();
+
+          final customerSummary = uniqueStopNames.length == 1
+              ? '${uniqueStopNames.first} • ${trip.stops.length} Orders'
+              : uniqueStopNames.join(' + ');
 
           _completedTrips.insert(0, {
             'orderId': trip.orderId,
             'orderNumber': trip.orderNumber,
-            'customerName': 'Grouped ${trip.stops.length}x Batch (${stopNames.join(' + ')})',
+            'customerName': 'Grouped ${trip.stops.length}x Batch ($customerSummary)',
             'customerPhone': trip.customerPhone,
             'millName': trip.millName,
             'millAddress': trip.millAddress,
@@ -650,38 +691,71 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
             ),
             child: Column(
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.home_work_outlined, size: 16, color: Color(0xFF2980B9)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text('Home Pickup: ${trip.homePickupAddress}', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.storefront_rounded, size: 16, color: AppTheme.primaryTerracotta),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text('Chakki Mill: ${trip.millName}', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.location_on_rounded, size: 16, color: Color(0xFF1E8449)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text('Final Drop: ${trip.deliveryAddress}', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                  ],
-                ),
+                if (trip.isLeg1GrainPickup) ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.home_work_outlined, size: 16, color: Color(0xFF2980B9)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          isGrouped ? 'Home Pickups: ${trip.stops.length} Customer Addresses' : 'Home Pickup: ${trip.homePickupAddress}',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textPrimary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.storefront_rounded, size: 16, color: AppTheme.primaryTerracotta),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Chakki Mill Drop: ${trip.millName} (${trip.millAddress})',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textPrimary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.storefront_rounded, size: 16, color: AppTheme.primaryTerracotta),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Chakki Mill Pickup: ${trip.millName} (${trip.millAddress})',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textPrimary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.location_on_rounded, size: 16, color: Color(0xFF1E8449)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          isGrouped ? 'Customer Doorstep Drops: ${trip.stops.length} Customer Homes' : 'Final Drop: ${trip.deliveryAddress}',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textPrimary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -692,6 +766,8 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
             ...trip.stops.asMap().entries.map((e) {
               final idx = e.key;
               final stop = e.value;
+              final pickupAddr = trip.isLeg1GrainPickup ? stop.homePickupAddress : trip.millAddress;
+              final dropAddr = trip.isLeg1GrainPickup ? trip.millAddress : stop.deliveryAddress;
               return Container(
                 margin: const EdgeInsets.only(bottom: 6),
                 padding: const EdgeInsets.all(8),
@@ -711,8 +787,10 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
                       ],
                     ),
                     const SizedBox(height: 2),
-                    Text('🏠 Pickup: ${stop.homePickupAddress}', style: GoogleFonts.plusJakartaSans(fontSize: 10, color: const Color(0xFF0284C7)), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    Text('🏡 Drop: ${stop.deliveryAddress}', style: GoogleFonts.plusJakartaSans(fontSize: 10, color: AppTheme.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text('📦 ${stop.quantityKg.toStringAsFixed(1)} kg • ${stop.grainTypeName}', style: GoogleFonts.plusJakartaSans(fontSize: 10, color: AppTheme.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 2),
+                    Text('📍 Pickup: $pickupAddr', style: GoogleFonts.plusJakartaSans(fontSize: 10, color: const Color(0xFF0284C7)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text('🏡 Drop: $dropAddr', style: GoogleFonts.plusJakartaSans(fontSize: 10, color: const Color(0xFF16A34A)), maxLines: 1, overflow: TextOverflow.ellipsis),
                   ],
                 ),
               );
@@ -847,10 +925,17 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
   // TAB 2: Past Delivered Orders History
   Widget _buildPastDeliveriesTab() {
     bool isGroupedTrip(Map<String, dynamic> t) {
+      final stops = t['stops'];
+      final stopsLen = (stops is List) ? stops.length : 0;
+      final custName = (t['customerName'] ?? '').toString().toLowerCase();
+      final ordNum = (t['orderNumber'] ?? '').toString().toUpperCase();
       return t['isBatch'] == true ||
-          (t['orderNumber'] ?? '').toString().contains('GRP') ||
+          ordNum.contains('GRP') ||
+          ordNum.contains('POOL') ||
+          custName.contains('grouped') ||
+          custName.contains('batch') ||
           (t['stopsCount'] ?? 1) > 1 ||
-          (t['stops'] is List && (t['stops'] as List).length > 1);
+          stopsLen > 1;
     }
 
     final filtered = _completedTrips.where((t) {
@@ -955,8 +1040,13 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
   }
 
   Widget _buildPastDeliveryCard(Map<String, dynamic> item) {
+    final ordNum = (item['orderNumber'] ?? '').toString().toUpperCase();
+    final custName = (item['customerName'] ?? '').toString().toLowerCase();
     final isGrouped = item['isBatch'] == true ||
-        (item['orderNumber'] ?? '').toString().contains('GRP') ||
+        ordNum.contains('GRP') ||
+        ordNum.contains('POOL') ||
+        custName.contains('grouped') ||
+        custName.contains('batch') ||
         (item['stopsCount'] ?? 1) > 1 ||
         (item['stops'] is List && (item['stops'] as List).length > 1);
 

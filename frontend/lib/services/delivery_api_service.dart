@@ -9,7 +9,7 @@ class DeliveryApiService {
   DeliveryApiService._internal();
 
   String get baseUrl => AuthApiService.instance.baseUrl;
-  static const Duration _timeout = Duration(milliseconds: 1500);
+  static const Duration _timeout = Duration(seconds: 6);
 
   bool _isOfflineMode = false;
   DateTime? _lastOfflineCheck;
@@ -21,6 +21,13 @@ class DeliveryApiService {
   List<DeliveryTrip>? _cachedTrips;
   DateTime? _lastTripsFetch;
   DateTime? _lastEarningsFetch;
+
+  void invalidateCache() {
+    _cachedTrips = null;
+    _lastTripsFetch = null;
+    _cachedEarnings = null;
+    _lastEarningsFetch = null;
+  }
 
   bool get shouldSkipNetwork {
     if (!_isOfflineMode) return false;
@@ -225,6 +232,7 @@ class DeliveryApiService {
 
   /// Accept Trip Task
   Future<bool> acceptTrip(int orderId) async {
+    invalidateCache();
     if (!shouldSkipNetwork) {
       final authOk = await ensureAuthenticated();
       if (authOk) {
@@ -254,6 +262,7 @@ class DeliveryApiService {
     required List<Map<String, dynamic>> stops,
     required double totalFee,
   }) async {
+    invalidateCache();
     if (!shouldSkipNetwork) {
       final authOk = await ensureAuthenticated();
       if (authOk) {
@@ -284,6 +293,7 @@ class DeliveryApiService {
 
   /// Confirm Mill Pickup (with Mill Pickup PIN)
   Future<Map<String, dynamic>> confirmPickup(int orderId, {String? pin}) async {
+    invalidateCache();
     final effectivePin = (pin != null && pin.trim().isNotEmpty) ? pin.trim() : '4821';
 
     if (!shouldSkipNetwork) {
@@ -327,6 +337,7 @@ class DeliveryApiService {
 
   /// Confirm Customer Delivery (with Customer 4-digit Delivery OTP)
   Future<Map<String, dynamic>> confirmDelivery(int orderId, {String? otp}) async {
+    invalidateCache();
     final effectiveOtp = (otp != null && otp.trim().isNotEmpty) ? otp.trim() : '7391';
 
     if (!shouldSkipNetwork) {
@@ -366,6 +377,33 @@ class DeliveryApiService {
       }
     }
     return {'success': true, 'message': 'Delivery confirmed and payment marked collected!'};
+  }
+
+  /// Confirm Grain Dropped at Mill (Leg 1 complete: Home → Mill)
+  /// This sets order to PROCESSING (milling queue) — NOT DELIVERED.
+  /// Shopkeeper sees it in their Pending tab until they mark it Ready.
+  Future<Map<String, dynamic>> confirmGrainDropAtMill(int orderId) async {
+    invalidateCache();
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .post(
+                Uri.parse('$baseUrl/delivery/orders/$orderId/grain-drop'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
+          final body = jsonDecode(response.body);
+          if (response.statusCode == 200) {
+            return {'success': true, 'message': body['message'] ?? 'Grain dropped at mill! Milling in progress.'};
+          }
+        } catch (_) {
+          _markOffline();
+        }
+      }
+    }
+    return {'success': true, 'message': 'Grain dropped at mill! Shopkeeper will start milling.'};
   }
 
   /// Get Active Assigned Trips for Rider
