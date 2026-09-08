@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Users, UserCheck, Calendar, RotateCcw, Search, Filter, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
 import { apiService } from '../services/apiService';
+import StatusLight, { StatusBadge, getUserLight } from '../components/StatusLight';
 
 export default function CitizensPage() {
   const [citizens, setCitizens] = useState([
@@ -258,9 +259,12 @@ export default function CitizensPage() {
                     <td style={{ fontWeight: 700 }}>{c.orders}</td>
                     <td style={{ color: '#756D69', fontSize: '0.85rem' }}>{c.contact}</td>
                     <td>
-                      <span className="tag-pill" style={{ background: c.statusBg, color: c.statusColor, padding: '4px 12px', borderRadius: '12px' }}>
-                        {c.status}
-                      </span>
+                      <StatusBadge
+                        status={c.status}
+                        type="user"
+                        light={getUserLight(c.status)}
+                        size="sm"
+                      />
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', gap: '8px' }}>

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
+import '../services/auth_api_service.dart';
+import 'user_avatar.dart';
 import '../screens/mills_list_screen.dart';
 import '../screens/saved_addresses_screen.dart';
 import '../screens/payment_methods_screen.dart';
@@ -26,6 +28,20 @@ class AppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currentUser = AuthApiService.instance.currentUser;
+    final userName = isMerchantMode
+        ? 'Shree Ganesh Flour Mill'
+        : (currentUser?['name']?.toString().trim().isNotEmpty == true
+            ? currentUser!['name'].toString().trim()
+            : 'Citizen User');
+    final userSubtitle = isMerchantMode
+        ? 'shop@shreeganesh.com'
+        : (currentUser?['email']?.toString().trim().isNotEmpty == true
+            ? currentUser!['email'].toString().trim()
+            : (currentUser?['phone']?.toString().trim().isNotEmpty == true
+                ? currentUser!['phone'].toString().trim()
+                : 'Citizen Customer'));
+
     return Drawer(
       backgroundColor: AppTheme.background,
       child: Column(
@@ -46,21 +62,11 @@ class AppDrawer extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppTheme.primaryTerracotta, width: 2),
-                        image: DecorationImage(
-                          image: NetworkImage(
-                            isMerchantMode
-                                ? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80'
-                                : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80',
-                          ),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
+                    UserAvatar(
+                      size: 60,
+                      name: userName,
+                      borderWidth: 2,
+                      borderColor: AppTheme.primaryTerracotta,
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -69,7 +75,7 @@ class AppDrawer extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        isMerchantMode ? 'Merchant Admin' : 'Gold Customer',
+                        isMerchantMode ? 'Merchant Admin' : 'Citizen Customer',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -81,7 +87,7 @@ class AppDrawer extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  isMerchantMode ? 'Artisan Mill Co.' : 'Sarah Jenkins',
+                  userName,
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -89,7 +95,7 @@ class AppDrawer extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  isMerchantMode ? 'merchant@artisanmill.com' : 'sarah.jenkins@example.com',
+                  userSubtitle,
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 13,
                     color: AppTheme.textSecondary,

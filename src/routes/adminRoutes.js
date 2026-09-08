@@ -6,7 +6,7 @@ const { ROLES } = require('../constants/enums');
 
 // Admin authentication & authorization
 router.use(authenticateToken);
-router.use(authorizeRoles(ROLES.ADMIN, ROLES.SHOPKEEPER));
+router.use(authorizeRoles(ROLES.ADMIN));
 
 // Platform Dashboard
 router.get('/dashboard', adminController.getDashboardMetrics);

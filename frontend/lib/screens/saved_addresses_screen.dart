@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import '../models/app_models.dart';
 import '../services/customer_api_service.dart';
+import '../services/auth_api_service.dart';
 
 class SavedAddressesScreen extends StatefulWidget {
   const SavedAddressesScreen({super.key});
@@ -15,20 +16,7 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
   int _defaultIndex = 0;
   bool _isLoading = true;
 
-  List<Map<String, String>> _addresses = [
-    {
-      'type': 'Home',
-      'address': 'Flat 402, Shivalik Towers, Satellite Road',
-      'city': 'Ahmedabad, Gujarat - 380015',
-      'phone': '+91 98765 43210',
-    },
-    {
-      'type': 'Office',
-      'address': 'Office 301, Pinnacle Business Park, Prahlad Nagar',
-      'city': 'Ahmedabad, Gujarat - 380015',
-      'phone': '+91 98765 43210',
-    },
-  ];
+  List<Map<String, String>> _addresses = [];
 
   @override
   void initState() {
@@ -54,7 +42,7 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
           'type': type,
           'address': line1,
           'city': city,
-          'phone': '+91 98765 43210',
+          'phone': AuthApiService.instance.currentUser?['phone'] ?? '+91 98765 43210',
         });
       }
 
@@ -66,7 +54,12 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
         });
       }
     } else {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _addresses = [];
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -234,12 +227,53 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
               ),
               const SizedBox(height: 20),
 
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _addresses.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 14),
-                itemBuilder: (context, index) {
+              if (!_isLoading && _addresses.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppTheme.borderLight),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: const BoxDecoration(
+                          color: AppTheme.surfaceWarm,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.location_off_outlined, color: AppTheme.primaryTerracotta, size: 30),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No Saved Addresses',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Add your delivery address below for fast pickup and doorstep milling handover.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _addresses.length,
+                  separatorBuilder: (context, index) => const SizedBox(height: 14),
+                  itemBuilder: (context, index) {
                   final item = _addresses[index];
                   final isDefault = index == _defaultIndex;
                   return GestureDetector(

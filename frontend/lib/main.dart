@@ -22,7 +22,7 @@ class HerDoorApp extends StatefulWidget {
 class _HerDoorAppState extends State<HerDoorApp> {
   bool _isSplashDone = false;
   bool _isLoggedIn = false;
-  UserRole _activeRole = UserRole.delivery; // Default to Delivery to showcase new rider side
+  UserRole _activeRole = UserRole.customer; // Default to Citizen / Customer
 
   @override
   Widget build(BuildContext context) {

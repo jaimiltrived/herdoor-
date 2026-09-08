@@ -23,12 +23,18 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
   late AnimationController _animationController;
   late Animation<double> _animation;
   bool _isTorchOn = false;
-  bool _isScanned = false;
-  bool _isScanning = true;
+  late List<ProductBagItem> _productBags;
+  final Set<String> _scannedBagIds = {};
+  int _selectedBagIndex = 0;
+
+  bool get _isAllScanned => _productBags.isNotEmpty && _scannedBagIds.length >= _productBags.length;
+  ProductBagItem get _currentBag => _productBags[_selectedBagIndex.clamp(0, _productBags.length - 1)];
 
   @override
   void initState() {
     super.initState();
+    _productBags = widget.order.productBags;
+
     _animationController = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
@@ -38,10 +44,10 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
 
-    // Simulate auto-scan detection after 2.5 seconds
-    Timer(const Duration(milliseconds: 2500), () {
-      if (mounted && !_isScanned) {
-        _handleScanSuccess();
+    // Auto scan first bag after 2.5s for seamless simulation
+    Timer(const Duration(milliseconds: 2200), () {
+      if (mounted && _scannedBagIds.isEmpty && _productBags.isNotEmpty) {
+        _scanBag(_productBags.first);
       }
     });
   }
@@ -52,10 +58,20 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
     super.dispose();
   }
 
-  void _handleScanSuccess() {
+  void _scanBag(ProductBagItem bag) {
     setState(() {
-      _isScanned = true;
-      _isScanning = false;
+      _scannedBagIds.add(bag.bagId);
+      if (!_isAllScanned && _selectedBagIndex < _productBags.length - 1) {
+        _selectedBagIndex++;
+      }
+    });
+  }
+
+  void _scanAllBags() {
+    setState(() {
+      for (final b in _productBags) {
+        _scannedBagIds.add(b.bagId);
+      }
     });
   }
 
@@ -82,6 +98,7 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final scanBoxSize = size.width * 0.72;
+    final currentBagScanned = _scannedBagIds.contains(_currentBag.bagId);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -148,7 +165,9 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Align Grain Bag QR Code',
+                            _productBags.length > 1
+                                ? 'Unit ${_selectedBagIndex + 1} of ${_productBags.length}: ${_currentBag.bagId}'
+                                : 'Align Grain Bag QR: ${_currentBag.bagId}',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 12,
                               color: Colors.white.withValues(alpha: 0.7),
@@ -182,6 +201,64 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                   ),
                 ),
 
+                // Multi-Product Unit Bag Tabs if order has multiple products
+                if (_productBags.length > 1) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: _productBags.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final bag = entry.value;
+                          final isSelected = _selectedBagIndex == idx;
+                          final isScanned = _scannedBagIds.contains(bag.bagId);
+
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: InkWell(
+                              onTap: () => setState(() => _selectedBagIndex = idx),
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? (isScanned ? const Color(0xFF1E8449) : const Color(0xFFCBA034))
+                                      : (isScanned ? const Color(0xFF145A32) : Colors.white.withValues(alpha: 0.15)),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isSelected ? Colors.white : Colors.white24,
+                                    width: isSelected ? 1.8 : 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      isScanned ? Icons.check_circle_rounded : Icons.crop_free_rounded,
+                                      size: 14,
+                                      color: Colors.white,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      '${idx + 1}. ${bag.productName} (${bag.quantityKg}kg)',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 11,
+                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ],
+
                 const Spacer(),
 
                 // Center Viewfinder Box
@@ -196,7 +273,7 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
-                            color: _isScanned
+                            color: currentBagScanned
                                 ? const Color(0xFF2ECC71)
                                 : const Color(0xFFCBA034),
                             width: 2.5,
@@ -208,26 +285,26 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                       Positioned(
                         top: 0,
                         left: 0,
-                        child: _buildCorner(isTop: true, isLeft: true),
+                        child: _buildCorner(isTop: true, isLeft: true, isScanned: currentBagScanned),
                       ),
                       Positioned(
                         top: 0,
                         right: 0,
-                        child: _buildCorner(isTop: true, isLeft: false),
+                        child: _buildCorner(isTop: true, isLeft: false, isScanned: currentBagScanned),
                       ),
                       Positioned(
                         bottom: 0,
                         left: 0,
-                        child: _buildCorner(isTop: false, isLeft: true),
+                        child: _buildCorner(isTop: false, isLeft: true, isScanned: currentBagScanned),
                       ),
                       Positioned(
                         bottom: 0,
                         right: 0,
-                        child: _buildCorner(isTop: false, isLeft: false),
+                        child: _buildCorner(isTop: false, isLeft: false, isScanned: currentBagScanned),
                       ),
 
                       // Animated Laser Scan Line
-                      if (_isScanning)
+                      if (!currentBagScanned)
                         AnimatedBuilder(
                           animation: _animation,
                           builder: (context, child) {
@@ -261,7 +338,7 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                         ),
 
                       // Scanned Success Badge Icon
-                      if (_isScanned)
+                      if (currentBagScanned)
                         Container(
                           width: 80,
                           height: 80,
@@ -286,22 +363,42 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                   ),
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
 
-                // Manual Scan Trigger Button if not yet scanned
-                if (!_isScanned)
-                  TextButton.icon(
-                    onPressed: _handleScanSuccess,
-                    icon: const Icon(Icons.touch_app_rounded, color: Color(0xFFCBA034), size: 18),
-                    label: Text(
-                      'Simulate Instant QR Scan',
-                      style: GoogleFonts.plusJakartaSans(
-                        color: const Color(0xFFE8C86A),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
+                // Manual Scan Trigger Button
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (!currentBagScanned)
+                      TextButton.icon(
+                        onPressed: () => _scanBag(_currentBag),
+                        icon: const Icon(Icons.touch_app_rounded, color: Color(0xFFCBA034), size: 18),
+                        label: Text(
+                          'Scan Unit ${_selectedBagIndex + 1} (${_currentBag.productName})',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: const Color(0xFFE8C86A),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                    if (!_isAllScanned && _productBags.length > 1) ...[
+                      const SizedBox(width: 10),
+                      TextButton.icon(
+                        onPressed: _scanAllBags,
+                        icon: const Icon(Icons.done_all_rounded, color: Color(0xFF2ECC71), size: 18),
+                        label: Text(
+                          'Scan All Units (${_productBags.length} Bags)',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: const Color(0xFF2ECC71),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
 
                 const Spacer(),
 
@@ -326,12 +423,12 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                                 width: 42,
                                 height: 42,
                                 decoration: BoxDecoration(
-                                  color: _isScanned ? const Color(0xFFE8F8F0) : const Color(0xFFFBF4ED),
+                                  color: currentBagScanned ? const Color(0xFFE8F8F0) : const Color(0xFFFBF4ED),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
-                                  _isScanned ? Icons.verified_rounded : Icons.inventory_2_outlined,
-                                  color: _isScanned ? const Color(0xFF2ECC71) : AppTheme.primaryTerracotta,
+                                  currentBagScanned ? Icons.verified_rounded : Icons.inventory_2_outlined,
+                                  color: currentBagScanned ? const Color(0xFF2ECC71) : AppTheme.primaryTerracotta,
                                   size: 22,
                                 ),
                               ),
@@ -340,7 +437,7 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    widget.order.orderId,
+                                    '${widget.order.orderId} • ${_currentBag.bagId}',
                                     style: GoogleFonts.plusJakartaSans(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
@@ -362,28 +459,28 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: _isScanned ? const Color(0xFFE8F8F0) : const Color(0xFFFFF8E7),
+                              color: currentBagScanned ? const Color(0xFFE8F8F0) : const Color(0xFFFFF8E7),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: _isScanned ? const Color(0xFFA2E4D4) : const Color(0xFFFFE082),
+                                color: currentBagScanned ? const Color(0xFFA2E4D4) : const Color(0xFFFFE082),
                               ),
                             ),
                             child: Text(
-                              _isScanned ? 'QR VERIFIED' : 'SCANNING...',
+                              currentBagScanned ? 'UNIT VERIFIED' : 'SCANNING...',
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
-                                color: _isScanned ? const Color(0xFF1E8449) : const Color(0xFFD35400),
+                                color: currentBagScanned ? const Color(0xFF1E8449) : const Color(0xFFD35400),
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 12),
                       const Divider(height: 1, color: AppTheme.borderLight),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 12),
 
-                      // Grain & Quantity Details
+                      // Unit Breakdown Summary
                       Row(
                         children: [
                           Expanded(
@@ -391,11 +488,28 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Grain Type',
+                                  'Product Unit',
                                   style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
                                 ),
                                 Text(
-                                  widget.order.grainType,
+                                  _currentBag.productName,
+                                  style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Unit Weight',
+                                  style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
+                                ),
+                                Text(
+                                  '${_currentBag.quantityKg} kg',
                                   style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
                                 ),
                               ],
@@ -406,41 +520,30 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Quantity',
+                                  'Total Units',
                                   style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
                                 ),
                                 Text(
-                                  widget.order.quantityText,
-                                  style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Est. Milling',
-                                  style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
-                                ),
-                                Text(
-                                  widget.order.estimatedCompletionTime ?? '30 Mins',
-                                  style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold, color: const Color(0xFF6E5616)),
+                                  '${_scannedBagIds.length}/${_productBags.length} Verified',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: _isAllScanned ? const Color(0xFF1E8449) : const Color(0xFF6E5616),
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 18),
 
                       // Action Button: Move into Mill
                       SizedBox(
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton.icon(
-                          onPressed: !_isScanned ? null : _handleConfirmMoveToMill,
+                          onPressed: !_isAllScanned ? null : _handleConfirmMoveToMill,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF6E5616),
                             disabledBackgroundColor: Colors.grey.shade300,
@@ -449,7 +552,9 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                           ),
                           icon: const Icon(Icons.handshake_outlined, color: Colors.white, size: 20),
                           label: Text(
-                            !_isScanned ? 'Align QR to Verify' : 'Confirm & Proceed to Handover',
+                            !_isAllScanned
+                                ? 'Verify All Units (${_scannedBagIds.length}/${_productBags.length})'
+                                : 'Confirm & Proceed to Handover (${_productBags.length} Bags)',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
@@ -469,23 +574,23 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
     );
   }
 
-  Widget _buildCorner({required bool isTop, required bool isLeft}) {
+  Widget _buildCorner({required bool isTop, required bool isLeft, required bool isScanned}) {
     return Container(
       width: 28,
       height: 28,
       decoration: BoxDecoration(
         border: Border(
           top: isTop
-              ? BorderSide(color: _isScanned ? const Color(0xFF2ECC71) : const Color(0xFFCBA034), width: 5)
+              ? BorderSide(color: isScanned ? const Color(0xFF2ECC71) : const Color(0xFFCBA034), width: 5)
               : BorderSide.none,
           bottom: !isTop
-              ? BorderSide(color: _isScanned ? const Color(0xFF2ECC71) : const Color(0xFFCBA034), width: 5)
+              ? BorderSide(color: isScanned ? const Color(0xFF2ECC71) : const Color(0xFFCBA034), width: 5)
               : BorderSide.none,
           left: isLeft
-              ? BorderSide(color: _isScanned ? const Color(0xFF2ECC71) : const Color(0xFFCBA034), width: 5)
+              ? BorderSide(color: isScanned ? const Color(0xFF2ECC71) : const Color(0xFFCBA034), width: 5)
               : BorderSide.none,
           right: !isLeft
-              ? BorderSide(color: _isScanned ? const Color(0xFF2ECC71) : const Color(0xFFCBA034), width: 5)
+              ? BorderSide(color: isScanned ? const Color(0xFF2ECC71) : const Color(0xFFCBA034), width: 5)
               : BorderSide.none,
         ),
       ),

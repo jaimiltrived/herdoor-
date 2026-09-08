@@ -11,6 +11,7 @@ import 'settings_screen.dart';
 import 'orders_list_screen.dart';
 import 'edit_profile_screen.dart';
 import 'merchant_application_screen.dart';
+import '../widgets/user_avatar.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback? onLogout;
@@ -66,7 +67,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       }
 
-      String addrText = '12 Market Yard, Ellisbridge, Ahmedabad';
+      String addrText = '';
       if (fetchedAddresses != null && fetchedAddresses.isNotEmpty) {
         final def = fetchedAddresses.firstWhere((a) => a['isDefault'] == true, orElse: () => fetchedAddresses.first);
         addrText = '${def['addressLine1'] ?? ''}, ${def['city'] ?? ''}'.trim();
@@ -75,9 +76,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) {
         setState(() {
           _user = fetchedUser ?? AuthApiService.instance.currentUser;
-          _activeOrdersCount = active > 0 ? active : 1;
-          _completedOrdersCount = completed > 0 ? completed : 3;
-          _addressSummary = addrText.isNotEmpty ? addrText : '12 Market Yard, Ellisbridge, Ahmedabad';
+          _activeOrdersCount = active;
+          _completedOrdersCount = completed;
+          _addressSummary = addrText.isNotEmpty ? addrText : 'No saved address yet';
           _isLoading = false;
         });
       }
@@ -95,9 +96,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final canPop = Navigator.canPop(context);
     final currentUser = _user ?? AuthApiService.instance.currentUser;
-    final userName = currentUser?['name']?.toString() ?? 'Ramesh Patel';
-    final userPhone = currentUser?['phone']?.toString() ?? '+919876543210';
-    final userEmail = currentUser?['email']?.toString() ?? 'ramesh@example.com';
+    final userName = currentUser?['name']?.toString().trim().isNotEmpty == true
+        ? currentUser!['name'].toString().trim()
+        : 'Citizen User';
+    final userPhone = currentUser?['phone']?.toString() ?? '';
+    final userEmail = currentUser?['email']?.toString() ?? '';
     final profileImg = currentUser?['profile_image']?.toString() ?? currentUser?['profileImage']?.toString();
 
     return Scaffold(
@@ -155,21 +158,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   child: Row(
                     children: [
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppTheme.primaryTerracotta, width: 2),
-                          image: DecorationImage(
-                            image: NetworkImage(
-                              (profileImg != null && profileImg.startsWith('http'))
-                                  ? profileImg
-                                  : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
-                            ),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
+                      UserAvatar(
+                        size: 64,
+                        name: userName,
+                        imageUrl: profileImg,
+                        borderWidth: 2,
+                        borderColor: AppTheme.primaryTerracotta,
                       ),
                       const SizedBox(width: 16),
                       Expanded(

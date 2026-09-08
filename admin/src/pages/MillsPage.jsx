@@ -30,6 +30,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { apiService } from '../services/apiService';
+import StatusLight, { StatusBadge, getMillLight, getMillLoadLight, getUserLight } from '../components/StatusLight';
 
 export default function MillsPage() {
   // Main Tab: 'mills' | 'applications'
@@ -639,22 +640,12 @@ export default function MillsPage() {
 
                           {/* Status */}
                           <td style={{ padding: '16px 20px' }}>
-                            <span
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                padding: '4px 12px',
-                                borderRadius: 20,
-                                backgroundColor: badge.bg,
-                                color: badge.color,
-                                fontWeight: 800,
-                                fontSize: '0.78rem',
-                              }}
-                            >
-                              <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: badge.dot }}></span>
-                              {badge.label}
-                            </span>
+                            <StatusBadge
+                              status={app.status}
+                              type="user"
+                              label={badge.label}
+                              size="sm"
+                            />
                           </td>
 
                           {/* Actions */}
@@ -1285,12 +1276,15 @@ export default function MillsPage() {
                     </tr>
                   ) : (
                     filteredMills.map((mill) => {
-                      const badge = getStatusBadge(mill.status);
+                      const loadLight = getMillLoadLight(mill.output, mill.capacity);
                       return (
                         <tr key={mill.id} style={{ borderBottom: '1px solid #ECE4D9', transition: 'background 0.2s ease' }}>
                           <td style={{ padding: '16px 20px' }}>
-                            <div style={{ fontWeight: 800, color: '#2A2421' }}>{mill.name}</div>
-                            <div style={{ fontSize: '0.78rem', color: '#756D69' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <StatusLight light={getMillLight(mill.status)} size={9} />
+                              <div style={{ fontWeight: 800, color: '#2A2421' }}>{mill.name}</div>
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: '#756D69', marginLeft: 17 }}>
                               Owner: {mill.owner} • {mill.phone}
                             </div>
                           </td>
@@ -1298,26 +1292,18 @@ export default function MillsPage() {
                             <span style={{ fontWeight: 600 }}>{mill.loc}</span>
                           </td>
                           <td style={{ padding: '16px 20px' }}>
-                            <span style={{ fontWeight: 800, color: '#2A2421' }}>{mill.outputText}</span>
-                            <div style={{ fontSize: '0.75rem', color: '#756D69' }}>Cap: {mill.capacity} kg/day</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <StatusLight light={loadLight} size={8} />
+                              <span style={{ fontWeight: 800, color: '#2A2421' }}>{mill.outputText}</span>
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: '#756D69', marginLeft: 14 }}>Cap: {mill.capacity} kg/day</div>
                           </td>
                           <td style={{ padding: '16px 20px' }}>
-                            <span
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                padding: '4px 10px',
-                                borderRadius: 16,
-                                backgroundColor: badge.bg,
-                                color: badge.color,
-                                fontWeight: 800,
-                                fontSize: '0.75rem',
-                              }}
-                            >
-                              <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: badge.dot }}></span>
-                              {mill.status}
-                            </span>
+                            <StatusBadge
+                              status={mill.status}
+                              type="mill"
+                              size="sm"
+                            />
                           </td>
                           <td style={{ padding: '16px 20px' }}>
                             <span style={{ fontWeight: 800, color: '#2A2421' }}>★ {mill.rating}</span>

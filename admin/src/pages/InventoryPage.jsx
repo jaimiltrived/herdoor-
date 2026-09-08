@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ShoppingBag, Store, Truck, Wheat, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
 import { inventoryItems } from '../data/mockData';
+import StatusLight, { StatusBadge, getInventoryLight } from '../components/StatusLight';
 
 export default function InventoryPage() {
   const [subTab, setSubTab] = useState(0); // 0: Flour Inventory, 1: Raw Grain Vendor Hub
@@ -163,16 +164,16 @@ export default function InventoryPage() {
                       style={{
                         position: 'absolute',
                         top: 14, right: 14,
-                        backgroundColor: 'rgba(255,255,255,0.95)',
-                        fontSize: '0.75rem',
-                        fontWeight: 800,
-                        padding: '4px 12px',
-                        borderRadius: 14,
-                        color: item.inStock ? '#2ECC71' : '#D63031',
                         boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                       }}
                     >
-                      {item.inStock ? 'In Stock' : 'Out of Stock'}
+                      <StatusBadge
+                        status={item.inStock ? 'PAID' : 'FAILED'}
+                        type="payment"
+                        label={item.inStock ? 'In Stock' : 'Out of Stock'}
+                        size="sm"
+                        light={getInventoryLight(item.inStock ? (item.stockKg || 100) : 0, item.minimumStockKg)}
+                      />
                     </span>
                   </div>
 

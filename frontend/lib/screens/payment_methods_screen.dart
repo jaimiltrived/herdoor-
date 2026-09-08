@@ -218,12 +218,18 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                     String paymentStr = _methods[_selectedMethod]['title'] == 'Visa Card'
                         ? 'Visa Card (•••• 4242)'
                         : _methods[_selectedMethod]['title'];
+                    final combinedGrainNames = widget.cartItems.isNotEmpty
+                        ? widget.cartItems.map((i) => '${i['quantity']}kg ${i['name']}').join(', ')
+                        : 'Wheat';
+                    final totalQuantityKg = widget.cartItems.fold<double>(
+                        0.0, (s, i) => s + (double.tryParse(i['quantity'].toString()) ?? 1.0));
 
                     // Call backend place order endpoint
                     final placedOrder = await CustomerApiService.instance.placeOrder(
                       millId: effectiveMillId,
                       items: widget.cartItems,
-                      grainTypeName: widget.cartItems.isNotEmpty ? widget.cartItems[0]['name'] : 'Wheat',
+                      grainTypeName: combinedGrainNames,
+                      quantityKg: totalQuantityKg > 0 ? totalQuantityKg : 5.0,
                       totalAmount: widget.total,
                       pickupFee: widget.pickupFee,
                       deliveryFee: widget.deliveryFee,

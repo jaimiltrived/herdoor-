@@ -160,7 +160,7 @@ export default function DashboardPage({
           padding: '24px 28px',
           marginBottom: 28,
           display: 'flex',
-          justify: 'space-between',
+          justifyContent: 'space-between',
           alignItems: 'center',
           border: '1px solid #ECE4D9',
           boxShadow: '0 4px 16px rgba(140, 74, 62, 0.05)'

@@ -42,9 +42,9 @@ exports.createOrder = async (req, res) => {
     computedTotal = grindingCost + grainCost + parseFloat(deliveryFee);
   }
 
-  const orderNumber = req.body.orderNumber || `#HD-${Math.floor(1000 + Math.random() * 9000)}`;
+  const orderNumber = req.body.orderNumber || `#HD-${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`;
   const userId = req.user ? req.user.id : 1;
-  const custName = req.user ? req.user.name : 'Ramesh Patel';
+  const custName = req.user ? req.user.name : 'Customer';
   const custPhone = req.user ? req.user.phone : '+919876543210';
 
   const newOrder = {
@@ -126,8 +126,8 @@ exports.createOrder = async (req, res) => {
       newOrder.id = dbResult.insertId;
       try {
         await query(
-          'INSERT INTO order_timeline (order_id, status, note) VALUES (?, ?, ?)',
-          [newOrder.id, 'PLACED', 'Order placed by customer']
+          'INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)',
+          [newOrder.id, 'PLACED', 'Order Placed', 'Order placed by customer']
         );
       } catch (tlErr) {
         console.warn('MySQL Timeline Insert Warning:', tlErr.message);
@@ -137,6 +137,28 @@ exports.createOrder = async (req, res) => {
     console.warn('MySQL Orders Insert Warning:', dbErr.message);
   }
 
+  // If newOrder.id was not generated from DB, assign sequential memory ID
+  if (!newOrder.id) {
+    newOrder.id = store.orders.length ? Math.max(...store.orders.map(o => o.id)) + 1 : 501;
+  }
+
+  // Push into memory dataStore so immediate in-memory lookups succeed
+  store.orders.unshift(newOrder);
+
+  // Push real-time notification to store
+  if (!store.notifications) store.notifications = [];
+  store.notifications.unshift({
+    id: store.notifications.length + 1,
+    userId: 2, // Merchant
+    title: `🚨 New Order Received ${newOrder.orderNumber}`,
+    message: `${newOrder.customerName} placed a new order for ${newOrder.quantityKg}kg ${newOrder.grainTypeName} (₹${parseFloat(newOrder.totalAmount).toFixed(2)}).`,
+    read: false,
+    createdAt: new Date().toISOString(),
+    orderId: newOrder.id || newOrder.orderNumber,
+    orderNumber: newOrder.orderNumber,
+    type: 'NEW_ORDER'
+  });
+
   res.status(201).json({
     status: 'success',
     message: 'Order created successfully in database',
@@ -145,8 +167,12 @@ exports.createOrder = async (req, res) => {
 };
 
 exports.getOrders = async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ status: 'error', message: 'Authentication required' });
+  }
+
   const { status, page = 1, limit = 20 } = req.query;
-  const userId = req.user ? req.user.id : 1;
+  const userId = req.user.id;
 
   try {
     let sql = 'SELECT o.*, m.name as mill_name, m.address as mill_address FROM orders o LEFT JOIN mills m ON o.mill_id = m.id WHERE o.user_id = ?';
@@ -201,18 +227,27 @@ exports.getOrders = async (req, res) => {
     console.warn('MySQL getOrders warning:', err.message);
   }
 
+  const memoryOrders = store.orders.filter(o => o.userId === userId && (!status || o.status === status));
+  const p = parseInt(page);
+  const l = parseInt(limit);
+  const paginated = memoryOrders.slice((p - 1) * l, p * l);
+
   res.json({
     status: 'success',
-    count: 0,
-    page: parseInt(page),
-    limit: parseInt(limit),
-    data: { orders: [] }
+    count: memoryOrders.length,
+    page: p,
+    limit: l,
+    data: { orders: paginated }
   });
 };
 
 exports.getActiveOrders = async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ status: 'error', message: 'Authentication required' });
+  }
+
   try {
-    const userId = req.user ? req.user.id : 1;
+    const userId = req.user.id;
     const dbOrders = await query(
       `SELECT o.*, m.name as mill_name FROM orders o LEFT JOIN mills m ON o.mill_id = m.id WHERE o.user_id = ? AND o.status IN ('PLACED', 'ACCEPTED', 'PROCESSING', 'PACKING', 'READY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY') ORDER BY o.id DESC`,
       [userId]
@@ -247,12 +282,17 @@ exports.getActiveOrders = async (req, res) => {
     console.warn('MySQL getActiveOrders error:', err.message);
   }
 
-  res.json({ status: 'success', count: 0, data: { orders: [] } });
+  const memoryOrders = store.orders.filter(o => o.userId === req.user.id && ['PLACED', 'ACCEPTED', 'PROCESSING', 'PACKING', 'READY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'].includes(o.status));
+  res.json({ status: 'success', count: memoryOrders.length, data: { orders: memoryOrders } });
 };
 
 exports.getCompletedOrders = async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ status: 'error', message: 'Authentication required' });
+  }
+
   try {
-    const userId = req.user ? req.user.id : 1;
+    const userId = req.user.id;
     const dbOrders = await query(
       `SELECT o.*, m.name as mill_name FROM orders o LEFT JOIN mills m ON o.mill_id = m.id WHERE o.user_id = ? AND o.status IN ('DELIVERED', 'PICKED_UP', 'COMPLETED') ORDER BY o.id DESC`,
       [userId]
@@ -287,12 +327,17 @@ exports.getCompletedOrders = async (req, res) => {
     console.warn('MySQL getCompletedOrders error:', err.message);
   }
 
-  res.json({ status: 'success', count: 0, data: { orders: [] } });
+  const memoryOrders = store.orders.filter(o => o.userId === req.user.id && ['DELIVERED', 'PICKED_UP', 'COMPLETED'].includes(o.status));
+  res.json({ status: 'success', count: memoryOrders.length, data: { orders: memoryOrders } });
 };
 
 exports.getCancelledOrders = async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ status: 'error', message: 'Authentication required' });
+  }
+
   try {
-    const userId = req.user ? req.user.id : 1;
+    const userId = req.user.id;
     const dbOrders = await query(
       `SELECT o.*, m.name as mill_name FROM orders o LEFT JOIN mills m ON o.mill_id = m.id WHERE o.user_id = ? AND o.status IN ('CANCELLED', 'REJECTED') ORDER BY o.id DESC`,
       [userId]
@@ -303,10 +348,12 @@ exports.getCancelledOrders = async (req, res) => {
   } catch (err) {
     console.warn('MySQL getCancelledOrders error:', err.message);
   }
-  res.json({ status: 'success', count: 0, data: { orders: [] } });
+
+  const memoryOrders = store.orders.filter(o => o.userId === req.user.id && ['CANCELLED', 'REJECTED'].includes(o.status));
+  res.json({ status: 'success', count: memoryOrders.length, data: { orders: memoryOrders } });
 };
 
-// Robust order finder that handles numeric IDs, prefixed strings (#HD-..., ORD-...), and safe fallbacks
+// Robust order finder that handles numeric IDs, prefixed strings (#HD-..., ORD-...) without arbitrary fallback
 function findOrder(param) {
   if (!param) return null;
   const paramStr = param.toString().trim();
@@ -323,7 +370,7 @@ function findOrder(param) {
       o.orderNumber.replace(/[^0-9]/g, '') === paramStr.replace(/[^0-9]/g, '')
     )) return true;
     return false;
-  }) || store.orders.find(o => o.id === 501 || o.id === 502) || store.orders[0];
+  }) || null;
 }
 
 exports.getOrderById = async (req, res) => {

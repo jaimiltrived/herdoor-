@@ -36,6 +36,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
   final _otpController = TextEditingController();
 
   late List<DeliveryTripStop> _tripStops;
+  late List<ProductBagItem> _productBags;
   int _currentStopIndex = 0;
   bool _isFlashlightOn = false;
 
@@ -80,6 +81,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
   void initState() {
     super.initState();
     _tripStops = List.from(widget.trip.resolvedStops);
+    _productBags = List.from(widget.trip.productBags);
     _pinController.text = widget.trip.pickupPin;
     _otpController.text = _activeStop.deliveryOtp;
 
@@ -341,8 +343,10 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
     );
   }
 
-  /// Per-Order Dedicated QR & Barcode Camera Scanner Modal
-  void _openPerOrderBarcodeScanner(DeliveryTripStop stop, {bool isPickup = true}) {
+  /// Product-Specific Dedicated QR & Barcode Camera Scanner Modal
+  void _openProductBagBarcodeScanner(ProductBagItem initialBag, {bool isPickup = true}) {
+    String selectedBagId = initialBag.bagId;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -351,9 +355,16 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
       builder: (modalCtx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final orderBags = _productBags.where((b) => b.orderId == initialBag.orderId).toList();
+            final currentBag = orderBags.firstWhere(
+              (b) => b.bagId == selectedBagId,
+              orElse: () => orderBags.isNotEmpty ? orderBags.first : initialBag,
+            );
+            final isCurrentVerified = isPickup ? currentBag.isPickedUp : currentBag.isDelivered;
+
             return Container(
               padding: const EdgeInsets.all(20),
-              height: MediaQuery.of(context).size.height * 0.78,
+              height: MediaQuery.of(context).size.height * 0.86,
               child: Column(
                 children: [
                   // Modal drag handle & Title
@@ -368,17 +379,24 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.qr_code_scanner_rounded, color: Color(0xFF2ECC71), size: 24),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2ECC71).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.qr_code_scanner_rounded, color: Color(0xFF2ECC71), size: 22),
+                          ),
                           const SizedBox(width: 10),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                isPickup ? 'Verify Mill Bag Barcode' : 'Doorstep Bag Scan',
-                                style: GoogleFonts.playfairDisplay(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                                isPickup ? 'Verify Product Flour Bag' : 'Doorstep Product Bag Scan',
+                                style: GoogleFonts.playfairDisplay(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
                               ),
                               Text(
-                                '${stop.orderNumber} • ${stop.customerName}',
+                                '${currentBag.orderNumber} • ${currentBag.customerName}',
                                 style: GoogleFonts.plusJakartaSans(fontSize: 11, color: Colors.white70),
                               ),
                             ],
@@ -391,39 +409,161 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
 
-                  // Camera Viewfinder Box with Laser Sweep
+                  // Horizontal Unit Bag Tabs (when multiple product bags exist)
+                  if (orderBags.length > 1) ...[
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: orderBags.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final b = entry.value;
+                          final isSelected = b.bagId == currentBag.bagId;
+                          final isDone = isPickup ? b.isPickedUp : b.isDelivered;
+
+                          return GestureDetector(
+                            onTap: () {
+                              setModalState(() {
+                                selectedBagId = b.bagId;
+                              });
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? const Color(0xFF2ECC71).withValues(alpha: 0.25)
+                                    : Colors.white.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: isSelected ? const Color(0xFF2ECC71) : (isDone ? const Color(0xFF1E8449) : Colors.white24),
+                                  width: isSelected ? 1.5 : 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isDone ? Icons.check_circle_rounded : Icons.inventory_2_outlined,
+                                    size: 14,
+                                    color: isDone ? const Color(0xFF2ECC71) : Colors.white70,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Bag ${idx + 1}: ${b.productName} (${b.quantityKg}kg)',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 11,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                      color: isSelected ? Colors.white : Colors.white70,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // Camera Viewfinder Box with Product-Specific QR Card
                   Expanded(
                     child: Container(
                       width: double.infinity,
                       decoration: BoxDecoration(
                         color: Colors.black87,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFF2ECC71), width: 2),
+                        border: Border.all(
+                          color: isCurrentVerified ? const Color(0xFF1E8449) : const Color(0xFF2ECC71),
+                          width: 2,
+                        ),
                       ),
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          // Viewfinder corner marks & barcode graphic
+                          // Product QR Code Display Container
                           Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
-                                isPickup ? Icons.inventory_2_outlined : Icons.qr_code_2_rounded,
-                                size: 90,
-                                color: Colors.white38,
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isCurrentVerified
+                                      ? const Color(0xFF1E8449).withValues(alpha: 0.25)
+                                      : const Color(0xFF2ECC71).withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  isCurrentVerified ? 'BAG QR VERIFIED ✓' : 'PRODUCT SPECIFIC QR',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    color: isCurrentVerified ? const Color(0xFF2ECC71) : const Color(0xFF2ECC71),
+                                    letterSpacing: 1,
+                                  ),
+                                ),
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 10),
+                              Container(
+                                width: 140,
+                                height: 140,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF2ECC71).withValues(alpha: 0.3),
+                                      blurRadius: 16,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
+                                ),
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.qr_code_2_rounded,
+                                      size: 130,
+                                      color: Color(0xFF14181D),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: const Color(0xFF2ECC71), width: 1.5),
+                                      ),
+                                      child: Icon(
+                                        isCurrentVerified ? Icons.check_circle_rounded : Icons.grain_rounded,
+                                        color: isCurrentVerified ? const Color(0xFF1E8449) : const Color(0xFF8B4513),
+                                        size: 18,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 10),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: Colors.white.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: Text(
-                                  'Expected Tag: ${stop.barcodeNumber}',
-                                  style: GoogleFonts.plusJakartaSans(fontSize: 12, color: const Color(0xFF2ECC71), fontWeight: FontWeight.w800),
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      '${currentBag.quantityKg} kg • ${currentBag.productName}',
+                                      style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Tag: ${currentBag.bagId}',
+                                      style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF2ECC71), fontWeight: FontWeight.w800),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -472,9 +612,9 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
 
-                  // Order Bag Information
+                  // Order Product Information Card
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -484,18 +624,22 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.grain_rounded, color: Color(0xFFF1C40F), size: 22),
+                        Icon(
+                          isCurrentVerified ? Icons.check_circle : Icons.grain_rounded,
+                          color: isCurrentVerified ? const Color(0xFF2ECC71) : const Color(0xFFF1C40F),
+                          size: 22,
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '${stop.quantityKg} kg • ${stop.grainTypeName}',
+                                '${currentBag.quantityKg} kg • ${currentBag.productName}',
                                 style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
                               ),
                               Text(
-                                'Address: ${stop.deliveryAddress}',
+                                isPickup ? 'Mill: ${widget.trip.millName}' : 'Deliver: ${currentBag.deliveryAddress}',
                                 style: GoogleFonts.plusJakartaSans(fontSize: 10, color: Colors.white60),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -506,109 +650,130 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
 
                   // Confirm Scan Action Buttons
-                  if (!isPickup) ...[
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(modalCtx);
-                          setState(() {
-                            final idx = _tripStops.indexWhere((s) => s.orderId == stop.orderId);
-                            if (idx != -1) {
-                              _tripStops[idx] = _tripStops[idx].copyWith(isDelivered: true);
-                              _otpController.text = stop.deliveryOtp;
-                            }
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('✅ Barcode ${stop.barcodeNumber} Verified! Completing Drop...'),
-                              backgroundColor: const Color(0xFF1E8449),
-                            ),
-                          );
-                          _handleConfirmDelivery();
-                        },
-                        icon: const Icon(Icons.check_circle_rounded, color: Colors.white),
-                        label: Text(
-                          'SCAN & INSTANTLY COMPLETE DROP',
-                          style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1E8449),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          elevation: 4,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 42,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(modalCtx);
-                          setState(() {
-                            final idx = _tripStops.indexWhere((s) => s.orderId == stop.orderId);
-                            if (idx != -1) {
-                              _tripStops[idx] = _tripStops[idx].copyWith(isDelivered: true);
-                              _otpController.text = stop.deliveryOtp;
-                            }
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('✅ Barcode ${stop.barcodeNumber} Verified! Ready to handover.'),
-                              backgroundColor: const Color(0xFF1E8449),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.qr_code_scanner_rounded, size: 16, color: Colors.white70),
-                        label: Text(
-                          'Scan & Verify Tag Only',
-                          style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.bold),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.white24),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                  ] else ...[
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(modalCtx);
-                          setState(() {
-                            final idx = _tripStops.indexWhere((s) => s.orderId == stop.orderId);
-                            if (idx != -1) {
-                              _tripStops[idx] = _tripStops[idx].copyWith(isPickedUp: true);
-                              _pinController.text = stop.pickupPin;
-                            }
-                          });
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                final bIdx = _productBags.indexWhere((b) => b.bagId == currentBag.bagId);
+                                if (bIdx != -1) {
+                                  _productBags[bIdx] = isPickup
+                                      ? _productBags[bIdx].copyWith(isPickedUp: true)
+                                      : _productBags[bIdx].copyWith(isDelivered: true);
+                                }
+                                final stopBags = _productBags.where((b) => b.orderId == currentBag.orderId).toList();
+                                final allDone = isPickup
+                                    ? stopBags.every((b) => b.isPickedUp)
+                                    : stopBags.every((b) => b.isDelivered);
+                                if (allDone) {
+                                  final sIdx = _tripStops.indexWhere((s) => s.orderId == currentBag.orderId);
+                                  if (sIdx != -1) {
+                                    _tripStops[sIdx] = isPickup
+                                        ? _tripStops[sIdx].copyWith(isPickedUp: true)
+                                        : _tripStops[sIdx].copyWith(isDelivered: true);
+                                  }
+                                }
+                                if (isPickup && currentBag.pickupPin.isNotEmpty) {
+                                  _pinController.text = currentBag.pickupPin;
+                                } else if (!isPickup && currentBag.deliveryOtp.isNotEmpty) {
+                                  _otpController.text = currentBag.deliveryOtp;
+                                }
+                              });
 
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('✅ Barcode Verified: ${stop.barcodeNumber} matched for ${stop.customerName}!'),
-                              backgroundColor: const Color(0xFF1E8449),
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('✅ Scanned & Verified: ${currentBag.productName} (${currentBag.bagId})!'),
+                                  backgroundColor: const Color(0xFF1E8449),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+
+                              // Check if there is another unverified bag in this order
+                              final remainingBags = _productBags.where((b) {
+                                return b.orderId == currentBag.orderId &&
+                                    (isPickup ? !b.isPickedUp : !b.isDelivered);
+                              }).toList();
+
+                              if (remainingBags.isNotEmpty) {
+                                // Automatically switch to next unverified bag so driver can scan it immediately
+                                setModalState(() {
+                                  selectedBagId = remainingBags.first.bagId;
+                                });
+                              } else {
+                                // All bags verified for this order, close modal
+                                Navigator.pop(modalCtx);
+                              }
+                            },
+                            icon: Icon(isCurrentVerified ? Icons.check_circle_rounded : Icons.qr_code_scanner_rounded, color: Colors.white, size: 18),
+                            label: Text(
+                              isCurrentVerified
+                                  ? 'VERIFIED ✓ (${currentBag.bagId})'
+                                  : 'SCAN THIS BAG (${currentBag.bagId})',
+                              style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white),
                             ),
-                          );
-                        },
-                        icon: const Icon(Icons.document_scanner_rounded, color: Colors.white),
-                        label: Text(
-                          'SIMULATE SUCCESSFUL BARCODE SCAN',
-                          style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1E8449),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: isCurrentVerified ? const Color(0xFF1E8449) : const Color(0xFF6E5616),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              elevation: 4,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                      if (orderBags.length > 1) ...[
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          height: 48,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                for (final b in orderBags) {
+                                  final bIdx = _productBags.indexWhere((x) => x.bagId == b.bagId);
+                                  if (bIdx != -1) {
+                                    _productBags[bIdx] = isPickup
+                                        ? _productBags[bIdx].copyWith(isPickedUp: true)
+                                        : _productBags[bIdx].copyWith(isDelivered: true);
+                                  }
+                                }
+                                final sIdx = _tripStops.indexWhere((s) => s.orderId == currentBag.orderId);
+                                if (sIdx != -1) {
+                                  _tripStops[sIdx] = isPickup
+                                      ? _tripStops[sIdx].copyWith(isPickedUp: true)
+                                      : _tripStops[sIdx].copyWith(isDelivered: true);
+                                }
+                                if (isPickup && currentBag.pickupPin.isNotEmpty) {
+                                  _pinController.text = currentBag.pickupPin;
+                                } else if (!isPickup && currentBag.deliveryOtp.isNotEmpty) {
+                                  _otpController.text = currentBag.deliveryOtp;
+                                }
+                              });
+                              Navigator.pop(modalCtx);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('✅ Verified all ${orderBags.length} product bags!'),
+                                  backgroundColor: const Color(0xFF1E8449),
+                                ),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF2ECC71),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                            ),
+                            child: Text(
+                              'ALL (${orderBags.length})',
+                              style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
               ),
             );
@@ -617,6 +782,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
       },
     );
   }
+
 
   void _simulateDoorstepPhoto() {
     setState(() => _hasDoorstepPhoto = true);
@@ -656,7 +822,8 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
     if (res['success'] == true) {
       setState(() {
         _currentStage = TripStage.headingToCustomer;
-        // Mark all stops picked up
+        // Mark all product bags and stops picked up
+        _productBags = _productBags.map((b) => b.copyWith(isPickedUp: true)).toList();
         _tripStops = _tripStops.map((s) => s.copyWith(isPickedUp: true)).toList();
       });
       _resetNavigationForCustomerStage();
@@ -728,48 +895,61 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
     );
 
     if (!mounted) return;
-    setState(() => _isProcessing = false);
 
     if (res['success'] == true) {
-      setState(() {
-        final idx = _currentStopIndex;
-        if (idx < _tripStops.length) {
-          _tripStops[idx] = _tripStops[idx].copyWith(isDelivered: true);
-        }
+      final idx = _currentStopIndex;
+      if (idx < _tripStops.length) {
+        _tripStops[idx] = _tripStops[idx].copyWith(isDelivered: true);
+      }
 
-        // If more stops exist in grouped trip, advance to next stop
-        if (_currentStopIndex < _tripStops.length - 1) {
+      // If more stops exist in grouped trip, advance to next stop
+      if (_currentStopIndex < _tripStops.length - 1) {
+        setState(() {
+          _isProcessing = false;
           _currentStopIndex++;
           _currentStage = TripStage.headingToCustomer;
           _hasDoorstepPhoto = false;
           _hasCustomerSignature = false;
           _resetNavigationForCustomerStage();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ Stop $_currentStopIndex Complete! Navigating to Stop ${_currentStopIndex + 1} (${_activeStop.customerName}).'),
-              backgroundColor: const Color(0xFF1E8449),
-            ),
-          );
-        } else {
-          // Last stop completed — confirm all stops and batch trip so backend removes them completely
-          for (var stop in _tripStops) {
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Stop $_currentStopIndex Complete! Navigating to Stop ${_currentStopIndex + 1} (${_activeStop.customerName}).'),
+            backgroundColor: const Color(0xFF1E8449),
+          ),
+        );
+      } else {
+        // Last stop completed — confirm all stops and batch trip so backend removes them completely
+        final List<Future> batchConfirmFutures = [];
+        for (var stop in _tripStops) {
+          batchConfirmFutures.add(
             DeliveryApiService.instance.confirmDelivery(
               stop.orderId,
               otp: effectiveOtp,
-            );
-          }
-          if (widget.trip.isBatch) {
+            ),
+          );
+        }
+        if (widget.trip.isBatch) {
+          batchConfirmFutures.add(
             DeliveryApiService.instance.confirmDelivery(
               widget.trip.orderId,
               otp: effectiveOtp,
-            );
-          }
-          _currentStage = TripStage.completed;
-          _navSimulationTimer?.cancel();
-          _showCompletionDialog();
+            ),
+          );
         }
-      });
+
+        await Future.wait(batchConfirmFutures);
+
+        if (!mounted) return;
+        setState(() {
+          _isProcessing = false;
+          _currentStage = TripStage.completed;
+        });
+        _navSimulationTimer?.cancel();
+        _showCompletionDialog();
+      }
     } else {
+      setState(() => _isProcessing = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(res['message'] ?? 'Delivery confirmation failed'),
@@ -1636,7 +1816,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                   const Icon(Icons.storefront_rounded, color: AppTheme.primaryTerracotta),
                   const SizedBox(width: 8),
                   Text(
-                    'Mill Handover (${_tripStops.length} Bags)',
+                    'Mill Handover (${_productBags.length} Bags)',
                     style: GoogleFonts.playfairDisplay(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -1664,6 +1844,11 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
           Text('1. Customer Home Grain Pickup Origin:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
           const SizedBox(height: 8),
           ..._tripStops.map((stop) {
+            final stopBags = _productBags.where((b) => b.orderId == stop.orderId).toList();
+            final productDetails = stopBags.isNotEmpty
+                ? stopBags.map((b) => '${b.quantityKg} kg ${b.productName}').join(', ')
+                : '${stop.quantityKg} kg ${stop.grainTypeName}';
+
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(12),
@@ -1685,7 +1870,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
-                                '${stop.customerName} (${stop.quantityKg} kg ${stop.grainTypeName})',
+                                '${stop.customerName} ($productDetails)',
                                 style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF0369A1)),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -1728,26 +1913,26 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
           }),
           const SizedBox(height: 12),
 
-          // 2. Per-Order Specific Bags to Scan & Pick Up
+          // 2. Per-Product Specific Bags to Scan & Pick Up
           Text('2. Scan & Verify Mill Flour Bags:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
           const SizedBox(height: 8),
-          ..._tripStops.map((stop) {
+          ..._productBags.map((bag) {
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: stop.isPickedUp ? const Color(0xFFE8F8F5) : const Color(0xFFFAF6F0),
+                color: bag.isPickedUp ? const Color(0xFFE8F8F5) : const Color(0xFFFAF6F0),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: stop.isPickedUp ? const Color(0xFF2ECC71) : const Color(0xFFECE4D9),
-                  width: stop.isPickedUp ? 1.5 : 1,
+                  color: bag.isPickedUp ? const Color(0xFF2ECC71) : const Color(0xFFECE4D9),
+                  width: bag.isPickedUp ? 1.5 : 1,
                 ),
               ),
               child: Row(
                 children: [
                   Icon(
-                    stop.isPickedUp ? Icons.check_circle_rounded : Icons.inventory_2_outlined,
-                    color: stop.isPickedUp ? const Color(0xFF1E8449) : const Color(0xFF6E5616),
+                    bag.isPickedUp ? Icons.check_circle_rounded : Icons.inventory_2_outlined,
+                    color: bag.isPickedUp ? const Color(0xFF1E8449) : const Color(0xFF6E5616),
                     size: 20,
                   ),
                   const SizedBox(width: 10),
@@ -1756,22 +1941,22 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${stop.orderNumber} • ${stop.quantityKg} kg ${stop.grainTypeName}',
+                          '${bag.orderNumber} • ${bag.quantityKg} kg ${bag.productName}',
                           style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12),
                         ),
                         Text(
-                          'For ${stop.customerName} • Tag: ${stop.barcodeNumber}',
+                          'For ${bag.customerName} • Tag: ${bag.bagId}',
                           style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
                         ),
                       ],
                     ),
                   ),
                   ElevatedButton.icon(
-                    onPressed: () => _openPerOrderBarcodeScanner(stop, isPickup: true),
-                    icon: Icon(stop.isPickedUp ? Icons.check : Icons.qr_code_scanner_rounded, size: 14, color: Colors.white),
-                    label: Text(stop.isPickedUp ? 'Scanned' : 'Scan Bag', style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
+                    onPressed: () => _openProductBagBarcodeScanner(bag, isPickup: true),
+                    icon: Icon(bag.isPickedUp ? Icons.check : Icons.qr_code_scanner_rounded, size: 14, color: Colors.white),
+                    label: Text(bag.isPickedUp ? 'Scanned' : 'Scan Bag', style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: stop.isPickedUp ? const Color(0xFF1E8449) : const Color(0xFF6E5616),
+                      backgroundColor: bag.isPickedUp ? const Color(0xFF1E8449) : const Color(0xFF6E5616),
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
@@ -1917,6 +2102,60 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
             ),
           ],
           const SizedBox(height: 16),
+
+          // Customer Specific Product Bags to Verify & Drop
+          Text('Customer Bags to Verify & Handover:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
+          const SizedBox(height: 8),
+          ..._productBags.where((b) => b.orderId == stop.orderId).map((bag) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: bag.isDelivered ? const Color(0xFFE8F8F5) : const Color(0xFFFAF6F0),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: bag.isDelivered ? const Color(0xFF2ECC71) : const Color(0xFFECE4D9),
+                  width: bag.isDelivered ? 1.5 : 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    bag.isDelivered ? Icons.check_circle_rounded : Icons.qr_code_2_rounded,
+                    color: bag.isDelivered ? const Color(0xFF1E8449) : const Color(0xFF6E5616),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${bag.quantityKg} kg • ${bag.productName}',
+                          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                        Text(
+                          'Tag: ${bag.bagId}',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () => _openProductBagBarcodeScanner(bag, isPickup: false),
+                    icon: Icon(bag.isDelivered ? Icons.check : Icons.qr_code_scanner_rounded, size: 14, color: Colors.white),
+                    label: Text(bag.isDelivered ? 'Verified' : 'Scan Bag', style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: bag.isDelivered ? const Color(0xFF1E8449) : const Color(0xFF6E5616),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+          const SizedBox(height: 14),
 
           // STEP 1: Proof of Delivery Handover
           Text('Step 1: Proof of Delivery Handover (Optional):', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),

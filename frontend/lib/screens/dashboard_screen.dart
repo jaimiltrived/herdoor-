@@ -11,6 +11,7 @@ import 'mills_list_screen.dart';
 import 'order_tracking_screen.dart';
 import 'cart_screen.dart';
 import 'profile_screen.dart';
+import '../widgets/user_avatar.dart';
 
 class DashboardScreen extends StatefulWidget {
   final Function(int) onNavigateTab;
@@ -85,7 +86,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (user != null && user['name'] != null && user['name'].toString().trim().isNotEmpty) {
       return user['name'].toString().split(' ').first;
     }
-    return 'Sarah';
+    return 'Citizen';
   }
 
   String _getProductImage(String summary) {
@@ -191,19 +192,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     }
 
-    if (activeOrdersList.isEmpty) {
-      final fallbackActives = MockData.orders.where((o) => o.isActive).toList();
-      activeOrdersList.addAll(fallbackActives);
-    }
-
     // Resolve past orders
     final dynamicPastOrders = _dynamicOrders?.where((o) =>
         ['COMPLETED', 'DELIVERED'].contains(o.statusTag.toUpperCase())
     ).toList();
 
-    final pastOrders = (dynamicPastOrders != null && dynamicPastOrders.isNotEmpty)
-        ? dynamicPastOrders
-        : MockData.orders.where((o) => !o.isActive).toList();
+    final pastOrders = dynamicPastOrders ?? <dynamic>[];
 
     // Resolve mills
     final millsList = (_dynamicMills != null && _dynamicMills!.isNotEmpty)
@@ -261,19 +255,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                         );
                       },
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppTheme.borderLight, width: 2),
-                          image: const DecorationImage(
-                            image: NetworkImage(
-                              'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
-                            ),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
+                      child: UserAvatar(
+                        name: _getUserDisplayName(),
+                        size: 44,
                       ),
                     ),
                   ],
@@ -865,46 +849,73 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildNoActiveOrderCard() {
-    return GestureDetector(
-      onTap: widget.onStartNewOrder,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppTheme.borderLight),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.borderLight),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: const BoxDecoration(
+              color: AppTheme.surfaceWarm,
+              shape: BoxShape.circle,
             ),
-          ],
-        ),
-        child: Column(
-          children: [
-            const Icon(Icons.shopping_bag_outlined, color: AppTheme.primaryTerracotta, size: 36),
-            const SizedBox(height: 10),
-            Text(
-              'No Active Orders',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
+            child: const Icon(Icons.shopping_bag_outlined, color: AppTheme.primaryTerracotta, size: 28),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'No Active Orders',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Explore nearby local flour mills and order fresh custom grinding or packaged flour.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 13,
+              color: AppTheme.textSecondary,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 38,
+            child: ElevatedButton.icon(
+              onPressed: widget.onStartNewOrder,
+              icon: const Icon(Icons.add, size: 18, color: Colors.white),
+              label: Text(
+                'Browse Mills & Order',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryTerracotta,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(19)),
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                elevation: 0,
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Order fresh stone-milled flour delivered directly to your home.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 13,
-                color: AppTheme.textSecondary,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

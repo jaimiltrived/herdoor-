@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/app_models.dart';
 import '../models/merchant_models.dart';
+import 'auth_api_service.dart';
 
 class CustomerApiService {
   static final CustomerApiService instance = CustomerApiService._internal();
@@ -19,13 +20,19 @@ class CustomerApiService {
 
   String? _authToken;
 
+  String? get activeToken => AuthApiService.instance.token ?? _authToken;
+
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
-        if (_authToken != null) 'Authorization': 'Bearer $_authToken',
+        if (activeToken != null) 'Authorization': 'Bearer $activeToken',
       };
 
   /// Ensure customer authentication token is acquired
   Future<bool> ensureAuthenticated() async {
+    if (AuthApiService.instance.token != null) {
+      _authToken = AuthApiService.instance.token;
+      return true;
+    }
     if (_authToken != null) return true;
     try {
       final response = await http.post(
@@ -487,6 +494,24 @@ class CustomerApiService {
       debugPrint('Get My Merchant Application Error: $e');
     }
     return null;
+  }
+
+  /// Cancel Order
+  Future<bool> cancelOrder(int orderId, {String reason = 'Customer requested cancellation'}) async {
+    await ensureAuthenticated();
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/orders/$orderId/cancel'),
+        headers: _headers,
+        body: jsonEncode({'reason': reason}),
+      );
+      if (response.statusCode == 200) {
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Cancel Order Error: $e');
+    }
+    return false;
   }
 }
 

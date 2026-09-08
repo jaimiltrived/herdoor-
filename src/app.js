@@ -13,8 +13,19 @@ const app = express();
 app.use(helmet({
   contentSecurityPolicy: false // Allow Swagger UI inline scripts & styles
 }));
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim())
+  : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174', 'http://127.0.0.1:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174'];
+
 app.use(cors({
-  origin: '*',
+  origin: (origin, callback) => {
+    // Allow non-browser requests (mobile apps, Postman, curl)
+    if (!origin) return callback(null, true);
+    if (process.env.NODE_ENV !== 'production' || allowedOrigins.includes(origin)) {
+      return callback(null, origin);
+    }
+    return callback(new Error('CORS policy: Not allowed by CORS'));
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   credentials: true

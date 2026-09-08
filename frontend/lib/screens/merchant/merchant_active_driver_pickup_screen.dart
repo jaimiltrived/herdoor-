@@ -352,13 +352,54 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Quantity', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary)),
-                          Text(order.quantityText, style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold)),
+                          Text('Units & Quantity', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary)),
+                          Text(
+                            order.productBags.length > 1
+                                ? '${order.productBags.length} Bags (${order.quantityText})'
+                                : order.quantityText,
+                            style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold),
+                          ),
                         ],
                       ),
                     ),
                   ],
                 ),
+                if (order.productBags.length > 1) ...[
+                  const SizedBox(height: 10),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: order.productBags.asMap().entries.map((entry) {
+                        final idx = entry.key;
+                        final bag = entry.value;
+                        return Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFAF4EA),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFE5D5BC)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.qr_code_2_rounded, size: 12, color: Color(0xFF6E5616)),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${idx + 1}. ${bag.productName} (${bag.quantityKg}kg)',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF5C4710),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 14),
 
                 // Assigned Delivery Boy Div (Only this boy is authorized)

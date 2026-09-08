@@ -1,6 +1,6 @@
 import { initialOrders, pendingRequests, inventoryItems } from '../data/mockData';
 
-const BASE_URL = 'http://localhost:5000/api/v1';
+const BASE_URL = (import.meta.env && import.meta.env.VITE_API_URL) ? import.meta.env.VITE_API_URL : 'http://localhost:5000/api/v1';
 
 // Auto-authenticate as Super Admin if token not present
 async function ensureAdminAuth() {
@@ -255,6 +255,13 @@ export const apiService = {
     const data = await apiRequest(`/shopkeeper/orders/${encodeURIComponent(numericId)}/handover`, 'POST', {
       pin: verificationPin,
     });
+    return data;
+  },
+
+  // Mark Order Ready for Pickup / Delivery
+  async markOrderReady(orderId) {
+    const numericId = String(orderId).replace(/\D/g, '') || '501';
+    const data = await apiRequest(`/shopkeeper/orders/${encodeURIComponent(numericId)}/ready`, 'POST');
     return data;
   },
 

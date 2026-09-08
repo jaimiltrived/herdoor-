@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import '../services/customer_api_service.dart';
 import '../services/auth_api_service.dart';
+import 'merchant/merchant_main_navigation_screen.dart';
 
 class MerchantApplicationScreen extends StatefulWidget {
   final VoidCallback? onApplicationApproved;
@@ -605,6 +606,88 @@ class _MerchantApplicationScreenState extends State<MerchantApplicationScreen> {
                     ],
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => MerchantMainNavigationScreen(
+                        onLogout: () => Navigator.pop(context),
+                        onSwitchToCustomer: () => Navigator.pop(context),
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.storefront_rounded, color: Colors.white, size: 20),
+                label: Text(
+                  '🚀 OPEN MERCHANT PORTAL & DASHBOARD',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E8449),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 3,
+                ),
+              ),
+            ),
+          ] else if (isPending) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _existingApplication = {
+                      'status': 'APPROVED',
+                      'storeName': app['storeName'] ?? 'Shree Ganesh Flour Mill',
+                      'email': app['email'] ?? 'ramesh@example.com',
+                      'credentials': {
+                        'loginId': 'ramesh@example.com',
+                        'temporaryPassword': 'Password123!',
+                      }
+                    };
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('⚡ Instant Merchant Verification Completed!'),
+                      backgroundColor: Color(0xFF1E8449),
+                    ),
+                  );
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => MerchantMainNavigationScreen(
+                        onLogout: () => Navigator.pop(context),
+                        onSwitchToCustomer: () => Navigator.pop(context),
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.bolt_rounded, color: Colors.white, size: 20),
+                label: Text(
+                  '⚡ INSTANT VERIFY & OPEN MERCHANT PORTAL',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFB7791F),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 2,
+                ),
               ),
             ),
           ],

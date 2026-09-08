@@ -1,13 +1,19 @@
 const store = require('../store/dataStore');
 const { query } = require('../config/database');
-const { ORDER_STATUS, FULFILLMENT_TYPES, DELIVERY_STATUS } = require('../constants/enums');
+const { ORDER_STATUS, FULFILLMENT_TYPES, DELIVERY_STATUS, ROLES } = require('../constants/enums');
 
-// Helper to get Mill ID associated with logged-in Shopkeeper
+// Helper to get Mill ID safely associated with logged-in Shopkeeper
 function getShopkeeperMillId(req) {
+  if (req && req.user) {
+    if (req.user.role === ROLES.ADMIN) {
+      if (req.query && req.query.millId) return parseInt(req.query.millId);
+      if (req.headers && req.headers['x-mill-id']) return parseInt(req.headers['x-mill-id']);
+    }
+    if (req.user.millId) return req.user.millId;
+  }
   if (req && req.query && req.query.millId) return parseInt(req.query.millId);
   if (req && req.headers && req.headers['x-mill-id']) return parseInt(req.headers['x-mill-id']);
-  if (req && req.user && req.user.millId) return req.user.millId;
-  return 101; // Default to mill 101
+  return 101; // Default to mill 101 for backwards compatibility in dev
 }
 
 async function getLiveOrders(millId) {
@@ -55,7 +61,28 @@ async function getLiveOrders(millId) {
   return [];
 }
 
+// Robust order finder that handles numeric IDs and prefixed strings (#HD-..., ORD-...) without arbitrary fallback
+function findOrder(param) {
+  if (!param) return null;
+  const paramStr = param.toString().trim();
+  const numericOnly = parseInt(paramStr.replace(/[^0-9]/g, ''));
+  const intVal = parseInt(paramStr);
+
+  return store.orders.find(o => {
+    if (!isNaN(intVal) && o.id === intVal) return true;
+    if (!isNaN(numericOnly) && o.id === numericOnly) return true;
+    if (o.orderNumber && (
+      o.orderNumber === paramStr ||
+      o.orderNumber === `#${paramStr}` ||
+      `#${o.orderNumber}` === paramStr ||
+      o.orderNumber.replace(/[^0-9]/g, '') === paramStr.replace(/[^0-9]/g, '')
+    )) return true;
+    return false;
+  }) || null;
+}
+
 function enrichOrder(o) {
+  if (!o) return null;
   const u = store.users.find(usr => usr.id === o.userId);
   const addr = store.addresses.find(a => a.id === o.addressId);
   const delivery = store.deliveries.find(d => d.orderId === o.id);
@@ -153,132 +180,6 @@ exports.getDashboard = async (req, res) => {
 };
 
 /**
- * @desc Get Mill / Shop Profile
- * @route GET /api/v1/shopkeeper/profile
- */
-exports.getProfile = (req, res) => {
-  const millId = getShopkeeperMillId(req);
-  const mill = store.mills.find(m => m.id === millId);
-  const user = store.users.find(u => req.user && u.id === req.user.id);
-
-  res.json({
-    status: 'success',
-    data: {
-      user: {
-        id: user ? user.id : 2,
-        name: user ? user.name : 'Suresh Mill Owner',
-        email: user ? user.email : 'shop@shreeganesh.com',
-        phone: user ? user.phone : '+919876543211'
-      },
-      mill: mill || {
-        id: 101,
-        name: 'Shree Ganesh Flour Mill',
-        address: '12 Market Yard, Ellisbridge, Ahmedabad',
-        phone: '+919876543211',
-        isOpen: true,
-        services: ['Flour Grinding', 'Packing', 'Home Delivery', 'Cleaning'],
-        workingHours: '08:00 AM - 08:00 PM'
-      }
-    }
-  });
-};
-
-/**
- * @desc Update Mill / Shop Profile & Store Details
- * @route PUT /api/v1/shopkeeper/profile
- */
-exports.updateProfile = (req, res) => {
-  const millId = getShopkeeperMillId(req);
-  const mill = store.mills.find(m => m.id === millId);
-  const user = store.users.find(u => req.user && u.id === req.user.id);
-
-  const {
-    name,
-    ownerName,
-    phone,
-    email,
-    address,
-    city,
-    state,
-    pincode,
-    latitude,
-    longitude,
-    workingHours,
-    services,
-    specialty,
-    capacityKgPerDay,
-    deliveryRadiusKm,
-    storeImage,
-    chakkiImage,
-    isOpen,
-    expressDeliveryEnabled,
-    selfPickupEnabled
-  } = req.body;
-
-  if (user) {
-    if (ownerName) user.name = ownerName;
-    else if (name && !mill) user.name = name;
-    if (phone) user.phone = phone;
-    if (email) user.email = email;
-  }
-
-  if (mill) {
-    if (name) mill.name = name;
-    if (phone) mill.phone = phone;
-    if (address) mill.address = address;
-    if (city) mill.city = city;
-    if (state) mill.state = state;
-    if (pincode) mill.pincode = pincode;
-    if (latitude !== undefined) mill.latitude = parseFloat(latitude);
-    if (longitude !== undefined) mill.longitude = parseFloat(longitude);
-    if (workingHours) mill.workingHours = workingHours;
-    if (Array.isArray(services)) mill.services = services;
-    if (specialty) mill.specialty = specialty;
-    if (capacityKgPerDay !== undefined) mill.capacityKgPerDay = parseFloat(capacityKgPerDay);
-    if (deliveryRadiusKm !== undefined) mill.deliveryRadiusKm = parseFloat(deliveryRadiusKm);
-    if (storeImage) mill.storeImage = storeImage;
-    if (chakkiImage) mill.chakkiImage = chakkiImage;
-    if (isOpen !== undefined) mill.isOpen = !!isOpen;
-    if (expressDeliveryEnabled !== undefined) mill.expressDeliveryEnabled = !!expressDeliveryEnabled;
-    if (selfPickupEnabled !== undefined) mill.selfPickupEnabled = !!selfPickupEnabled;
-  }
-
-  res.json({
-    status: 'success',
-    message: 'Store details updated successfully',
-    data: { user, mill }
-  });
-};
-
-/**
- * @desc Upload / Update Store Images
- * @route POST /api/v1/shopkeeper/store-images
- */
-exports.uploadStoreImages = (req, res) => {
-  const millId = getShopkeeperMillId(req);
-  const mill = store.mills.find(m => m.id === millId);
-
-  const { storeImage, chakkiImage, bannerImage } = req.body;
-
-  if (mill) {
-    if (storeImage) mill.storeImage = storeImage;
-    if (chakkiImage) mill.chakkiImage = chakkiImage;
-    if (bannerImage) mill.bannerImage = bannerImage;
-  }
-
-  res.json({
-    status: 'success',
-    message: 'Store images updated successfully',
-    data: {
-      storeImage: mill?.storeImage || storeImage,
-      chakkiImage: mill?.chakkiImage || chakkiImage,
-      bannerImage: mill?.bannerImage || bannerImage
-    }
-  });
-};
-
-
-/**
  * @desc Get Orders Queues
  */
 exports.getTodayOrders = async (req, res) => {
@@ -342,13 +243,21 @@ exports.getRevenue = async (req, res) => {
  * @route POST /api/v1/shopkeeper/orders/:orderId/accept
  */
 exports.acceptOrder = async (req, res) => {
+  const millId = getShopkeeperMillId(req);
   const rawParam = (req.params.orderId || '').toString().trim();
-  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam) || 501;
+  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam);
   const order = findOrder(req.params.orderId);
   const { estimatedCompletionMinutes = 30, estimatedCompletionTime } = req.body;
 
+  if (!orderId && !order) {
+    return res.status(404).json({ status: 'error', message: 'Order not found' });
+  }
+
+  const targetId = order ? order.id : orderId;
+
   try {
-    await query('UPDATE orders SET status = ?, estimated_minutes = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.ACCEPTED, estimatedCompletionMinutes, orderId]);
+    await query('UPDATE orders SET status = ?, estimated_minutes = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.ACCEPTED, estimatedCompletionMinutes, targetId]);
+    await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [targetId, ORDER_STATUS.ACCEPTED, 'Order Accepted', `Accepted by mill owner (ETA: ${estimatedCompletionMinutes} mins)`]);
   } catch (err) {
     console.warn('MySQL acceptOrder update warning:', err.message);
   }
@@ -366,10 +275,10 @@ exports.acceptOrder = async (req, res) => {
     }
   }
 
-  const liveOrders = await getLiveOrders();
-  const updatedOrder = liveOrders.find(o => o.id === orderId) || order;
+  const liveOrders = await getLiveOrders(millId);
+  const updatedOrder = liveOrders.find(o => o.id === targetId) || order;
 
-  res.json({ status: 'success', message: 'Order accepted', data: { order: enrichOrder(updatedOrder || { id: orderId, status: ORDER_STATUS.ACCEPTED }) } });
+  res.json({ status: 'success', message: 'Order accepted', data: { order: enrichOrder(updatedOrder || { id: targetId, status: ORDER_STATUS.ACCEPTED }) } });
 };
 
 /**
@@ -377,13 +286,21 @@ exports.acceptOrder = async (req, res) => {
  * @route POST /api/v1/shopkeeper/orders/:orderId/reject
  */
 exports.rejectOrder = async (req, res) => {
+  const millId = getShopkeeperMillId(req);
   const rawParam = (req.params.orderId || '').toString().trim();
-  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam) || 501;
+  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam);
   const order = findOrder(req.params.orderId);
   const { reason = 'Capacity exceeded' } = req.body;
 
+  if (!orderId && !order) {
+    return res.status(404).json({ status: 'error', message: 'Order not found' });
+  }
+
+  const targetId = order ? order.id : orderId;
+
   try {
-    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.REJECTED, orderId]);
+    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.REJECTED, targetId]);
+    await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [targetId, ORDER_STATUS.REJECTED, 'Order Rejected', `Rejected: ${reason}`]);
   } catch (err) {
     console.warn('MySQL rejectOrder update warning:', err.message);
   }
@@ -399,10 +316,10 @@ exports.rejectOrder = async (req, res) => {
     }
   }
 
-  const liveOrders = await getLiveOrders();
-  const updatedOrder = liveOrders.find(o => o.id === orderId) || order;
+  const liveOrders = await getLiveOrders(millId);
+  const updatedOrder = liveOrders.find(o => o.id === targetId) || order;
 
-  res.json({ status: 'success', message: 'Order rejected', data: { order: enrichOrder(updatedOrder || { id: orderId, status: ORDER_STATUS.REJECTED }) } });
+  res.json({ status: 'success', message: 'Order rejected', data: { order: enrichOrder(updatedOrder || { id: targetId, status: ORDER_STATUS.REJECTED }) } });
 };
 
 /**
@@ -410,14 +327,21 @@ exports.rejectOrder = async (req, res) => {
  * @route PUT /api/v1/shopkeeper/orders/:orderId/completion-time
  */
 exports.setCompletionTime = async (req, res) => {
+  const millId = getShopkeeperMillId(req);
   const rawParam = (req.params.orderId || '').toString().trim();
-  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam) || 501;
+  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam);
   const order = findOrder(req.params.orderId);
   const { estimatedCompletionMinutes, estimatedCompletionTime } = req.body;
 
+  if (!orderId && !order) {
+    return res.status(404).json({ status: 'error', message: 'Order not found' });
+  }
+
+  const targetId = order ? order.id : orderId;
+
   try {
     if (estimatedCompletionMinutes) {
-      await query('UPDATE orders SET estimated_minutes = ?, updated_at = NOW() WHERE id = ?', [estimatedCompletionMinutes, orderId]);
+      await query('UPDATE orders SET estimated_minutes = ?, updated_at = NOW() WHERE id = ?', [estimatedCompletionMinutes, targetId]);
     }
   } catch (err) {
     console.warn('MySQL setCompletionTime update warning:', err.message);
@@ -428,10 +352,10 @@ exports.setCompletionTime = async (req, res) => {
     if (estimatedCompletionTime) order.estimatedCompletionTime = estimatedCompletionTime;
   }
 
-  const liveOrders = await getLiveOrders();
-  const updatedOrder = liveOrders.find(o => o.id === orderId) || order;
+  const liveOrders = await getLiveOrders(millId);
+  const updatedOrder = liveOrders.find(o => o.id === targetId) || order;
 
-  res.json({ status: 'success', message: 'Completion time updated', data: { order: enrichOrder(updatedOrder || { id: orderId }) } });
+  res.json({ status: 'success', message: 'Completion time updated', data: { order: enrichOrder(updatedOrder || { id: targetId }) } });
 };
 
 /**
@@ -439,12 +363,20 @@ exports.setCompletionTime = async (req, res) => {
  * @route POST /api/v1/shopkeeper/orders/:orderId/start or /processing
  */
 exports.startProcessing = async (req, res) => {
+  const millId = getShopkeeperMillId(req);
   const rawParam = (req.params.orderId || '').toString().trim();
-  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam) || 501;
+  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam);
   const order = findOrder(req.params.orderId);
 
+  if (!orderId && !order) {
+    return res.status(404).json({ status: 'error', message: 'Order not found' });
+  }
+
+  const targetId = order ? order.id : orderId;
+
   try {
-    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.PROCESSING, orderId]);
+    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.PROCESSING, targetId]);
+    await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [targetId, ORDER_STATUS.PROCESSING, 'Milling Started', 'Chakki grinding started']);
   } catch (err) {
     console.warn('MySQL startProcessing update warning:', err.message);
   }
@@ -460,10 +392,10 @@ exports.startProcessing = async (req, res) => {
     }
   }
 
-  const liveOrders = await getLiveOrders();
-  const updatedOrder = liveOrders.find(o => o.id === orderId) || order;
+  const liveOrders = await getLiveOrders(millId);
+  const updatedOrder = liveOrders.find(o => o.id === targetId) || order;
 
-  res.json({ status: 'success', message: 'Milling process started', data: { order: enrichOrder(updatedOrder || { id: orderId, status: ORDER_STATUS.PROCESSING }) } });
+  res.json({ status: 'success', message: 'Milling process started', data: { order: enrichOrder(updatedOrder || { id: targetId, status: ORDER_STATUS.PROCESSING }) } });
 };
 
 /**
@@ -471,12 +403,20 @@ exports.startProcessing = async (req, res) => {
  * @route POST /api/v1/shopkeeper/orders/:orderId/packing
  */
 exports.startPacking = async (req, res) => {
+  const millId = getShopkeeperMillId(req);
   const rawParam = (req.params.orderId || '').toString().trim();
-  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam) || 501;
+  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam);
   const order = findOrder(req.params.orderId);
 
+  if (!orderId && !order) {
+    return res.status(404).json({ status: 'error', message: 'Order not found' });
+  }
+
+  const targetId = order ? order.id : orderId;
+
   try {
-    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.PACKING, orderId]);
+    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.PACKING, targetId]);
+    await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [targetId, ORDER_STATUS.PACKING, 'Packing Started', 'Flour packing & bagging started']);
   } catch (err) {
     console.warn('MySQL startPacking update warning:', err.message);
   }
@@ -492,10 +432,10 @@ exports.startPacking = async (req, res) => {
     }
   }
 
-  const liveOrders = await getLiveOrders();
-  const updatedOrder = liveOrders.find(o => o.id === orderId) || order;
+  const liveOrders = await getLiveOrders(millId);
+  const updatedOrder = liveOrders.find(o => o.id === targetId) || order;
 
-  res.json({ status: 'success', message: 'Packing started', data: { order: enrichOrder(updatedOrder || { id: orderId, status: ORDER_STATUS.PACKING }) } });
+  res.json({ status: 'success', message: 'Packing started', data: { order: enrichOrder(updatedOrder || { id: targetId, status: ORDER_STATUS.PACKING }) } });
 };
 
 /**
@@ -503,16 +443,23 @@ exports.startPacking = async (req, res) => {
  * @route POST /api/v1/shopkeeper/orders/:orderId/ready
  */
 exports.markReady = async (req, res) => {
+  const millId = getShopkeeperMillId(req);
   const rawParam = (req.params.orderId || '').toString().trim();
-  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam) || 501;
+  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam);
   const order = findOrder(req.params.orderId);
 
+  if (!orderId && !order) {
+    return res.status(404).json({ status: 'error', message: 'Order not found' });
+  }
+
+  const targetId = order ? order.id : orderId;
   const nextStatus = (order && order.fulfillmentType === FULFILLMENT_TYPES.PICKUP)
     ? ORDER_STATUS.READY_FOR_PICKUP
     : ORDER_STATUS.READY;
 
   try {
-    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [nextStatus, orderId]);
+    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [nextStatus, targetId]);
+    await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [targetId, nextStatus, 'Order Ready', `Order packed and ready for fulfillment`]);
   } catch (err) {
     console.warn('MySQL markReady update warning:', err.message);
   }
@@ -528,37 +475,17 @@ exports.markReady = async (req, res) => {
     }
   }
 
-  const liveOrders = await getLiveOrders();
-  const updatedOrder = liveOrders.find(o => o.id === orderId) || order;
+  const liveOrders = await getLiveOrders(millId);
+  const updatedOrder = liveOrders.find(o => o.id === targetId) || order;
 
-  res.json({ status: 'success', message: `Order marked ${nextStatus}`, data: { order: enrichOrder(updatedOrder || { id: orderId, status: nextStatus }) } });
+  res.json({ status: 'success', message: `Order marked ${nextStatus}`, data: { order: enrichOrder(updatedOrder || { id: targetId, status: nextStatus }) } });
 };
-
-// Robust order finder that handles numeric IDs, prefixed strings (#HD-..., ORD-...), and safe fallbacks
-function findOrder(param) {
-  if (!param) return null;
-  const paramStr = param.toString().trim();
-  const numericOnly = parseInt(paramStr.replace(/[^0-9]/g, ''));
-  const intVal = parseInt(paramStr);
-
-  return store.orders.find(o => {
-    if (!isNaN(intVal) && o.id === intVal) return true;
-    if (!isNaN(numericOnly) && o.id === numericOnly) return true;
-    if (o.orderNumber && (
-      o.orderNumber === paramStr ||
-      o.orderNumber === `#${paramStr}` ||
-      `#${o.orderNumber}` === paramStr ||
-      o.orderNumber.replace(/[^0-9]/g, '') === paramStr.replace(/[^0-9]/g, '')
-    )) return true;
-    return false;
-  }) || store.orders.find(o => o.id === 501 || o.id === 502) || store.orders[0];
-}
 
 /**
  * @desc Handover Order to Delivery Rider with Verification PIN / QR
  * @route POST /api/v1/shopkeeper/orders/:orderId/handover
  */
-exports.handoverDelivery = (req, res) => {
+exports.handoverDelivery = async (req, res) => {
   const order = findOrder(req.params.orderId);
 
   if (!order) {
@@ -574,11 +501,19 @@ exports.handoverDelivery = (req, res) => {
   }
 
   order.status = ORDER_STATUS.OUT_FOR_DELIVERY;
+  if (!order.timeline) order.timeline = [];
   order.timeline.push({
     status: ORDER_STATUS.OUT_FOR_DELIVERY,
     timestamp: new Date().toISOString(),
     note: 'Handed over to delivery partner for doorstep delivery'
   });
+
+  try {
+    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.OUT_FOR_DELIVERY, orderId]);
+    await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [orderId, ORDER_STATUS.OUT_FOR_DELIVERY, 'Out For Delivery', 'Handed over to delivery partner']);
+  } catch (err) {
+    console.warn('MySQL handoverDelivery update warning:', err.message);
+  }
 
   // Update associated delivery record if exists
   const delivery = store.deliveries.find(d => d.orderId === orderId);
@@ -594,7 +529,7 @@ exports.handoverDelivery = (req, res) => {
  * @desc Complete Order
  * @route POST /api/v1/shopkeeper/orders/:orderId/complete
  */
-exports.completeOrder = (req, res) => {
+exports.completeOrder = async (req, res) => {
   const order = findOrder(req.params.orderId);
 
   if (!order) {
@@ -604,11 +539,19 @@ exports.completeOrder = (req, res) => {
   const statusVal = order.fulfillmentType === FULFILLMENT_TYPES.PICKUP ? ORDER_STATUS.PICKED_UP : ORDER_STATUS.COMPLETED;
   order.status = statusVal;
   order.paymentStatus = 'PAID';
+  if (!order.timeline) order.timeline = [];
   order.timeline.push({
     status: statusVal,
     timestamp: new Date().toISOString(),
     note: 'Order successfully completed'
   });
+
+  try {
+    await query('UPDATE orders SET status = ?, payment_status = ?, updated_at = NOW() WHERE id = ?', [statusVal, 'PAID', order.id]);
+    await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [order.id, statusVal, 'Order Completed', 'Order marked as completed / picked up']);
+  } catch (err) {
+    console.warn('MySQL completeOrder update warning:', err.message);
+  }
 
   res.json({ status: 'success', message: 'Order completed', data: { order: enrichOrder(order) } });
 };
@@ -617,13 +560,13 @@ exports.completeOrder = (req, res) => {
  * @desc Flour & Grain Inventory Management
  */
 exports.getInventory = (req, res) => {
-  const millId = getShopkeeperMillId(req.user);
+  const millId = getShopkeeperMillId(req);
   const items = store.inventory.filter(i => i.millId === millId);
   res.json({ status: 'success', count: items.length, data: { inventory: items } });
 };
 
 exports.getLowStock = (req, res) => {
-  const millId = getShopkeeperMillId(req.user);
+  const millId = getShopkeeperMillId(req);
   const lowStock = store.inventory.filter(i => i.millId === millId && i.stockKg <= i.minimumStockKg);
   res.json({ status: 'success', count: lowStock.length, data: { inventory: lowStock } });
 };
@@ -640,7 +583,7 @@ exports.getInventoryById = (req, res) => {
 };
 
 exports.createInventory = (req, res) => {
-  const millId = getShopkeeperMillId(req.user);
+  const millId = getShopkeeperMillId(req);
   const { productType = 'FLOUR', name, stockKg = 0, minimumStockKg = 20, pricePerKg = 0 } = req.body;
 
   if (!name) {
@@ -722,7 +665,7 @@ exports.stockOut = (req, res) => {
  * @desc Shop Availability & Services
  */
 exports.getAvailability = (req, res) => {
-  const millId = getShopkeeperMillId(req.user);
+  const millId = getShopkeeperMillId(req);
   const mill = store.mills.find(m => m.id === millId) || store.mills[0];
 
   res.json({
@@ -740,7 +683,7 @@ exports.getAvailability = (req, res) => {
 };
 
 exports.updateAvailability = (req, res) => {
-  const millId = getShopkeeperMillId(req.user);
+  const millId = getShopkeeperMillId(req);
   const mill = store.mills.find(m => m.id === millId) || store.mills[0];
 
   if (!mill) {
@@ -787,13 +730,13 @@ exports.updateAvailability = (req, res) => {
 };
 
 exports.getServices = (req, res) => {
-  const millId = getShopkeeperMillId(req.user);
+  const millId = getShopkeeperMillId(req);
   const mill = store.mills.find(m => m.id === millId);
   res.json({ status: 'success', data: { services: mill ? mill.services : [] } });
 };
 
 exports.updateServices = (req, res) => {
-  const millId = getShopkeeperMillId(req.user);
+  const millId = getShopkeeperMillId(req);
   const mill = store.mills.find(m => m.id === millId);
 
   if (!mill) {
@@ -809,7 +752,7 @@ exports.updateServices = (req, res) => {
 };
 
 exports.updateWorkingHours = (req, res) => {
-  const millId = getShopkeeperMillId(req.user);
+  const millId = getShopkeeperMillId(req);
   const mill = store.mills.find(m => m.id === millId);
 
   if (!mill) {
@@ -828,7 +771,7 @@ exports.updateWorkingHours = (req, res) => {
  * @desc Food Safety & Hygiene Audit
  */
 exports.getSafetyAudit = (req, res) => {
-  const millId = getShopkeeperMillId(req.user);
+  const millId = getShopkeeperMillId(req);
   const mill = store.mills.find(m => m.id === millId) || store.mills[0];
 
   const defaultAudit = {
@@ -847,7 +790,7 @@ exports.getSafetyAudit = (req, res) => {
 };
 
 exports.updateSafetyAudit = (req, res) => {
-  const millId = getShopkeeperMillId(req.user);
+  const millId = getShopkeeperMillId(req);
   const mill = store.mills.find(m => m.id === millId) || store.mills[0];
 
   if (!mill) {
@@ -890,7 +833,7 @@ exports.updateSafetyAudit = (req, res) => {
  * @route GET /api/v1/shopkeeper/profile
  */
 exports.getProfile = (req, res) => {
-  const millId = getShopkeeperMillId(req.user);
+  const millId = getShopkeeperMillId(req);
   const mill = store.mills.find(m => m.id === millId) || store.mills[0];
   const user = (req.user && req.user.id) ? store.users.find(u => u.id === req.user.id) : store.users[1];
 
@@ -915,7 +858,7 @@ exports.getProfile = (req, res) => {
  * @route PUT /api/v1/shopkeeper/profile
  */
 exports.updateProfile = async (req, res) => {
-  const millId = getShopkeeperMillId(req.user);
+  const millId = getShopkeeperMillId(req);
   let mill = store.mills.find(m => m.id === millId);
   const user = (req.user && req.user.id) ? store.users.find(u => u.id === req.user.id) : null;
 
@@ -988,7 +931,7 @@ exports.updateProfile = async (req, res) => {
  */
 exports.uploadStoreImages = async (req, res) => {
   const { uploadToCloudinary } = require('../config/cloudinary');
-  const millId = getShopkeeperMillId(req.user);
+  const millId = getShopkeeperMillId(req);
   const mill = store.mills.find(m => m.id === millId) || store.mills[0];
 
   const { storeImage, chakkiImage, bannerImage } = req.body;
@@ -1026,4 +969,5 @@ exports.uploadStoreImages = async (req, res) => {
     });
   }
 };
+
 

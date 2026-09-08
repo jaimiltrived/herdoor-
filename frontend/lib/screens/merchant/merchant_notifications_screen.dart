@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
 import '../../models/merchant_models.dart';
 import '../../services/merchant_api_service.dart';
+import 'merchant_orders_screen.dart';
+import 'merchant_active_driver_pickup_screen.dart';
+import 'merchant_inventory_screen.dart';
 
 class MerchantNotificationsScreen extends StatefulWidget {
   const MerchantNotificationsScreen({super.key});
@@ -15,54 +19,103 @@ class _MerchantNotificationsScreenState extends State<MerchantNotificationsScree
   bool _isLoading = true;
   int _selectedFilterTab = 0; // 0: All, 1: Unread
   List<AppNotification> _notifications = [];
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _loadNotifications();
+    // Real-time polling every 4 seconds for dynamic instant updates
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      _loadNotifications(silent: true);
+    });
   }
 
-  Future<void> _loadNotifications() async {
-    setState(() => _isLoading = true);
-    final list = await MerchantApiService.instance.getNotifications();
-    if (list != null) {
-      _notifications = list;
-    } else {
-      // Fallback sample notifications
-      _notifications = [
-        AppNotification(
-          id: 1,
-          title: '🚨 New Order Received #ORD-2026-1002',
-          message: 'Elena Rodriguez placed a new order for 5kg Multigrain Mix (₹175.00).',
-          read: false,
-          createdAt: '11:00 AM',
-        ),
-        AppNotification(
-          id: 2,
-          title: '🛵 Driver Arrived for Pickup',
-          message: 'Rajesh Kumar (Electric Bike #EB-4821) arrived at store for order #ORD-2026-1001.',
-          read: false,
-          createdAt: '10:30 AM',
-        ),
-        AppNotification(
-          id: 3,
-          title: '⚠️ Low Stock Alert: Dark Rye Blend',
-          message: 'Stock has fallen below threshold (15kg remaining). Restock soon.',
-          read: false,
-          createdAt: '09:15 AM',
-        ),
-        AppNotification(
-          id: 4,
-          title: '🛡️ Food Safety Audit Status',
-          message: 'Daily chakki stone sanitization and grain moisture test verified (Score 99%).',
-          read: true,
-          createdAt: '08:00 AM',
-        ),
-      ];
-    }
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
 
+  Future<void> _loadNotifications({bool silent = false}) async {
+    if (!silent) setState(() => _isLoading = true);
+
+    try {
+      final list = await MerchantApiService.instance.getNotifications();
+      if (list != null && list.isNotEmpty) {
+        // Also dynamically enrich with latest live orders from merchant API if available
+        final activeOrders = await MerchantApiService.instance.getActiveOrders();
+        final existingTitles = list.map((n) => n.title).toSet();
+
+        final dynamicList = List<AppNotification>.from(list);
+
+        if (activeOrders != null && activeOrders.isNotEmpty) {
+          for (final ord in activeOrders.take(2)) {
+            final orderTitle = '🚨 New Order Received ${ord.orderId}';
+            if (!existingTitles.contains(orderTitle)) {
+              dynamicList.insert(
+                0,
+                AppNotification(
+                  id: ord.numericId ?? 999,
+                  title: orderTitle,
+                  message: '${ord.customerName} placed a new order for ${ord.quantityText} ${ord.grainType} (₹${ord.totalPrice.toStringAsFixed(2)}).',
+                  read: false,
+                  createdAt: ord.timeAgo.contains(':') ? ord.timeAgo.replaceAll('Ordered at ', '') : '11:00',
+                  orderId: ord.orderId,
+                  type: 'NEW_ORDER',
+                ),
+              );
+            }
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            _notifications = dynamicList;
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+    } catch (_) {}
+
+    // Fallback sample real-time notifications matching reference UI
     if (mounted) {
-      setState(() => _isLoading = false);
+      setState(() {
+        if (_notifications.isEmpty) {
+          _notifications = [
+            AppNotification(
+              id: 1,
+              title: '🚨 New Order Received #ORD-2026-1002',
+              message: 'Elena Rodriguez placed a new order for 5kg Multigrain Mix (₹175.00).',
+              read: false,
+              createdAt: '11:00',
+            ),
+            AppNotification(
+              id: 2,
+              title: '🛵 Driver Arrived for Pickup',
+              message: 'Rajesh Kumar (Electric Bike #EB-4821) arrived at store for order #ORD-2026-1001.',
+              read: false,
+              createdAt: '10:30',
+            ),
+            AppNotification(
+              id: 3,
+              title: '⚠️ Low Stock Alert: Dark Rye Blend',
+              message: 'Stock has fallen below threshold (12kg remaining). Restock soon.',
+              read: false,
+              createdAt: '09:15',
+            ),
+            AppNotification(
+              id: 4,
+              title: '🛡️ Food Safety Audit Status',
+              message: 'Daily chakki stone sanitization and grain moisture test verified (Score 99%).',
+              read: true,
+              createdAt: '08:00',
+            ),
+          ];
+        }
+        _isLoading = false;
+      });
     }
   }
 
@@ -93,6 +146,26 @@ class _MerchantNotificationsScreenState extends State<MerchantNotificationsScree
         notification.read = true;
       });
     }
+
+    if (!mounted) return;
+
+    // Dynamic Navigation based on notification context
+    if (notification.title.contains('Order')) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const MerchantOrdersScreen()),
+      );
+    } else if (notification.title.contains('Driver') || notification.title.contains('Pickup')) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const MerchantActiveDriverPickupScreen()),
+      );
+    } else if (notification.title.contains('Stock')) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const MerchantInventoryScreen()),
+      );
+    }
   }
 
   @override
@@ -104,9 +177,10 @@ class _MerchantNotificationsScreenState extends State<MerchantNotificationsScree
     final int unreadCount = _notifications.where((n) => !n.read).length;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFFAF7F2), // Soft warm cream background
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0.5,
+        backgroundColor: const Color(0xFFFAF7F2),
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: AppTheme.textPrimary),
           onPressed: () => Navigator.pop(context),
@@ -128,7 +202,7 @@ class _MerchantNotificationsScreenState extends State<MerchantNotificationsScree
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
-                  color: AppTheme.primaryTerracotta,
+                  color: const Color(0xFF7D4438),
                 ),
               ),
             ),
@@ -136,27 +210,35 @@ class _MerchantNotificationsScreenState extends State<MerchantNotificationsScree
       ),
       body: RefreshIndicator(
         onRefresh: _loadNotifications,
-        color: AppTheme.primaryTerracotta,
+        color: const Color(0xFF7D4438),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Filter Bar
+            // Filter Bar with exact visual styling
             Container(
-              color: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
-                  _buildFilterTab(0, 'All (${_notifications.length})'),
+                  _buildFilterChip(
+                    index: 0,
+                    label: 'All (${_notifications.length})',
+                    hasCheckIcon: true,
+                  ),
                   const SizedBox(width: 10),
-                  _buildFilterTab(1, 'Unread ($unreadCount)'),
+                  _buildFilterChip(
+                    index: 1,
+                    label: 'Unread ($unreadCount)',
+                    hasCheckIcon: false,
+                  ),
                 ],
               ),
             ),
-            const Divider(height: 1, color: AppTheme.borderLight),
+            const Divider(height: 1, color: Color(0xFFEFE8DE)),
 
-            // Notification List
+            // Dynamic Notification List
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryTerracotta))
+                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF7D4438)))
                   : filteredList.isEmpty
                       ? Center(
                           child: Column(
@@ -174,10 +256,9 @@ class _MerchantNotificationsScreenState extends State<MerchantNotificationsScree
                             ],
                           ),
                         )
-                      : ListView.separated(
-                          padding: const EdgeInsets.all(16),
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           itemCount: filteredList.length,
-                          separatorBuilder: (context, index) => const SizedBox(height: 12),
                           itemBuilder: (context, index) {
                             final notification = filteredList[index];
                             return _buildNotificationCard(context, notification);
@@ -190,24 +271,47 @@ class _MerchantNotificationsScreenState extends State<MerchantNotificationsScree
     );
   }
 
-  Widget _buildFilterTab(int index, String title) {
+  Widget _buildFilterChip({
+    required int index,
+    required String label,
+    required bool hasCheckIcon,
+  }) {
     final isSelected = _selectedFilterTab == index;
 
-    return ChoiceChip(
-      label: Text(title),
-      selected: isSelected,
-      selectedColor: AppTheme.primaryTerracotta,
-      backgroundColor: const Color(0xFFF6F0E7),
-      labelStyle: GoogleFonts.plusJakartaSans(
-        fontSize: 13,
-        fontWeight: FontWeight.bold,
-        color: isSelected ? Colors.white : AppTheme.textPrimary,
-      ),
-      onSelected: (val) {
+    return GestureDetector(
+      onTap: () {
         setState(() {
           _selectedFilterTab = index;
         });
       },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF7D4438) : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF7D4438) : const Color(0xFF222222),
+            width: isSelected ? 1 : 1.2,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isSelected) ...[
+              const Icon(Icons.check, size: 15, color: Colors.white),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              label,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? Colors.white : const Color(0xFF222222),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -231,24 +335,24 @@ class _MerchantNotificationsScreenState extends State<MerchantNotificationsScree
   Widget _buildNotificationCard(BuildContext context, AppNotification notification) {
     IconData iconData = Icons.notifications_active_rounded;
     Color iconBgColor = const Color(0xFFF6F0E7);
-    Color iconColor = AppTheme.primaryTerracotta;
+    Color iconColor = const Color(0xFF7D4438);
 
     if (notification.title.contains('Order')) {
       iconData = Icons.receipt_long_rounded;
-      iconBgColor = const Color(0xFFE8F8F0);
-      iconColor = const Color(0xFF2ECC71);
+      iconBgColor = const Color(0xFFE3F8EE);
+      iconColor = const Color(0xFF00B074);
     } else if (notification.title.contains('Driver') || notification.title.contains('Pickup')) {
       iconData = Icons.local_shipping_rounded;
-      iconBgColor = const Color(0xFFEDE9D9);
-      iconColor = const Color(0xFF6E5616);
+      iconBgColor = const Color(0xFFEFECE2);
+      iconColor = const Color(0xFF6E6A3B);
     } else if (notification.title.contains('Stock')) {
       iconData = Icons.warning_amber_rounded;
-      iconBgColor = const Color(0xFFFFECEB);
-      iconColor = AppTheme.primaryTerracotta;
+      iconBgColor = const Color(0xFFFDECEC);
+      iconColor = const Color(0xFFD9534F);
     } else if (notification.title.contains('Safety') || notification.title.contains('Audit')) {
-      iconData = Icons.verified_user_rounded;
-      iconBgColor = const Color(0xFFFEF3D6);
-      iconColor = const Color(0xFFD4AC0D);
+      iconData = Icons.verified_rounded;
+      iconBgColor = const Color(0xFFFDF6DE);
+      iconColor = const Color(0xFFB89228);
     }
 
     return Dismissible(
@@ -257,102 +361,113 @@ class _MerchantNotificationsScreenState extends State<MerchantNotificationsScree
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
+        margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
           color: Colors.red[400],
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
         ),
         child: const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 24),
       ),
       onDismissed: (direction) => _handleDeleteNotification(notification),
-      child: InkWell(
-        onTap: () => _handleNotificationTap(notification),
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: notification.read ? Colors.white : const Color(0xFFFFFBF6),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: notification.read ? AppTheme.borderLight : const Color(0xFFF5E6D3),
-              width: notification.read ? 1 : 1.5,
-            ),
-            boxShadow: [
-              if (!notification.read)
-                BoxShadow(
-                  color: AppTheme.primaryTerracotta.withValues(alpha: 0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-            ],
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFFEDE5DA),
+            width: 1.2,
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: iconBgColor,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(iconData, color: iconColor, size: 22),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            onTap: () => _handleNotificationTap(notification),
+            borderRadius: BorderRadius.circular(18),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Icon Box
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: iconBgColor,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(iconData, color: iconColor, size: 24),
+                  ),
+                  const SizedBox(width: 14),
+
+                  // Notification Content
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            notification.title,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 14,
-                              fontWeight: notification.read ? FontWeight.w600 : FontWeight.bold,
-                              color: AppTheme.textPrimary,
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                notification.title,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF1E242B),
+                                ),
+                              ),
                             ),
-                          ),
+                            const SizedBox(width: 8),
+                            Text(
+                              notification.createdAt,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 12,
+                                color: const Color(0xFF888888),
+                              ),
+                            ),
+                            if (!notification.read) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                width: 7,
+                                height: 7,
+                                margin: const EdgeInsets.only(top: 4),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF9E4B3E),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(height: 5),
                         Text(
-                          notification.createdAt,
+                          notification.message,
                           style: GoogleFonts.plusJakartaSans(
-                            fontSize: 11,
-                            color: AppTheme.textMuted,
+                            fontSize: 13,
+                            color: const Color(0xFF555555),
+                            height: 1.35,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      notification.message,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 13,
-                        color: AppTheme.textSecondary,
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (!notification.read) ...[
-                const SizedBox(width: 8),
-                Container(
-                  width: 8,
-                  height: 8,
-                  margin: const EdgeInsets.only(top: 6),
-                  decoration: const BoxDecoration(
-                    color: AppTheme.primaryTerracotta,
-                    shape: BoxShape.circle,
                   ),
-                ),
-              ],
-            ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 }
+

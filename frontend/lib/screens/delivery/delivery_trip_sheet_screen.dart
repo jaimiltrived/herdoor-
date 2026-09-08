@@ -31,7 +31,6 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
   List<DeliveryTrip> _assignedTrips = [];
   List<Map<String, dynamic>> _completedTrips = [];
   List<DeliveryTrip> _nearbyAvailableTrips = [];
-  String _selectedPastFilter = 'All';
   Timer? _realtimeRefreshTimer;
 
   @override
@@ -82,20 +81,43 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
       final nearby = List<DeliveryTrip>.from(results[2] as List<DeliveryTrip>);
 
       // Merge completed trips so recently finished trips are preserved seamlessly
-      final Set<dynamic> completedKeys = completed.map((c) => c['orderId'] ?? c['orderNumber']).toSet();
+      final Set<dynamic> completedKeys = <dynamic>{};
+      for (final c in completed) {
+        if (c['orderId'] != null) completedKeys.add(c['orderId']);
+        if (c['orderNumber'] != null) completedKeys.add(c['orderNumber']);
+        if (c['groupCode'] != null) completedKeys.add(c['groupCode']);
+        if (c['groupId'] != null) completedKeys.add(c['groupId']);
+        if (c['stops'] is List) {
+          for (final s in (c['stops'] as List)) {
+            if (s is Map) {
+              if (s['orderId'] != null) completedKeys.add(s['orderId']);
+              if (s['orderNumber'] != null) completedKeys.add(s['orderNumber']);
+            }
+          }
+        }
+      }
+
       for (var local in _completedTrips) {
         final key = local['orderId'] ?? local['orderNumber'];
         final orderNum = local['orderNumber'];
+        final groupCode = local['groupCode'];
         final localStops = (local['stops'] is List) ? (local['stops'] as List) : [];
 
         // If not in completed, insert at top
-        if (key != null && !completedKeys.contains(key) && !completedKeys.contains(orderNum)) {
+        if (key != null && !completedKeys.contains(key) && (orderNum == null || !completedKeys.contains(orderNum))) {
           completed.insert(0, local);
           completedKeys.add(key);
           if (orderNum != null) completedKeys.add(orderNum);
+          if (groupCode != null) completedKeys.add(groupCode);
+          for (final s in localStops) {
+            if (s is Map) {
+              if (s['orderId'] != null) completedKeys.add(s['orderId']);
+              if (s['orderNumber'] != null) completedKeys.add(s['orderNumber']);
+            }
+          }
         } else if (localStops.isNotEmpty) {
           // If server returned a flattened/incomplete item without stops, replace with rich local version
-          final existingIdx = completed.indexWhere((c) => c['orderId'] == key || c['orderNumber'] == orderNum || c['orderNumber'] == key);
+          final existingIdx = completed.indexWhere((c) => c['orderId'] == key || c['orderNumber'] == orderNum || c['orderNumber'] == key || (groupCode != null && c['orderNumber'] == groupCode));
           if (existingIdx != -1) {
             final existingStops = (completed[existingIdx]['stops'] is List) ? (completed[existingIdx]['stops'] as List) : [];
             if (existingStops.length < localStops.length) {
@@ -105,12 +127,34 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
         }
       }
 
+      // Strictly filter assigned trips so completed trips NEVER appear in active trips
+      final List<DeliveryTrip> filteredAssigned = [];
+      final Set<dynamic> seenAssigned = <dynamic>{};
+
+      for (final t in assigned) {
+        if (completedKeys.contains(t.orderId) ||
+            completedKeys.contains(t.orderNumber) ||
+            (t.groupCode != null && completedKeys.contains(t.groupCode))) {
+          continue;
+        }
+        if (t.isBatch && t.stops.isNotEmpty) {
+          final allStopsDone = t.stops.every((s) => completedKeys.contains(s.orderId) || completedKeys.contains(s.orderNumber));
+          if (allStopsDone) continue;
+        }
+        final uniqueKey = t.orderNumber.isNotEmpty ? t.orderNumber : '${t.orderId}';
+        if (seenAssigned.contains(uniqueKey) || seenAssigned.contains(t.orderId)) continue;
+        seenAssigned.add(uniqueKey);
+        seenAssigned.add(t.orderId);
+        filteredAssigned.add(t);
+      }
+
       // If activeTrip passed from parent, ensure it's in assigned list only if not completed
       if (widget.activeTrip != null &&
           !completedKeys.contains(widget.activeTrip!.orderId) &&
           !completedKeys.contains(widget.activeTrip!.orderNumber) &&
-          !assigned.any((t) => t.orderId == widget.activeTrip!.orderId)) {
-        assigned.insert(0, widget.activeTrip!);
+          (widget.activeTrip!.groupCode == null || !completedKeys.contains(widget.activeTrip!.groupCode)) &&
+          !filteredAssigned.any((t) => t.orderId == widget.activeTrip!.orderId || t.orderNumber == widget.activeTrip!.orderNumber)) {
+        filteredAssigned.insert(0, widget.activeTrip!);
       }
 
       // Sort by real deliveredAt timestamp so newest deliveries always appear first
@@ -138,9 +182,9 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
       }
 
       setState(() {
-        _assignedTrips = assigned;
+        _assignedTrips = filteredAssigned;
         _completedTrips = completed;
-        _nearbyAvailableTrips = nearby.where((n) => !assigned.any((a) => a.orderId == n.orderId) && !assigned.any((a) => a.stops.any((s) => s.orderId == n.orderId))).toList();
+        _nearbyAvailableTrips = nearby.where((n) => !filteredAssigned.any((a) => a.orderId == n.orderId) && !filteredAssigned.any((a) => a.stops.any((s) => s.orderId == n.orderId))).toList();
         if (!silentRefresh) {
           _isLoading = false;
         }
@@ -230,12 +274,18 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
 
   void _handleTripCompletionRealtime(DeliveryTrip trip) {
     setState(() {
-      _assignedTrips.removeWhere((t) => t.orderId == trip.orderId || t.orderNumber == trip.orderNumber);
+      _assignedTrips.removeWhere((t) =>
+          t.orderId == trip.orderId ||
+          t.orderNumber == trip.orderNumber ||
+          (trip.groupCode != null && (t.groupCode == trip.groupCode || t.orderNumber == trip.groupCode)));
       // Also remove any individual stops from assigned trips that were part of this batch
       if (trip.isBatch && trip.stops.isNotEmpty) {
         final stopIds = trip.stops.map((s) => s.orderId).toSet();
         final stopNums = trip.stops.map((s) => s.orderNumber).toSet();
-        _assignedTrips.removeWhere((t) => stopIds.contains(t.orderId) || stopNums.contains(t.orderNumber));
+        _assignedTrips.removeWhere((t) =>
+            stopIds.contains(t.orderId) ||
+            stopNums.contains(t.orderNumber) ||
+            (t.isBatch && t.stops.every((s) => stopIds.contains(s.orderId) || stopNums.contains(s.orderNumber))));
       }
 
       if (trip.isBatch && trip.stops.length > 1) {
@@ -924,48 +974,6 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
 
   // TAB 2: Past Delivered Orders History
   Widget _buildPastDeliveriesTab() {
-    bool isGroupedTrip(Map<String, dynamic> t) {
-      final stops = t['stops'];
-      final stopsLen = (stops is List) ? stops.length : 0;
-      final custName = (t['customerName'] ?? '').toString().toLowerCase();
-      final ordNum = (t['orderNumber'] ?? '').toString().toUpperCase();
-      return t['isBatch'] == true ||
-          ordNum.contains('GRP') ||
-          ordNum.contains('POOL') ||
-          custName.contains('grouped') ||
-          custName.contains('batch') ||
-          (t['stopsCount'] ?? 1) > 1 ||
-          stopsLen > 1;
-    }
-
-    final filtered = _completedTrips.where((t) {
-      if (_selectedPastFilter == 'Today') {
-        final timeStr = (t['deliveredTimeAgo'] ?? '').toString().toLowerCase();
-        final isToday = timeStr.contains('hr') || timeStr.contains('min') || timeStr.contains('today') || timeStr.contains('just now');
-        if (!isToday) return false;
-      }
-      if (_selectedPastFilter == 'Grouped') {
-        if (!isGroupedTrip(t)) return false;
-      }
-      if (_selectedPastFilter == 'Heavy') {
-        final kg = (t['quantityKg'] is num) ? (t['quantityKg'] as num).toDouble() : (double.tryParse(t['quantityKg'].toString()) ?? 0.0);
-        if (kg < 10.0) return false;
-      }
-      return true;
-    }).toList();
-
-    final groupedCount = _completedTrips.where(isGroupedTrip).length;
-
-    final todayCount = _completedTrips.where((t) {
-      final timeStr = (t['deliveredTimeAgo'] ?? '').toString().toLowerCase();
-      return timeStr.contains('hr') || timeStr.contains('min') || timeStr.contains('today') || timeStr.contains('just now');
-    }).length;
-
-    final heavyCount = _completedTrips.where((t) {
-      final kg = (t['quantityKg'] is num) ? (t['quantityKg'] as num).toDouble() : (double.tryParse(t['quantityKg'].toString()) ?? 0.0);
-      return kg >= 10.0;
-    }).length;
-
     return RefreshIndicator(
       color: AppTheme.primaryTerracotta,
       onRefresh: _loadTripSheetData,
@@ -975,22 +983,8 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Filter Pills
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildPastFilterChip('All', 'All Past Deliveries (${_completedTrips.length})'),
-                  _buildPastFilterChip('Grouped', '📦 Grouped Batches ($groupedCount)'),
-                  _buildPastFilterChip('Today', '📅 Delivered Today ($todayCount)'),
-                  _buildPastFilterChip('Heavy', '⚖️ Heavy Batches 10kg+ ($heavyCount)'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            if (filtered.isNotEmpty)
-              ...filtered.map((item) => _buildPastDeliveryCard(item))
+            if (_completedTrips.isNotEmpty)
+              ..._completedTrips.map((item) => _buildPastDeliveryCard(item))
             else
               Container(
                 padding: const EdgeInsets.all(28),
@@ -1004,37 +998,12 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
                   children: [
                     const Icon(Icons.check_circle_outline_rounded, size: 42, color: AppTheme.textMuted),
                     const SizedBox(height: 10),
-                    Text('No past deliveries under this filter.', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text('No past deliveries yet.', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13)),
                   ],
                 ),
               ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildPastFilterChip(String key, String label) {
-    final isSelected = _selectedPastFilter == key;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(
-          label,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            color: isSelected ? Colors.white : AppTheme.textPrimary,
-          ),
-        ),
-        selected: isSelected,
-        selectedColor: AppTheme.primaryTerracotta,
-        backgroundColor: Colors.white,
-        side: BorderSide(color: isSelected ? AppTheme.primaryTerracotta : AppTheme.borderLight),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        onSelected: (val) {
-          if (val) setState(() => _selectedPastFilter = key);
-        },
       ),
     );
   }

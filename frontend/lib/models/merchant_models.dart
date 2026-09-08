@@ -38,6 +38,8 @@ class AppNotification {
   final String message;
   bool read;
   final String createdAt;
+  final String? type;
+  final String? orderId;
 
   AppNotification({
     required this.id,
@@ -45,17 +47,36 @@ class AppNotification {
     required this.message,
     required this.read,
     required this.createdAt,
+    this.type,
+    this.orderId,
   });
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
+    String formattedTime = '11:00';
+    final rawCreated = json['createdAt']?.toString() ?? '';
+    if (rawCreated.isNotEmpty) {
+      if (rawCreated.contains('T') || rawCreated.contains('-')) {
+        try {
+          final dt = DateTime.parse(rawCreated).toLocal();
+          final hour = dt.hour.toString().padLeft(2, '0');
+          final minute = dt.minute.toString().padLeft(2, '0');
+          formattedTime = '$hour:$minute';
+        } catch (_) {
+          formattedTime = rawCreated.length >= 16 ? rawCreated.substring(11, 16) : rawCreated;
+        }
+      } else {
+        formattedTime = rawCreated;
+      }
+    }
+
     return AppNotification(
       id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '1') ?? 1,
       title: json['title'] ?? 'Notification',
       message: json['message'] ?? '',
       read: json['read'] ?? false,
-      createdAt: json['createdAt'] != null && json['createdAt'].toString().length >= 16
-          ? json['createdAt'].toString().substring(11, 16)
-          : 'Recently',
+      createdAt: formattedTime,
+      type: json['type']?.toString(),
+      orderId: json['orderId']?.toString() ?? json['orderNumber']?.toString(),
     );
   }
 }
@@ -225,6 +246,65 @@ class MerchantOrder {
       totalPrice: price,
       millName: resolvedMill,
     );
+  }
+
+  List<ProductBagItem> get productBags {
+    final rawParts = grainType
+        .split(RegExp(r',|\+|\band\b|&'))
+        .map((s) => s.trim().replaceAll(RegExp(r'^\d+(\.\d+)?\s*kg\s*', caseSensitive: false), ''))
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    double qtyNum = 5.0;
+    final match = RegExp(r'(\d+(\.\d+)?)').firstMatch(quantityText);
+    if (match != null) {
+      qtyNum = double.tryParse(match.group(1) ?? '5.0') ?? 5.0;
+    }
+
+    final rawOrderId = numericId ?? int.tryParse(orderId.replaceAll(RegExp(r'[^0-9]'), '')) ?? 101;
+    final baseTag = 'HD-BAG-$rawOrderId';
+
+    if (rawParts.isEmpty) {
+      return [
+        ProductBagItem(
+          bagId: baseTag,
+          orderId: rawOrderId,
+          orderNumber: orderId,
+          productName: grainType.isNotEmpty ? grainType : 'Fresh Ground Flour',
+          quantityKg: qtyNum,
+          customerName: customerName,
+          customerPhone: deliveryDriverPhone ?? '',
+          deliveryAddress: 'Customer Address',
+          homePickupAddress: 'Customer Home',
+          pickupPin: '4821',
+          deliveryOtp: '7391',
+        ),
+      ];
+    }
+
+    final eachWeight = double.parse((qtyNum / rawParts.length).toStringAsFixed(1));
+
+    return rawParts.asMap().entries.map((entry) {
+      final idx = entry.key;
+      final name = entry.value;
+      final tag = rawParts.length == 1
+          ? baseTag
+          : '$baseTag-${(idx + 1).toString().padLeft(2, '0')}';
+
+      return ProductBagItem(
+        bagId: tag,
+        orderId: rawOrderId,
+        orderNumber: orderId,
+        productName: name,
+        quantityKg: eachWeight,
+        customerName: customerName,
+        customerPhone: deliveryDriverPhone ?? '',
+        deliveryAddress: 'Customer Address',
+        homePickupAddress: 'Customer Home',
+        pickupPin: '4821',
+        deliveryOtp: '7391',
+      );
+    }).toList();
   }
 }
 
@@ -551,6 +631,126 @@ class DeliveryTripStop {
       orderPayout: orderPayout,
     );
   }
+
+  List<ProductBagItem> get productBags {
+    final rawParts = grainTypeName
+        .split(RegExp(r',|\+|\band\b|&'))
+        .map((s) => s.trim().replaceAll(RegExp(r'^\d+(\.\d+)?\s*kg\s*', caseSensitive: false), ''))
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    if (rawParts.isEmpty) {
+      return [
+        ProductBagItem(
+          bagId: barcodeNumber,
+          orderId: orderId,
+          orderNumber: orderNumber,
+          productName: grainTypeName.isNotEmpty ? grainTypeName : 'Fresh Stone Ground Flour',
+          quantityKg: quantityKg,
+          customerName: customerName,
+          customerPhone: customerPhone,
+          deliveryAddress: deliveryAddress,
+          homePickupAddress: homePickupAddress,
+          homePickupLandmark: homePickupLandmark,
+          homePickupInstructions: homePickupInstructions,
+          pickupPin: pickupPin,
+          deliveryOtp: deliveryOtp,
+          isPickedUp: isPickedUp,
+          isDelivered: isDelivered,
+        ),
+      ];
+    }
+
+    final eachWeight = double.parse((quantityKg / rawParts.length).toStringAsFixed(1));
+    final baseTag = barcodeNumber.replaceAll(RegExp(r'-\d+$'), '');
+
+    return rawParts.asMap().entries.map((entry) {
+      final idx = entry.key;
+      final name = entry.value;
+      final tag = rawParts.length == 1
+          ? barcodeNumber
+          : '$baseTag-${(idx + 1).toString().padLeft(2, '0')}';
+
+      return ProductBagItem(
+        bagId: tag,
+        orderId: orderId,
+        orderNumber: orderNumber,
+        productName: name,
+        quantityKg: eachWeight,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        deliveryAddress: deliveryAddress,
+        homePickupAddress: homePickupAddress,
+        homePickupLandmark: homePickupLandmark,
+        homePickupInstructions: homePickupInstructions,
+        pickupPin: pickupPin,
+        deliveryOtp: deliveryOtp,
+        isPickedUp: isPickedUp,
+        isDelivered: isDelivered,
+      );
+    }).toList();
+  }
+}
+
+class ProductBagItem {
+  final String bagId;
+  final int orderId;
+  final String orderNumber;
+  final String productName;
+  final double quantityKg;
+  final String customerName;
+  final String customerPhone;
+  final String deliveryAddress;
+  final String homePickupAddress;
+  final String? homePickupLandmark;
+  final String? homePickupInstructions;
+  final String pickupPin;
+  final String deliveryOtp;
+  final bool isPickedUp;
+  final bool isDelivered;
+
+  ProductBagItem({
+    required this.bagId,
+    required this.orderId,
+    required this.orderNumber,
+    required this.productName,
+    required this.quantityKg,
+    required this.customerName,
+    required this.customerPhone,
+    required this.deliveryAddress,
+    required this.homePickupAddress,
+    this.homePickupLandmark,
+    this.homePickupInstructions,
+    required this.pickupPin,
+    required this.deliveryOtp,
+    this.isPickedUp = false,
+    this.isDelivered = false,
+  });
+
+  ProductBagItem copyWith({
+    bool? isPickedUp,
+    bool? isDelivered,
+    String? homePickupAddress,
+    String? deliveryAddress,
+  }) {
+    return ProductBagItem(
+      bagId: bagId,
+      orderId: orderId,
+      orderNumber: orderNumber,
+      productName: productName,
+      quantityKg: quantityKg,
+      customerName: customerName,
+      customerPhone: customerPhone,
+      deliveryAddress: deliveryAddress ?? this.deliveryAddress,
+      homePickupAddress: homePickupAddress ?? this.homePickupAddress,
+      homePickupLandmark: homePickupLandmark,
+      homePickupInstructions: homePickupInstructions,
+      pickupPin: pickupPin,
+      deliveryOtp: deliveryOtp,
+      isPickedUp: isPickedUp ?? this.isPickedUp,
+      isDelivered: isDelivered ?? this.isDelivered,
+    );
+  }
 }
 
 class DeliveryTrip {
@@ -591,6 +791,8 @@ class DeliveryTrip {
   final String pickupZone;
   final String paymentMode;
   final String vehicleTypeAllowed; // 'ANY' | 'CAR_VAN' | 'BIKE_EV'
+  final String? groupCode;
+  final int? groupId;
   final List<DeliveryTripStop> stops;
 
   DeliveryTrip({
@@ -631,6 +833,8 @@ class DeliveryTrip {
     this.pickupZone = 'Ellisbridge Hub',
     this.paymentMode = 'PREPAID_ONLINE',
     this.vehicleTypeAllowed = 'ANY',
+    this.groupCode,
+    this.groupId,
     this.stops = const [],
   });
 
@@ -649,6 +853,8 @@ class DeliveryTrip {
   String get effectivePickupLocation => isLeg1GrainPickup ? homePickupAddress : millAddress;
 
   String get effectiveDeliveryLocation => isLeg1GrainPickup ? millAddress : deliveryAddress;
+
+  List<ProductBagItem> get productBags => resolvedStops.expand((s) => s.productBags).toList();
 
   List<DeliveryTripStop> get resolvedStops {
     if (stops.isNotEmpty) return stops;
@@ -726,6 +932,8 @@ class DeliveryTrip {
       pickupZone: json['pickupZone'] ?? 'Central Ahmedabad',
       paymentMode: json['paymentMode'] ?? 'PREPAID_ONLINE',
       vehicleTypeAllowed: json['vehicleTypeAllowed'] ?? 'ANY',
+      groupCode: json['groupCode']?.toString(),
+      groupId: json['groupId'] is int ? json['groupId'] as int : (json['groupId'] != null ? int.tryParse(json['groupId'].toString()) : null),
       stops: parsedStops,
     );
   }

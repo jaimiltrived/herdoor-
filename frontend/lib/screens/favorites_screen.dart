@@ -5,6 +5,7 @@ import '../models/app_models.dart';
 import '../services/customer_api_service.dart';
 import 'mill_detail_screen.dart';
 import 'profile_screen.dart';
+import '../widgets/user_avatar.dart';
 
 class FavoritesScreen extends StatefulWidget {
   final VoidCallback? onOpenDrawer;
@@ -35,7 +36,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     final favs = await CustomerApiService.instance.getFavorites();
     if (mounted) {
       setState(() {
-        _favorites = favs ?? MockData.mills.where((m) => MockData.favoriteMillIds.contains(m.id)).toList();
+        _favorites = favs ?? [];
         _isLoading = false;
       });
     }
@@ -43,7 +44,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final favMills = _favorites ?? MockData.mills.where((m) => MockData.favoriteMillIds.contains(m.id)).toList();
+    final favMills = _favorites ?? [];
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -76,20 +77,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     ),
                   );
                 },
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppTheme.borderLight, width: 2),
-                    image: const DecorationImage(
-                      image: NetworkImage(
-                        'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
-                      ),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
+                child: const UserAvatar(size: 38),
               ),
             ),
           ),

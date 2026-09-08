@@ -1,30 +1,75 @@
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const store = require('../store/dataStore');
+const { query } = require('../config/database');
 const { generateToken } = require('../utils/jwt');
 const { ROLES } = require('../constants/enums');
 
-// In-memory OTP store: Map of identifier -> { otp, expiresAt, verified }
+// In-memory OTP store: Map of identifier -> { otp, expiresAt, verified, userId }
 const otpStore = new Map();
 
-// Helper to reliably find user by email or phone
-function findUserByIdentifier(identifier) {
+// Generate a secure 6-digit numeric OTP string
+function generateSecureOtp() {
+  // In development/test if explicitly set via env or fallback
+  if (process.env.NODE_ENV === 'test') {
+    return '123456';
+  }
+  return crypto.randomInt(100000, 1000000).toString();
+}
+
+// Helper to reliably find user by email or phone in DB first, then memory
+async function findUserByIdentifier(identifier) {
   if (!identifier) return null;
   const trimmed = String(identifier).trim();
+  const emailLower = trimmed.toLowerCase();
+  const digitsOnly = trimmed.replace(/\D/g, '');
 
-  // If it looks like an email
-  if (trimmed.includes('@')) {
-    const emailLower = trimmed.toLowerCase();
-    return store.users.find(u => u.email && u.email.toLowerCase() === emailLower);
+  // 1. Query MySQL database FIRST (Source of Truth)
+  try {
+    const rows = await query(
+      'SELECT * FROM users WHERE LOWER(email) = ? OR phone = ? OR phone = ? LIMIT 1',
+      [emailLower, trimmed, digitsOnly]
+    );
+    if (rows && rows.length > 0) {
+      const dbUser = {
+        id: rows[0].id,
+        name: rows[0].name,
+        email: rows[0].email,
+        phone: rows[0].phone,
+        password: rows[0].password,
+        role: rows[0].role,
+        millId: rows[0].mill_id || null,
+        vehicleNumber: rows[0].vehicle_number || null,
+        vehicleType: rows[0].vehicle_type || 'Electric Scooter',
+        isOnline: Boolean(rows[0].is_online),
+        rating: parseFloat(rows[0].rating || 5.0),
+        totalTrips: parseInt(rows[0].total_trips || 0),
+        profileImage: rows[0].profile_image || null,
+        createdAt: rows[0].created_at ? new Date(rows[0].created_at).toISOString() : new Date().toISOString()
+      };
+      const idx = store.users.findIndex(u => u.id === dbUser.id || (u.email && u.email.toLowerCase() === emailLower));
+      if (idx !== -1) {
+        store.users[idx] = dbUser;
+      } else {
+        store.users.push(dbUser);
+      }
+      return dbUser;
+    }
+  } catch (err) {
+    console.warn('MySQL findUserByIdentifier lookup warning:', err.message);
   }
 
-  // Otherwise, match by phone
-  const digitsOnly = trimmed.replace(/\D/g, '');
-  if (digitsOnly.length > 0) {
-    return store.users.find(u => {
+  // 2. Search in memory store fallback
+  if (trimmed.includes('@')) {
+    const memUser = store.users.find(u => u.email && u.email.toLowerCase() === emailLower);
+    if (memUser) return memUser;
+  } else if (digitsOnly.length > 0) {
+    const memUser = store.users.find(u => {
       if (!u.phone) return false;
       const userPhoneDigits = u.phone.replace(/\D/g, '');
       return userPhoneDigits === digitsOnly || (digitsOnly.length >= 10 && userPhoneDigits.endsWith(digitsOnly));
     });
+    if (memUser) return memUser;
   }
 
   return null;
@@ -34,7 +79,7 @@ function findUserByIdentifier(identifier) {
  * @desc User / Merchant / Rider Registration
  * @route POST /api/v1/auth/register
  */
-exports.register = (req, res) => {
+exports.register = async (req, res) => {
   const { name, email, phone, password, role = ROLES.CUSTOMER, vehicleNumber, vehicleType, millName } = req.body;
 
   if (!name || (!email && !phone) || !password) {
@@ -44,12 +89,27 @@ exports.register = (req, res) => {
     });
   }
 
-  // Check if user already exists
-  const existingUser = store.users.find(u =>
-    (email && u.email && u.email.toLowerCase() === email.toLowerCase()) ||
-    (phone && u.phone && u.phone === phone)
-  );
+  // Whitelist allowable registration roles (disallow self-registering as ADMIN)
+  const allowedRoles = [ROLES.CUSTOMER, ROLES.SHOPKEEPER, ROLES.DELIVERY];
+  if (!allowedRoles.includes(role)) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Invalid registration role. Admin accounts must be provisioned by super-admin.'
+    });
+  }
 
+  if (password.length < 6) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Password must be at least 6 characters long'
+    });
+  }
+
+  // Check if user already exists in memory or DB
+  const cleanEmail = email ? email.trim().toLowerCase() : null;
+  const cleanPhone = phone ? phone.trim() : null;
+
+  const existingUser = await findUserByIdentifier(cleanEmail || cleanPhone);
   if (existingUser) {
     return res.status(409).json({
       status: 'error',
@@ -57,17 +117,17 @@ exports.register = (req, res) => {
     });
   }
 
-  const hashedPassword = bcrypt.hashSync(password, 8);
-  const newUserId = store.users.length + 1;
+  const hashedPassword = bcrypt.hashSync(password, 10);
+  let newUserId = store.users.length ? Math.max(...store.users.map(u => u.id)) + 1 : 10;
 
   let millId = null;
   if (role === ROLES.SHOPKEEPER) {
     millId = 100 + store.mills.length + 1;
-    store.mills.push({
+    const newMill = {
       id: millId,
       ownerUserId: newUserId,
       name: millName || `${name}'s Flour Mill`,
-      phone: phone || '+919876543299',
+      phone: cleanPhone || '+919876543299',
       address: 'Ahmedabad, Gujarat',
       latitude: 23.0225,
       longitude: 72.5714,
@@ -79,14 +139,63 @@ exports.register = (req, res) => {
       currentLoadKg: 0,
       services: ['Flour Grinding', 'Home Delivery'],
       workingHours: '08:00 AM - 08:00 PM'
+    };
+    store.mills.push(newMill);
+
+    try {
+      const millSql = `
+        INSERT INTO mills (name, phone, address, latitude, longitude, rating, total_ratings, is_open, estimated_time, capacity_kg_per_day, current_load_kg, working_hours)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+      const millDb = await query(millSql, [
+        newMill.name, newMill.phone, newMill.address, newMill.latitude, newMill.longitude,
+        5.0, 1, 1, '30 min', 500, 0, '08:00 AM - 08:00 PM'
+      ]);
+      if (millDb && millDb.insertId) {
+        millId = millDb.insertId;
+        newMill.id = millId;
+      }
+    } catch (mErr) {
+      console.warn('MySQL Mill Insert Warning:', mErr.message);
+    }
+  }
+
+  // Insert into MySQL Database
+  try {
+    const userSql = `
+      INSERT INTO users (name, email, phone, password, role, mill_id, vehicle_number, vehicle_type, is_online, rating, total_trips, profile_image)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    const userDb = await query(userSql, [
+      name.trim(),
+      cleanEmail,
+      cleanPhone,
+      hashedPassword,
+      role,
+      millId,
+      vehicleNumber || null,
+      vehicleType || 'Electric Scooter',
+      1,
+      5.0,
+      0,
+      null
+    ]);
+    if (userDb && userDb.insertId) {
+      newUserId = userDb.insertId;
+    }
+  } catch (uErr) {
+    console.error('MySQL User Insert Error:', uErr.message);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to save user in database: ' + uErr.message
     });
   }
 
   const newUser = {
     id: newUserId,
-    name,
-    email: email ? email.toLowerCase() : null,
-    phone,
+    name: name.trim(),
+    email: cleanEmail,
+    phone: cleanPhone,
     password: hashedPassword,
     role,
     millId,
@@ -130,7 +239,7 @@ exports.register = (req, res) => {
  * @desc Unified Login for All Users (Customer, Merchant, Delivery, Admin)
  * @route POST /api/v1/auth/login
  */
-exports.login = (req, res) => {
+exports.login = async (req, res) => {
   const { email, phone, username, identifier, password, role } = req.body;
   const loginId = email || phone || username || identifier;
 
@@ -141,7 +250,7 @@ exports.login = (req, res) => {
     });
   }
 
-  const user = findUserByIdentifier(loginId);
+  const user = await findUserByIdentifier(loginId);
   if (!user) {
     return res.status(401).json({
       status: 'error',
@@ -210,12 +319,16 @@ exports.logout = (req, res) => {
  * @desc Refresh JWT Token
  * @route POST /api/v1/auth/refresh-token
  */
-exports.refreshToken = (req, res) => {
+exports.refreshToken = async (req, res) => {
   if (!req.user) {
     return res.status(401).json({ status: 'error', message: 'Unauthorized' });
   }
 
-  const user = store.users.find(u => u.id === req.user.id);
+  let user = store.users.find(u => u.id === req.user.id);
+  if (!user) {
+    user = await findUserByIdentifier(req.user.email || req.user.phone || req.user.id);
+  }
+
   const newToken = generateToken({
     id: req.user.id,
     name: user ? user.name : req.user.name,
@@ -234,7 +347,7 @@ exports.refreshToken = (req, res) => {
  * @desc Forgot Password - Send OTP
  * @route POST /api/v1/auth/forgot-password
  */
-exports.forgotPassword = (req, res) => {
+exports.forgotPassword = async (req, res) => {
   const { email, phone, identifier } = req.body;
   const target = email || phone || identifier;
 
@@ -242,15 +355,25 @@ exports.forgotPassword = (req, res) => {
     return res.status(400).json({ status: 'error', message: 'Email or phone number is required' });
   }
 
-  const user = findUserByIdentifier(target);
+  const user = await findUserByIdentifier(target);
   if (!user) {
     return res.status(404).json({ status: 'error', message: 'No account found with this email or phone' });
   }
 
-  const generatedOtp = '123456';
+  const generatedOtp = generateSecureOtp();
   const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
 
-  if (user.email) {
+  const cleanTarget = String(target).trim().toLowerCase();
+  const targetKey = cleanTarget.includes('@') ? cleanTarget : target.trim();
+
+  otpStore.set(targetKey, {
+    otp: generatedOtp,
+    expiresAt,
+    verified: false,
+    userId: user.id
+  });
+
+  if (user.email && user.email.toLowerCase() !== targetKey) {
     otpStore.set(user.email.toLowerCase(), {
       otp: generatedOtp,
       expiresAt,
@@ -259,7 +382,7 @@ exports.forgotPassword = (req, res) => {
     });
   }
 
-  if (user.phone) {
+  if (user.phone && user.phone !== targetKey) {
     otpStore.set(user.phone, {
       otp: generatedOtp,
       expiresAt,
@@ -273,7 +396,7 @@ exports.forgotPassword = (req, res) => {
     message: `Password reset OTP has been sent to ${target}`,
     data: {
       identifier: target,
-      otpHint: '123456',
+      otpHint: process.env.NODE_ENV === 'production' ? undefined : generatedOtp,
       expiresInMinutes: 10
     }
   });
@@ -291,54 +414,41 @@ exports.verifyOtp = (req, res) => {
     return res.status(400).json({ status: 'error', message: 'OTP is required' });
   }
 
-  if (target) {
-    const cleanTarget = String(target).trim().toLowerCase();
-    const entry = otpStore.get(cleanTarget) || otpStore.get(target);
-
-    if (!entry) {
-      if (otp === '123456') {
-        return res.json({
-          status: 'success',
-          message: 'OTP verified successfully',
-          data: { verified: true, resetToken: 'RTKN_HERDOOR_VALIDATED' }
-        });
-      }
-      return res.status(400).json({ status: 'error', message: 'Invalid or expired OTP. Please request a new code.' });
-    }
-
-    if (Date.now() > entry.expiresAt) {
-      otpStore.delete(cleanTarget);
-      return res.status(400).json({ status: 'error', message: 'OTP has expired. Please request a new one.' });
-    }
-
-    if (entry.otp !== String(otp).trim() && String(otp).trim() !== '123456') {
-      return res.status(400).json({ status: 'error', message: 'Incorrect OTP entered' });
-    }
-
-    entry.verified = true;
-    return res.json({
-      status: 'success',
-      message: 'OTP verified successfully',
-      data: { verified: true, resetToken: `RTKN_${entry.userId}_${Date.now()}` }
-    });
+  if (!target) {
+    return res.status(400).json({ status: 'error', message: 'Email or phone identifier is required' });
   }
 
-  if (otp === '123456') {
-    return res.json({
-      status: 'success',
-      message: 'OTP verified successfully',
-      data: { verified: true }
-    });
+  const cleanTarget = String(target).trim().toLowerCase();
+  const rawTarget = String(target).trim();
+  const entry = otpStore.get(cleanTarget) || otpStore.get(rawTarget);
+
+  if (!entry) {
+    return res.status(400).json({ status: 'error', message: 'Invalid or expired OTP. Please request a new code.' });
   }
 
-  res.status(400).json({ status: 'error', message: 'Invalid OTP code' });
+  if (Date.now() > entry.expiresAt) {
+    otpStore.delete(cleanTarget);
+    otpStore.delete(rawTarget);
+    return res.status(400).json({ status: 'error', message: 'OTP has expired. Please request a new one.' });
+  }
+
+  if (entry.otp !== String(otp).trim()) {
+    return res.status(400).json({ status: 'error', message: 'Incorrect OTP entered' });
+  }
+
+  entry.verified = true;
+  return res.json({
+    status: 'success',
+    message: 'OTP verified successfully',
+    data: { verified: true, resetToken: `RTKN_${entry.userId}_${Date.now()}` }
+  });
 };
 
 /**
  * @desc Resend OTP
  * @route POST /api/v1/auth/resend-otp
  */
-exports.resendOtp = (req, res) => {
+exports.resendOtp = async (req, res) => {
   const { email, phone, identifier } = req.body;
   const target = email || phone || identifier;
 
@@ -346,19 +456,39 @@ exports.resendOtp = (req, res) => {
     return res.status(400).json({ status: 'error', message: 'Email or phone number is required' });
   }
 
-  const generatedOtp = '123456';
-  const expiresAt = Date.now() + 10 * 60 * 1000;
+  const user = await findUserByIdentifier(target);
+  if (!user) {
+    return res.status(404).json({ status: 'error', message: 'No account found with this email or phone' });
+  }
 
-  otpStore.set(String(target).trim().toLowerCase(), {
+  const generatedOtp = generateSecureOtp();
+  const expiresAt = Date.now() + 10 * 60 * 1000;
+  const cleanTarget = String(target).trim().toLowerCase();
+  const rawTarget = String(target).trim();
+
+  otpStore.set(cleanTarget, {
     otp: generatedOtp,
     expiresAt,
-    verified: false
+    verified: false,
+    userId: user.id
   });
+
+  if (rawTarget !== cleanTarget) {
+    otpStore.set(rawTarget, {
+      otp: generatedOtp,
+      expiresAt,
+      verified: false,
+      userId: user.id
+    });
+  }
 
   res.json({
     status: 'success',
     message: `A new OTP code has been sent to ${target}`,
-    data: { otpHint: '123456', expiresInMinutes: 10 }
+    data: {
+      otpHint: process.env.NODE_ENV === 'production' ? undefined : generatedOtp,
+      expiresInMinutes: 10
+    }
   });
 };
 
@@ -366,40 +496,58 @@ exports.resendOtp = (req, res) => {
  * @desc Reset Password with OTP Verification
  * @route POST /api/v1/auth/reset-password
  */
-exports.resetPassword = (req, res) => {
+exports.resetPassword = async (req, res) => {
   const { email, phone, identifier, otp, newPassword } = req.body;
   const target = email || phone || identifier;
+
+  if (!target) {
+    return res.status(400).json({ status: 'error', message: 'Email or phone identifier is required' });
+  }
 
   if (!newPassword || newPassword.length < 6) {
     return res.status(400).json({ status: 'error', message: 'New password must be at least 6 characters' });
   }
 
-  let user = null;
-  if (target) {
-    user = findUserByIdentifier(target);
+  if (!otp) {
+    return res.status(400).json({ status: 'error', message: 'OTP is required' });
   }
 
-  if (!user && target) {
+  const user = await findUserByIdentifier(target);
+  if (!user) {
     return res.status(404).json({ status: 'error', message: 'User account not found' });
   }
 
-  if (target) {
-    const entry = otpStore.get(String(target).trim().toLowerCase()) || otpStore.get(target);
-    if (entry && entry.otp !== otp && otp !== '123456') {
-      return res.status(400).json({ status: 'error', message: 'Invalid OTP' });
-    }
-  } else if (otp !== '123456') {
-    return res.status(400).json({ status: 'error', message: 'Invalid OTP' });
+  const cleanTarget = String(target).trim().toLowerCase();
+  const rawTarget = String(target).trim();
+  const entry = otpStore.get(cleanTarget) || otpStore.get(rawTarget);
+
+  if (!entry) {
+    return res.status(400).json({ status: 'error', message: 'Invalid or expired OTP. Please request a new code.' });
   }
 
-  if (!user) {
-    user = store.users[0];
+  if (Date.now() > entry.expiresAt) {
+    otpStore.delete(cleanTarget);
+    otpStore.delete(rawTarget);
+    return res.status(400).json({ status: 'error', message: 'OTP has expired. Please request a new one.' });
   }
 
-  user.password = bcrypt.hashSync(newPassword, 8);
-  if (target) {
-    otpStore.delete(String(target).trim().toLowerCase());
+  if (entry.otp !== String(otp).trim()) {
+    return res.status(400).json({ status: 'error', message: 'Invalid OTP code' });
   }
+
+  const hashedPassword = bcrypt.hashSync(newPassword, 10);
+  user.password = hashedPassword;
+
+  // Persist password update to MySQL Database
+  try {
+    await query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, user.id]);
+  } catch (dbErr) {
+    console.warn('MySQL Reset Password Warning:', dbErr.message);
+  }
+
+  // Cleanup OTP entries
+  otpStore.delete(cleanTarget);
+  otpStore.delete(rawTarget);
 
   res.json({
     status: 'success',
@@ -418,8 +566,9 @@ exports.sendLoginOtp = (req, res) => {
     return res.status(400).json({ status: 'error', message: 'Phone number is required' });
   }
 
-  otpStore.set(phone, {
-    otp: '123456',
+  const generatedOtp = generateSecureOtp();
+  otpStore.set(phone.trim(), {
+    otp: generatedOtp,
     expiresAt: Date.now() + 10 * 60 * 1000,
     verified: false
   });
@@ -427,7 +576,10 @@ exports.sendLoginOtp = (req, res) => {
   res.json({
     status: 'success',
     message: `Login OTP sent to ${phone}`,
-    data: { otpHint: '123456', expiresInMinutes: 10 }
+    data: {
+      otpHint: process.env.NODE_ENV === 'production' ? undefined : generatedOtp,
+      expiresInMinutes: 10
+    }
   });
 };
 
@@ -435,28 +587,52 @@ exports.sendLoginOtp = (req, res) => {
  * @desc Login Directly With Mobile OTP
  * @route POST /api/v1/auth/login-otp
  */
-exports.loginWithOtp = (req, res) => {
+exports.loginWithOtp = async (req, res) => {
   const { phone, otp, name = 'New User', role = ROLES.CUSTOMER } = req.body;
 
   if (!phone || !otp) {
     return res.status(400).json({ status: 'error', message: 'Phone number and OTP are required' });
   }
 
-  if (otp !== '123456') {
-    const entry = otpStore.get(phone);
-    if (!entry || entry.otp !== otp) {
-      return res.status(400).json({ status: 'error', message: 'Invalid or expired OTP' });
-    }
+  const cleanPhone = phone.trim();
+  const entry = otpStore.get(cleanPhone);
+
+  if (!entry || entry.otp !== String(otp).trim()) {
+    return res.status(400).json({ status: 'error', message: 'Invalid or expired OTP' });
   }
 
-  let user = findUserByIdentifier(phone);
+  if (Date.now() > entry.expiresAt) {
+    otpStore.delete(cleanPhone);
+    return res.status(400).json({ status: 'error', message: 'OTP has expired. Please request a new one.' });
+  }
+
+  // Cleanup OTP after successful consumption
+  otpStore.delete(cleanPhone);
+
+  let user = await findUserByIdentifier(cleanPhone);
   if (!user) {
+    const defaultHashedPassword = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 10);
+    let newUserId = store.users.length ? Math.max(...store.users.map(u => u.id)) + 1 : 1;
+
+    try {
+      const userDb = await query(
+        `INSERT INTO users (name, email, phone, password, role, is_online, rating, total_trips)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [name.trim(), null, cleanPhone, defaultHashedPassword, role, 1, 5.0, 0]
+      );
+      if (userDb && userDb.insertId) {
+        newUserId = userDb.insertId;
+      }
+    } catch (uErr) {
+      console.warn('MySQL User Insert (OTP Login) Warning:', uErr.message);
+    }
+
     user = {
-      id: store.users.length + 1,
-      name,
+      id: newUserId,
+      name: name.trim(),
       email: null,
-      phone,
-      password: bcrypt.hashSync('Password123!', 8),
+      phone: cleanPhone,
+      password: defaultHashedPassword,
       role,
       profileImage: null,
       createdAt: new Date().toISOString()
@@ -493,8 +669,12 @@ exports.loginWithOtp = (req, res) => {
  * @desc Get Authenticated User Profile
  * @route GET /api/v1/auth/me
  */
-exports.getMe = (req, res) => {
-  const user = store.users.find(u => u.id === req.user.id);
+exports.getMe = async (req, res) => {
+  let user = store.users.find(u => u.id === req.user.id);
+  if (!user) {
+    user = await findUserByIdentifier(req.user.email || req.user.phone || req.user.id);
+  }
+
   if (!user) {
     return res.status(404).json({ status: 'error', message: 'User not found' });
   }
@@ -510,17 +690,39 @@ exports.getMe = (req, res) => {
  * @desc Change Password
  * @route PUT /api/v1/auth/change-password
  */
-exports.changePassword = (req, res) => {
+exports.changePassword = async (req, res) => {
   const { currentPassword, newPassword } = req.body;
-  const user = store.users.find(u => u.id === req.user.id);
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ status: 'error', message: 'Current password and new password are required' });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ status: 'error', message: 'New password must be at least 6 characters long' });
+  }
+
+  let user = store.users.find(u => u.id === req.user.id);
+  if (!user) {
+    user = await findUserByIdentifier(req.user.email || req.user.phone || req.user.id);
+  }
 
   if (!user || !bcrypt.compareSync(currentPassword, user.password)) {
     return res.status(400).json({ status: 'error', message: 'Current password incorrect' });
   }
 
-  user.password = bcrypt.hashSync(newPassword, 8);
+  const hashedPassword = bcrypt.hashSync(newPassword, 10);
+  user.password = hashedPassword;
+
+  // Persist password change to MySQL Database
+  try {
+    await query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, user.id]);
+  } catch (dbErr) {
+    console.warn('MySQL Change Password Warning:', dbErr.message);
+  }
+
   res.json({
     status: 'success',
     message: 'Password changed successfully'
   });
 };
+

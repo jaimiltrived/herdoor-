@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
 import '../../models/merchant_models.dart';
 import '../../services/merchant_api_service.dart';
+import '../../widgets/status_light.dart';
 import 'merchant_order_process_detail_screen.dart';
 import 'merchant_active_driver_pickup_screen.dart';
 import 'mill_owner_qr_scanner_screen.dart';
@@ -809,19 +810,14 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                           color: AppTheme.textSecondary,
                         ),
                       ),
-                      Container(
+                      StatusBadge(
+                        status: order.statusTag,
+                        label: order.statusTag,
+                        type: 'order',
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: order.statusColor.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          order.statusTag,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: order.statusColor,
-                          ),
+                        textStyle: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ],
@@ -906,7 +902,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(
-                          Icons.hourglass_bottom_rounded,
+                          Icons.inventory_2_outlined,
                           color: Color(0xFF6E5616),
                           size: 20,
                         ),
@@ -917,14 +913,16 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Quantity',
+                              'Units & Quantity',
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 12,
                                 color: AppTheme.textSecondary,
                               ),
                             ),
                             Text(
-                              order.quantityText,
+                              order.productBags.length > 1
+                                  ? '${order.productBags.length} Units (${order.quantityText})'
+                                  : order.quantityText,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.plusJakartaSans(
@@ -938,6 +936,42 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                       ),
                     ],
                   ),
+                  if (order.productBags.length > 1) ...[
+                    const SizedBox(height: 10),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: order.productBags.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final bag = entry.value;
+                          return Container(
+                            margin: const EdgeInsets.only(right: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFAF4EA),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFE5D5BC)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.qr_code_2_rounded, size: 12, color: Color(0xFF6E5616)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${idx + 1}. ${bag.productName} (${bag.quantityKg}kg)',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF5C4710),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
 
                   // Dynamic Action Controls based on Tab & Status

@@ -23,7 +23,88 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
   @override
   void initState() {
     super.initState();
-    _displayOrder = widget.order.timelineSteps.isNotEmpty ? widget.order : MerchantMockData.sampleOrderHD8829;
+    final steps = widget.order.timelineSteps.isNotEmpty
+        ? widget.order.timelineSteps
+        : _buildStepsForOrder(widget.order);
+
+    _displayOrder = MerchantOrder(
+      numericId: widget.order.numericId,
+      orderId: widget.order.orderId,
+      customerName: widget.order.customerName,
+      itemsSummary: widget.order.itemsSummary,
+      grainType: widget.order.grainType,
+      quantityText: widget.order.quantityText,
+      timeAgo: widget.order.timeAgo,
+      statusTag: widget.order.statusTag,
+      statusColor: widget.order.statusColor,
+      binLocation: widget.order.binLocation ?? 'Bin A-4',
+      estimatedCompletionTime: widget.order.estimatedCompletionTime ?? '30 Mins',
+      deliveryDriverName: widget.order.deliveryDriverName ?? 'Rajesh Kumar',
+      deliveryDriverPhone: widget.order.deliveryDriverPhone ?? '+91 98765 43210',
+      deliveryDriverVehicle: widget.order.deliveryDriverVehicle ?? 'Electric Scooter #GJ-01-AB-1234',
+      timelineSteps: steps,
+      totalPrice: widget.order.totalPrice,
+      millName: widget.order.millName,
+    );
+  }
+
+  static List<MerchantProcessStep> _buildStepsForOrder(MerchantOrder order) {
+    final status = order.statusTag.toUpperCase();
+    final bool isReady = status == 'READY FOR PICKUP' || status == 'READY' || status == 'OUT FOR DELIVERY' || status == 'COMPLETED';
+    final bool isPacking = isReady || status == 'PACKING';
+    final bool isMillingComplete = isPacking;
+    final bool isMilling = isMillingComplete || status == 'IN PROGRESS' || status == 'PROCESSING' || status == 'ACCEPTED';
+    final bool isSecurityPassed = isMilling || status == 'NEW' || status == 'PLACED';
+
+    final grainName = order.grainType.isNotEmpty ? order.grainType : 'Whole Wheat';
+    final qty = order.quantityText.isNotEmpty ? order.quantityText : '10 kg';
+    final bin = order.binLocation ?? 'Bin A-4';
+
+    return [
+      MerchantProcessStep(
+        title: 'Order Received',
+        timeText: '09:00 AM',
+        icon: Icons.check_circle_rounded,
+        isCompleted: true,
+      ),
+      MerchantProcessStep(
+        title: 'Security Check Passed',
+        timeText: '09:15 AM',
+        detailsNote: 'Grain box QR verified. Container integrity confirmed.',
+        icon: Icons.shield_rounded,
+        isCompleted: isSecurityPassed,
+      ),
+      MerchantProcessStep(
+        title: 'Milling Commenced',
+        timeText: '09:30 AM',
+        detailsNote: '⚙️ Premium $grainName. Fine grind setting.',
+        icon: Icons.grass_rounded,
+        isCompleted: isMilling,
+      ),
+      MerchantProcessStep(
+        title: 'Milling Complete',
+        timeText: '10:45 AM',
+        detailsNote: '$qty processed. Quality inspected.',
+        icon: Icons.check_circle_rounded,
+        isCompleted: isMillingComplete,
+      ),
+      MerchantProcessStep(
+        title: 'Packing & Sealing',
+        timeText: '11:00 AM',
+        detailsNote: 'Eco-friendly bag sealed and labeled.',
+        icon: Icons.inventory_2_rounded,
+        isCompleted: isPacking,
+      ),
+      MerchantProcessStep(
+        title: 'Ready for Pickup',
+        timeText: '11:05 AM',
+        detailsNote: 'Stored in $bin. Delivery partner notified.',
+        icon: Icons.local_shipping_rounded,
+        isCompleted: isReady,
+        isCurrent: isReady,
+        isHighlighted: isReady,
+      ),
+    ];
   }
 
   @override
@@ -96,29 +177,32 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'CUSTOMER',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.8,
-                                color: AppTheme.textSecondary,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'CUSTOMER',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.8,
+                                  color: AppTheme.textSecondary,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _displayOrder.customerName,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.textPrimary,
+                              const SizedBox(height: 4),
+                              Text(
+                                _displayOrder.customerName,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.textPrimary,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
@@ -153,12 +237,14 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
                         children: [
                           const Icon(Icons.timer_outlined, size: 14, color: AppTheme.textSecondary),
                           const SizedBox(width: 4),
-                          Text(
-                            'Estimated Completion: ${_displayOrder.estimatedCompletionTime}',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFF6E5616),
+                          Expanded(
+                            child: Text(
+                              'Estimated Completion: ${_displayOrder.estimatedCompletionTime}',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF6E5616),
+                              ),
                             ),
                           ),
                         ],
@@ -168,6 +254,7 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
                     const Divider(height: 1, color: AppTheme.borderLight),
                     const SizedBox(height: 14),
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
                           width: 44,
@@ -183,28 +270,68 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
                           ),
                         ),
                         const SizedBox(width: 14),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Item',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 12,
-                                color: AppTheme.textSecondary,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _displayOrder.productBags.length > 1
+                                    ? 'Items (${_displayOrder.productBags.length} Units)'
+                                    : 'Item',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 12,
+                                  color: AppTheme.textSecondary,
+                                ),
                               ),
-                            ),
-                            Text(
-                              _displayOrder.itemsSummary,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.textPrimary,
+                              const SizedBox(height: 2),
+                              Text(
+                                _displayOrder.itemsSummary,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.textPrimary,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ],
                     ),
+                    if (_displayOrder.productBags.length > 1) ...[
+                      const SizedBox(height: 12),
+                      Column(
+                        children: _displayOrder.productBags.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final bag = entry.value;
+                          return Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFAF4EA),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFFE5D5BC)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.qr_code_2_rounded, size: 14, color: Color(0xFF6E5616)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '${idx + 1}. ${bag.productName} (${bag.quantityKg}kg) • ${bag.bagId}',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF5C4710),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -238,6 +365,25 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
                             final int orderId = _displayOrder.numericId ?? 501;
                             setState(() {
                               _displayOrder.statusTag = 'READY FOR PICKUP';
+                              _displayOrder = MerchantOrder(
+                                numericId: _displayOrder.numericId,
+                                orderId: _displayOrder.orderId,
+                                customerName: _displayOrder.customerName,
+                                itemsSummary: _displayOrder.itemsSummary,
+                                grainType: _displayOrder.grainType,
+                                quantityText: _displayOrder.quantityText,
+                                timeAgo: _displayOrder.timeAgo,
+                                statusTag: 'READY FOR PICKUP',
+                                statusColor: const Color(0xFFFF8A80),
+                                binLocation: _displayOrder.binLocation,
+                                estimatedCompletionTime: _displayOrder.estimatedCompletionTime,
+                                deliveryDriverName: _displayOrder.deliveryDriverName,
+                                deliveryDriverPhone: _displayOrder.deliveryDriverPhone,
+                                deliveryDriverVehicle: _displayOrder.deliveryDriverVehicle,
+                                timelineSteps: _buildStepsForOrder(_displayOrder),
+                                totalPrice: _displayOrder.totalPrice,
+                                millName: _displayOrder.millName,
+                              );
                             });
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
@@ -330,8 +476,8 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
                 height: 38,
                 decoration: BoxDecoration(
                   color: step.isHighlighted
-                      ? AppTheme.primaryTerracotta
-                      : (step.isCompleted ? const Color(0xFFC4B258) : const Color(0xFFE2DACF)),
+                      ? const Color(0xFFB85042)
+                      : (step.isCompleted ? const Color(0xFFB8A44F) : const Color(0xFFE2DACF)),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -360,14 +506,17 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        step.title,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
+                      Expanded(
+                        child: Text(
+                          step.title,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textPrimary,
+                          ),
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Text(
                         step.timeText,
                         style: GoogleFonts.plusJakartaSans(
@@ -386,7 +535,7 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
                       decoration: BoxDecoration(
                         color: step.isHighlighted
                             ? const Color(0xFFFFECEB)
-                            : const Color(0xFFF9F5EF),
+                            : const Color(0xFFF6F2EA),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: step.isHighlighted
@@ -399,7 +548,7 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 13,
                           fontWeight: step.isHighlighted ? FontWeight.w600 : FontWeight.w400,
-                          color: step.isHighlighted ? AppTheme.primaryTerracotta : AppTheme.textPrimary,
+                          color: step.isHighlighted ? const Color(0xFFB85042) : AppTheme.textPrimary,
                         ),
                       ),
                     ),

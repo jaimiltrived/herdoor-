@@ -23,6 +23,7 @@ const ORDER_STATUS = {
   // Compatibility names for existing tests and models
   PLACED: 'PLACED',
   ACCEPTED: 'ACCEPTED',
+  ASSIGNED: 'ASSIGNED',
   PROCESSING: 'PROCESSING',
   PACKING: 'PACKING',
   READY: 'READY',
@@ -67,6 +68,64 @@ const DELIVERY_STATUS = {
   DELIVERED: 'DELIVERED'
 };
 
+const PAYMENT_STATUS = {
+  PENDING: 'PENDING',
+  PAID: 'PAID',
+  FAILED: 'FAILED',
+  REFUNDED: 'REFUNDED'
+};
+
+const STATUS_LIGHT = {
+  GREEN: 'GREEN',
+  AMBER: 'AMBER',
+  RED: 'RED',
+  BLUE: 'BLUE',
+  GREY: 'GREY'
+};
+
+const STATUS_LIGHT_DEFS = {
+  [STATUS_LIGHT.GREEN]: {
+    color: '#2ECC71',
+    bg: '#E8F8F0',
+    text: '#1E8449',
+    border: '#A9DFBF',
+    label: 'Good',
+    pulse: false
+  },
+  [STATUS_LIGHT.AMBER]: {
+    color: '#F39C12',
+    bg: '#FFF8E7',
+    text: '#B7791F',
+    border: '#F6AD55',
+    label: 'Attention',
+    pulse: true
+  },
+  [STATUS_LIGHT.RED]: {
+    color: '#E74C3C',
+    bg: '#FDEDEC',
+    text: '#C0392B',
+    border: '#F1948A',
+    label: 'Problem',
+    pulse: true
+  },
+  [STATUS_LIGHT.BLUE]: {
+    color: '#3498DB',
+    bg: '#EBF5FB',
+    text: '#21618C',
+    border: '#85C1E9',
+    label: 'In Transit',
+    pulse: false
+  },
+  [STATUS_LIGHT.GREY]: {
+    color: '#95A5A6',
+    bg: '#F2F3F4',
+    text: '#616A6B',
+    border: '#D5D8DC',
+    label: 'Inactive',
+    pulse: false
+  }
+};
+
 module.exports = {
   ROLES,
   ORDER_STATUS,
@@ -74,5 +133,8 @@ module.exports = {
   GRAIN_SOURCES,
   SERVICE_TYPES,
   FULFILLMENT_TYPES,
-  DELIVERY_STATUS
+  DELIVERY_STATUS,
+  PAYMENT_STATUS,
+  STATUS_LIGHT,
+  STATUS_LIGHT_DEFS
 };

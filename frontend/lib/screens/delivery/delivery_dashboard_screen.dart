@@ -22,7 +22,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
   bool _isLoading = true;
   bool _isOnline = true;
   bool _isAutoAccept = false;
-  String _selectedFilter = 'All'; // 'All' | 'Surge' | 'Batch' | 'Quick' | 'Heavy'
+  String _selectedFilter = 'All'; // 'All' | 'HomeToMill' | 'MillToHome'
   String _selectedHotspot = 'All Zones';
   String _selectedVehicle = 'CAR_VAN'; // 'ALL' | 'CAR_VAN' | 'BIKE_EV'
   final double _selectedRadiusKm = 5.0; // Strict 5.0 km radius
@@ -379,10 +379,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
       if (t.distanceKm > _selectedRadiusKm) return false;
       if (_selectedVehicle == 'CAR_VAN' && t.vehicleTypeAllowed == 'BIKE_EV') return false;
       if (_selectedVehicle == 'BIKE_EV' && t.vehicleTypeAllowed == 'CAR_VAN') return false;
-      if (_selectedFilter == 'Surge' && t.surgeBonus <= 0) return false;
-      if (_selectedFilter == 'Batch' && !t.isBatch) return false;
-      if (_selectedFilter == 'Quick' && t.distanceKm > 2.0) return false;
-      if (_selectedFilter == 'Heavy' && t.quantityKg < 10.0) return false;
+      if (_selectedFilter == 'HomeToMill' && !t.isLeg1GrainPickup) return false;
+      if (_selectedFilter == 'MillToHome' && !t.isLeg2FlourDelivery) return false;
       return true;
     }).toList();
   }
@@ -1018,12 +1016,13 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
   }
 
   Widget _buildFilterChips() {
+    final homeToMillCount = _allTrips.where((t) => t.isLeg1GrainPickup).length;
+    final millToHomeCount = _allTrips.where((t) => t.isLeg2FlourDelivery).length;
+
     final filters = [
       {'key': 'All', 'label': 'All Orders (${_allTrips.length})'},
-      {'key': 'Surge', 'label': '🔥 Surge Bonus'},
-      {'key': 'Batch', 'label': '📦 Stacked Batch (2x)'},
-      {'key': 'Quick', 'label': '⚡ Quick (<2km)'},
-      {'key': 'Heavy', 'label': '⚖️ Heavy Bags (10kg+)'},
+      {'key': 'HomeToMill', 'label': '🌾 Home ➔ Mill ($homeToMillCount)'},
+      {'key': 'MillToHome', 'label': '🍞 Mill ➔ Home ($millToHomeCount)'},
     ];
 
     return SingleChildScrollView(
@@ -1854,12 +1853,21 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                 const Icon(Icons.radar_rounded, size: 36, color: AppTheme.textMuted),
                 const SizedBox(height: 8),
                 Text(
-                  'No orders currently within 5.0 km for $_selectedVehicle.',
+                  _selectedFilter == 'HomeToMill'
+                      ? 'No Home ➔ Mill grain pickup orders nearby.'
+                      : _selectedFilter == 'MillToHome'
+                          ? 'No Mill ➔ Home flour delivery orders nearby.'
+                          : 'No orders currently within 5.0 km for $_selectedVehicle.',
                   style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textPrimary),
+                  textAlign: TextAlign.center,
                 ),
+                const SizedBox(height: 4),
                 Text(
-                  'Radar is actively searching nearby chakki mills...',
+                  _selectedFilter != 'All'
+                      ? 'Try switching to "All Orders" or expanding your radius.'
+                      : 'Radar is actively searching nearby chakki mills...',
                   style: GoogleFonts.plusJakartaSans(color: AppTheme.textSecondary, fontSize: 12),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
@@ -2045,7 +2053,9 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  '${trip.quantityKg} kg • ${trip.grainTypeName} (${trip.isLeg1GrainPickup ? "Raw Grain for Grinding" : "Fresh Packed Flour"})',
+                  trip.productBags.length > 1
+                      ? '${trip.productBags.length} Bags (${trip.quantityKg} kg) • ${trip.grainTypeName}'
+                      : '${trip.quantityKg} kg • ${trip.grainTypeName} (${trip.isLeg1GrainPickup ? "Raw Grain for Grinding" : "Fresh Packed Flour"})',
                   style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -2071,6 +2081,42 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
               ],
             ],
           ),
+          if (trip.productBags.length > 1) ...[
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: trip.productBags.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final bag = entry.value;
+                  return Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3ECE1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE5D5BC)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.qr_code_2_rounded, size: 12, color: Color(0xFF6E5616)),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${idx + 1}. ${bag.productName} (${bag.quantityKg}kg)',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF5C4710),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
 
           // Step 1 Location (Origin: Customer Home on Leg 1, Flour Mill on Leg 2)

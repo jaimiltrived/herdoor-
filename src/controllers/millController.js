@@ -14,12 +14,22 @@ exports.getNearbyMills = async (req, res) => {
 
   const userLat = parseFloat(latitude);
   const userLon = parseFloat(longitude);
-  const maxRadius = parseFloat(radius);
+  const maxRadius = parseFloat(radius) || 10;
+  const latDelta = maxRadius / 111.0;
+  const cosLat = Math.cos(userLat * (Math.PI / 180));
+  const lonDelta = maxRadius / (111.0 * (cosLat === 0 ? 1 : Math.abs(cosLat)));
+  const minLat = userLat - latDelta;
+  const maxLat = userLat + latDelta;
+  const minLon = userLon - lonDelta;
+  const maxLon = userLon + lonDelta;
 
   let millsList = [];
   try {
-    const dbMills = await query('SELECT * FROM mills');
-    if (dbMills && Array.isArray(dbMills)) {
+    const dbMills = await query(
+      'SELECT * FROM mills WHERE latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ? LIMIT 50',
+      [minLat, maxLat, minLon, maxLon]
+    );
+    if (dbMills && Array.isArray(dbMills) && dbMills.length > 0) {
       millsList = dbMills.map(m => ({
         id: m.id,
         name: m.name,
@@ -34,6 +44,9 @@ exports.getNearbyMills = async (req, res) => {
         specialty: m.specialty || 'Fresh Stone Ground Flour',
         workingHours: m.working_hours || '08:00 AM - 08:00 PM'
       }));
+    } else {
+      // Fallback to all in-memory mills if DB returned 0
+      millsList = store.mills;
     }
   } catch (err) {
     console.warn('MySQL getNearbyMills warning:', err.message);

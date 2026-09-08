@@ -499,12 +499,48 @@ class _MerchantDeliveryHandoverScreenState extends State<MerchantDeliveryHandove
                             ),
                           ),
                           Text(
-                            widget.order.itemsSummary,
+                            widget.order.productBags.length > 1
+                                ? '${widget.order.productBags.length} Bags (${widget.order.quantityText})'
+                                : widget.order.itemsSummary,
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 13,
                               color: AppTheme.textSecondary,
                             ),
                           ),
+                          if (widget.order.productBags.length > 1) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: widget.order.productBags.asMap().entries.map((entry) {
+                                final idx = entry.key;
+                                final bag = entry.value;
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: const Color(0xFFFFC0BD)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.qr_code_2_rounded, size: 12, color: AppTheme.primaryTerracotta),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '${idx + 1}. ${bag.productName} (${bag.quantityKg}kg)',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppTheme.primaryTerracotta,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ],
                         ],
                       ),
                     ),

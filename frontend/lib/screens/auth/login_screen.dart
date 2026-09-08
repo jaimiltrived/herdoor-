@@ -19,12 +19,12 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _phoneController = TextEditingController(text: 'shop@shreeganesh.com');
+  final _phoneController = TextEditingController(text: 'ramesh@example.com');
   final _passwordController = TextEditingController(text: 'Password123!');
   bool _rememberMe = true;
   bool _obscurePassword = true;
   bool _isLoading = false;
-  UserRole _selectedRole = UserRole.merchant; // Default to Merchant
+  UserRole _selectedRole = UserRole.customer; // Default to Citizen / Customer
 
   void _onRoleChanged(UserRole role) {
     setState(() {
@@ -443,7 +443,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         context,
                         MaterialPageRoute(
                           builder: (context) => RegisterScreen(
-                            onRegisterSuccess: () => widget.onLoginSuccess(_selectedRole),
+                            onRegisterSuccess: () => widget.onLoginSuccess(UserRole.customer),
                           ),
                         ),
                       );

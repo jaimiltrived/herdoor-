@@ -18,6 +18,7 @@ import {
   Truck
 } from 'lucide-react';
 import { apiService } from '../services/apiService';
+import StatusLight, { StatusBadge, getOrderLight } from '../components/StatusLight';
 
 export default function OrdersPage({ onOpenAcceptModal, onSelectOrderDetails }) {
   const [activeFilterTab, setActiveFilterTab] = useState(0);
@@ -33,9 +34,42 @@ export default function OrdersPage({ onOpenAcceptModal, onSelectOrderDetails }) 
   const grainTypes = ['All', 'Wheat (Gehun)', 'Organic Whole Wheat', 'Stoneground Rye', 'Multigrain Mix', 'Bajra Flour', 'Juwar Flour', 'Chana Dal'];
 
   useEffect(() => {
-    loadOrders();
-    const interval = setInterval(loadOrders, 3000);
-    return () => clearInterval(interval);
+    let isMounted = true;
+    const fetchOrders = async () => {
+      try {
+        const dbOrders = await apiService.getOrders();
+        if (isMounted && dbOrders && dbOrders.length > 0) {
+          const formatted = dbOrders.map(o => ({
+            id: o.orderNumber || `#HD-${o.id}`,
+            numericId: o.id,
+            customerName: o.customerName || 'Customer',
+            customerPhone: o.customerPhone || '+91 98765 43210',
+            grainType: o.grainTypeName || 'Wheat (Gehun)',
+            quantityText: `${o.quantityKg || 5} kg`,
+            quantityKg: o.quantityKg || 5,
+            amount: `₹${o.totalAmount || 180}`,
+            deliveryAddress: o.fulfillmentType === 'DELIVERY' ? 'Home Delivery (Ahmedabad)' : 'Self Pickup at Mill',
+            fulfillmentType: o.fulfillmentType || 'DELIVERY',
+            status: (o.status || 'PLACED').toUpperCase(),
+            groupId: o.groupId || o.group_id,
+            groupCode: o.groupCode || o.group_code,
+            isGrouped: Boolean(o.groupId || o.group_id || o.groupCode || o.group_code),
+            timeAgo: 'Just now',
+            paymentStatus: o.paymentStatus || 'PAID',
+          }));
+          setAllOrders(formatted);
+        }
+      } catch (e) {
+        console.warn('Load orders error:', e);
+      }
+    };
+
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 4000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const loadOrders = async () => {
@@ -90,7 +124,7 @@ export default function OrdersPage({ onOpenAcceptModal, onSelectOrderDetails }) 
 
   const handleMoveToReady = async (order) => {
     const numId = order.numericId || String(order.id).replace(/\D/g, '');
-    await apiService.updateOrderStatus(numId, 'READY_FOR_PICKUP');
+    await apiService.markOrderReady(numId);
     await loadOrders();
   };
 
@@ -624,22 +658,11 @@ export default function OrdersPage({ onOpenAcceptModal, onSelectOrderDetails }) 
                     </div>
 
                     <div>
-                      <span
-                        style={{
-                          backgroundColor: allDelivered ? '#E8F8F0' : hasPlaced ? '#FDEDEC' : '#FFF8E7',
-                          color: allDelivered ? '#1E8449' : hasPlaced ? '#C0392B' : '#B7791F',
-                          fontSize: '0.78rem',
-                          fontWeight: 800,
-                          padding: '6px 14px',
-                          borderRadius: 14,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6,
-                        }}
-                      >
-                        <span className="green-dot" style={{ width: 8, height: 8, background: allDelivered ? '#2ECC71' : hasPlaced ? '#E74C3C' : '#F39C12' }}></span>
-                        {allDelivered ? 'ALL STOPS DELIVERED' : hasPlaced ? 'NEW REQUESTS PENDING' : 'BATCH IN PROGRESS'}
-                      </span>
+                      <StatusBadge
+                        status={allDelivered ? 'ALL STOPS DELIVERED' : hasPlaced ? 'NEW REQUESTS PENDING' : 'BATCH IN PROGRESS'}
+                        type="order"
+                        size="md"
+                      />
                     </div>
                   </div>
 
@@ -669,18 +692,11 @@ export default function OrdersPage({ onOpenAcceptModal, onSelectOrderDetails }) 
                               <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#8C4A3E', background: '#FFECEB', padding: '2px 8px', borderRadius: 6 }}>
                                 STOP #{stopIdx + 1} • {req.id}
                               </span>
-                              <span
-                                style={{
-                                  backgroundColor: req.status === 'PLACED' ? '#FDEDEC' : req.status === 'ACCEPTED' ? '#FFF8E7' : '#E8F8F0',
-                                  color: req.status === 'PLACED' ? '#C0392B' : req.status === 'ACCEPTED' ? '#B7791F' : '#1E8449',
-                                  fontSize: '0.72rem',
-                                  fontWeight: 800,
-                                  padding: '3px 8px',
-                                  borderRadius: 10,
-                                }}
-                              >
-                                {req.status}
-                              </span>
+                              <StatusBadge
+                                status={req.status}
+                                type="order"
+                                size="sm"
+                              />
                             </div>
 
                             <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#2A2421', marginBottom: 6 }}>
@@ -758,22 +774,11 @@ export default function OrdersPage({ onOpenAcceptModal, onSelectOrderDetails }) 
                     </div>
                     <div className="serif-heading" style={{ fontSize: '1.35rem', fontWeight: 800, marginTop: 2 }}>{req.customerName}</div>
                   </div>
-                  <span
-                    style={{
-                      backgroundColor: req.status === 'PLACED' ? '#FDEDEC' : req.status === 'ACCEPTED' ? '#FFF8E7' : '#E8F8F0',
-                      color: req.status === 'PLACED' ? '#C0392B' : req.status === 'ACCEPTED' ? '#B7791F' : '#1E8449',
-                      fontSize: '0.75rem',
-                      fontWeight: 800,
-                      padding: '5px 12px',
-                      borderRadius: 14,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                    }}
-                  >
-                    <span className="green-dot" style={{ width: 8, height: 8, background: req.status === 'PLACED' ? '#E74C3C' : '#2ECC71' }}></span>
-                    {req.status}
-                  </span>
+                  <StatusBadge
+                    status={req.status}
+                    type="order"
+                    size="md"
+                  />
                 </div>
                 <div className="request-card-body">
                   <div className="request-spec-row">

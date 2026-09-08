@@ -78,7 +78,7 @@ exports.getMills = async (req, res) => {
         estimatedTime: m.estimated_time || '30 min',
         capacityKgPerDay: parseFloat(m.capacity_kg_per_day) || 500,
         currentLoadKg: parseFloat(m.current_load_kg) || 0,
-        services: typeof m.services === 'string' ? JSON.parse(m.services || '[]') : (m.services || ['Flour Grinding', 'Home Delivery']),
+        services: typeof m.services === 'string' ? (m.services.startsWith('[') ? JSON.parse(m.services) : m.services.split(',').map(s => s.trim())) : (m.services || ['Flour Grinding', 'Home Delivery']),
         workingHours: m.working_hours || '08:00 AM - 08:00 PM',
         specialty: m.specialty || 'Fresh Stone Ground Flour'
       }));
@@ -265,7 +265,7 @@ exports.getWholesalers = async (req, res) => {
         contactPerson: w.contact_person || 'Authorized Dealer',
         phone: w.phone,
         city: w.city || 'Ahmedabad',
-        grainsSupplied: typeof w.grains_supplied === 'string' ? JSON.parse(w.grains_supplied || '["Wheat"]') : (w.grains_supplied || ['Wheat']),
+        grainsSupplied: typeof w.grains_supplied === 'string' ? (w.grains_supplied.startsWith('[') ? JSON.parse(w.grains_supplied) : w.grains_supplied.split(',').map(s => s.trim())) : (w.grains_supplied || ['Wheat']),
         rating: parseFloat(w.rating) || 4.8,
         stockAvailableTons: parseFloat(w.stock_available_tons) || 50.0,
         status: w.status || 'ACTIVE'

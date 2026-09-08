@@ -108,6 +108,13 @@ class OrderModel {
   final double deliveryFee;
   final List<Map<String, dynamic>> items;
 
+  final String millPhone;
+  final String? deliveryDriverName;
+  final String? deliveryDriverPhone;
+  final String? deliveryDriverVehicle;
+  final String? pickupPin;
+  final String? deliveryOtp;
+
   OrderModel({
     required this.orderId,
     required this.millName,
@@ -127,6 +134,12 @@ class OrderModel {
     this.millingFee = 5.00,
     this.deliveryFee = 2.50,
     this.items = const [],
+    this.millPhone = '+919876543211',
+    this.deliveryDriverName,
+    this.deliveryDriverPhone,
+    this.deliveryDriverVehicle,
+    this.pickupPin,
+    this.deliveryOtp,
   });
 }
 

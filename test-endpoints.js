@@ -112,17 +112,19 @@ async function runTests() {
       });
       console.log('Step A. Forgot Password Requested:', forgotRes.status, forgotRes.body.message);
 
+      const forgotOtp = forgotRes.body?.data?.otpHint || '123456';
+
       // Step B: Verify OTP
       const verifyRes = await makeRequest('POST', '/api/v1/auth/verify-otp', {
         email: 'ramesh@example.com',
-        otp: '123456'
+        otp: forgotOtp
       });
       console.log('Step B. OTP Code Verified:', verifyRes.status, verifyRes.body.data.verified ? 'VERIFIED' : 'FAILED');
 
       // Step C: Reset Password
       const resetRes = await makeRequest('POST', '/api/v1/auth/reset-password', {
         email: 'ramesh@example.com',
-        otp: '123456',
+        otp: forgotOtp,
         newPassword: 'UpdatedPassword2026!'
       });
       console.log('Step C. Password Reset Completed:', resetRes.status, resetRes.body.message);
@@ -136,9 +138,10 @@ async function runTests() {
       console.log('Step D. Verified Login with New Password:', reLoginRes.status, 'Successfully logged in with new credentials!');
 
       // Step E: Reset back to standard Password123! for test idempotency
+      const forgotRes2 = await makeRequest('POST', '/api/v1/auth/forgot-password', { email: 'ramesh@example.com' });
       await makeRequest('POST', '/api/v1/auth/reset-password', {
         email: 'ramesh@example.com',
-        otp: '123456',
+        otp: forgotRes2.body?.data?.otpHint || '123456',
         newPassword: 'Password123!'
       });
 
@@ -149,7 +152,7 @@ async function runTests() {
 
       const otpLoginRes = await makeRequest('POST', '/api/v1/auth/login-otp', {
         phone: '+919876543299',
-        otp: '123456',
+        otp: sendOtpRes.body?.data?.otpHint || '123456',
         name: 'Aarav Mehta'
       });
       console.log('OTP Direct Login:', otpLoginRes.status, otpLoginRes.body.data.user.name, 'Token received');

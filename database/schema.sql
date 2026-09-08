@@ -16,6 +16,7 @@ DROP TABLE IF EXISTS `wholesalers`;
 DROP TABLE IF EXISTS `inventory`;
 DROP TABLE IF EXISTS `deliveries`;
 DROP TABLE IF EXISTS `payments`;
+DROP TABLE IF EXISTS `user_favorites`;
 DROP TABLE IF EXISTS `order_timeline`;
 DROP TABLE IF EXISTS `orders`;
 DROP TABLE IF EXISTS `grain_types`;
@@ -151,9 +152,22 @@ CREATE TABLE `order_timeline` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `order_id` INT NOT NULL,
   `status` VARCHAR(50) NOT NULL,
+  `title` VARCHAR(150) DEFAULT NULL,
   `note` TEXT,
+  `description` TEXT,
   `timestamp` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT `fk_timeline_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 8b. User Favorite Mills Table
+CREATE TABLE `user_favorites` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `mill_id` INT NOT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY `uk_user_mill` (`user_id`, `mill_id`),
+  CONSTRAINT `fk_favorites_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_favorites_mill` FOREIGN KEY (`mill_id`) REFERENCES `mills` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 9. Payments Table

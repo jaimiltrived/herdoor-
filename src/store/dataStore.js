@@ -594,16 +594,6 @@ const store = {
     }
   ],
 
-  grainTypes: [
-    { id: 1, name: 'Wheat (Gehun)', category: 'GRAIN', pricePerKg: 35.0, grindingFeePerKg: 5.0 },
-    { id: 2, name: 'Rice (Chawal)', category: 'GRAIN', pricePerKg: 40.0, grindingFeePerKg: 6.0 },
-    { id: 3, name: 'Bajra (Pearl Millet)', category: 'GRAIN', pricePerKg: 30.0, grindingFeePerKg: 5.0 },
-    { id: 4, name: 'Jowar (Sorghum)', category: 'GRAIN', pricePerKg: 38.0, grindingFeePerKg: 5.0 },
-    { id: 5, name: 'Maize (Makai)', category: 'GRAIN', pricePerKg: 28.0, grindingFeePerKg: 4.0 },
-    { id: 6, name: 'Multigrain Mix', category: 'GRAIN', pricePerKg: 60.0, grindingFeePerKg: 8.0 },
-    { id: 7, name: 'Ragi (Finger Millet)', category: 'GRAIN', pricePerKg: 55.0, grindingFeePerKg: 7.0 }
-  ],
-
   readymadeProducts: [
     {
       id: 'p1',

@@ -37,7 +37,11 @@ exports.uploadProfileImage = (req, res) => {
 };
 
 exports.getFavorites = async (req, res) => {
-  const userId = req.user ? req.user.id : 1;
+  if (!req.user) {
+    return res.status(401).json({ status: 'error', message: 'Authentication required' });
+  }
+
+  const userId = req.user.id;
   try {
     const sql = `
       SELECT m.* 
@@ -47,7 +51,7 @@ exports.getFavorites = async (req, res) => {
       ORDER BY uf.created_at DESC
     `;
     const dbMills = await query(sql, [userId]);
-    if (dbMills && dbMills.length > 0) {
+    if (dbMills && Array.isArray(dbMills)) {
       const mapped = dbMills.map(row => ({
         id: row.id,
         name: row.name,
@@ -72,7 +76,7 @@ exports.getFavorites = async (req, res) => {
     console.warn('MySQL getFavorites fallback:', err.message);
   }
 
-  const favIds = store.favorites ? store.favorites.filter(f => f.userId === userId).map(f => f.millId) : [101, 102];
+  const favIds = store.favorites ? store.favorites.filter(f => f.userId === userId).map(f => f.millId) : [];
   const favs = store.mills.filter(m => favIds.includes(m.id)).map(m => ({ ...m, isFavorite: true }));
   res.json({
     status: 'success',
@@ -82,8 +86,16 @@ exports.getFavorites = async (req, res) => {
 };
 
 exports.addFavorite = async (req, res) => {
-  const userId = req.user ? req.user.id : 1;
+  if (!req.user) {
+    return res.status(401).json({ status: 'error', message: 'Authentication required' });
+  }
+
+  const userId = req.user.id;
   const millId = parseInt(req.params.millId);
+
+  if (isNaN(millId)) {
+    return res.status(400).json({ status: 'error', message: 'Valid mill ID is required' });
+  }
 
   try {
     await query('INSERT IGNORE INTO user_favorites (user_id, mill_id) VALUES (?, ?)', [userId, millId]);
@@ -100,8 +112,16 @@ exports.addFavorite = async (req, res) => {
 };
 
 exports.removeFavorite = async (req, res) => {
-  const userId = req.user ? req.user.id : 1;
+  if (!req.user) {
+    return res.status(401).json({ status: 'error', message: 'Authentication required' });
+  }
+
+  const userId = req.user.id;
   const millId = parseInt(req.params.millId);
+
+  if (isNaN(millId)) {
+    return res.status(400).json({ status: 'error', message: 'Valid mill ID is required' });
+  }
 
   try {
     await query('DELETE FROM user_favorites WHERE user_id = ? AND mill_id = ?', [userId, millId]);
@@ -193,7 +213,11 @@ exports.setDefaultAddress = (req, res) => {
  * @route POST /api/v1/users/apply-merchant
  */
 exports.applyMerchant = async (req, res) => {
-  const userId = req.user ? req.user.id : 1;
+  if (!req.user) {
+    return res.status(401).json({ status: 'error', message: 'Authentication required' });
+  }
+
+  const userId = req.user.id;
   const user = store.users.find(u => u.id === userId);
 
   const {
@@ -296,7 +320,11 @@ exports.applyMerchant = async (req, res) => {
  * @route GET /api/v1/users/my-merchant-application
  */
 exports.getMyMerchantApplication = (req, res) => {
-  const userId = req.user ? req.user.id : 1;
+  if (!req.user) {
+    return res.status(401).json({ status: 'error', message: 'Authentication required' });
+  }
+
+  const userId = req.user.id;
   const applications = (store.merchantApplications || []).filter(app => app.userId === userId);
   
   const latestApp = applications.length > 0 ? applications[0] : null;
