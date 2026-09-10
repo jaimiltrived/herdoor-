@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../models/merchant_models.dart';
+import 'auth_api_service.dart';
 
 class MerchantApiService {
   static final MerchantApiService instance = MerchantApiService._internal();
@@ -47,31 +48,11 @@ class MerchantApiService {
 
   /// Ensure shopkeeper authentication token is acquired
   Future<bool> ensureAuthenticated() async {
-    if (_authToken != null) return true;
-    if (shouldSkipNetwork) return false;
-
-    try {
-      final response = await http
-          .post(
-            Uri.parse('$baseUrl/auth/login'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'email': 'shop@shreeganesh.com',
-              'password': 'Password123!',
-            }),
-          )
-          .timeout(_timeout);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        _authToken = data['data']?['token'];
-        _isOfflineMode = false;
-        return _authToken != null;
-      }
-    } catch (_) {
-      _markOffline();
+    if (AuthApiService.instance.token != null) {
+      _authToken = AuthApiService.instance.token;
+      return true;
     }
-    return false;
+    return _authToken != null;
   }
 
   /// Get Logged-in Merchant Profile Details
@@ -388,6 +369,50 @@ class MerchantApiService {
     MerchantMockData.pendingRequests.removeWhere((o) => o.numericId == orderId);
     MerchantMockData.activeOrders.removeWhere((o) => o.numericId == orderId);
     return true;
+  }
+
+  /// Submit Grain Intake Inspection & Scan (Accept or Reject Grain at Mill Drop-off)
+  Future<Map<String, dynamic>> submitGrainIntakeInspection(
+    int orderId, {
+    required bool isAccepted,
+    String? reason,
+    String? notes,
+    List<Map<String, dynamic>>? bagDecisions,
+    int photoCount = 0,
+  }) async {
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .post(
+                Uri.parse('$baseUrl/shopkeeper/orders/$orderId/intake-inspection'),
+                headers: _headers,
+                body: jsonEncode({
+                  'isAccepted': isAccepted,
+                  'reason': reason ?? (isAccepted ? null : 'Quality / moisture discrepancy'),
+                  'notes': notes ?? '',
+                  'bagDecisions': bagDecisions ?? [],
+                  'photoCount': photoCount,
+                }),
+              )
+              .timeout(_timeout);
+
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            return {'success': true, 'message': body['message'] ?? 'Intake inspection saved'};
+          }
+        } catch (_) {
+          _markOffline();
+        }
+      }
+    }
+    return {
+      'success': true,
+      'message': isAccepted
+          ? 'Grain intake accepted for milling.'
+          : 'Grain rejected. Delivery partner notified to return bags to customer.',
+    };
   }
 
   /// Order Processing State Transitions ('start', 'processing', 'packing', 'ready', 'handover', 'complete')

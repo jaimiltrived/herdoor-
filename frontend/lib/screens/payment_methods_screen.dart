@@ -44,21 +44,21 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
 
   final List<Map<String, dynamic>> _methods = [
     {
-      'icon': Icons.credit_card,
-      'title': 'Visa Card',
-      'subtitle': '•••• •••• •••• 4242',
+      'icon': Icons.account_balance_wallet_rounded,
+      'title': 'Instant UPI / Google Pay',
+      'subtitle': 'Fast & secure UPI payment',
+      'type': 'upi',
+    },
+    {
+      'icon': Icons.credit_card_rounded,
+      'title': 'Credit / Debit Card',
+      'subtitle': 'Visa, MasterCard, RuPay',
       'type': 'card',
     },
     {
-      'icon': Icons.account_balance_wallet,
-      'title': 'Apple Pay',
-      'subtitle': 'applepay@icloud.com',
-      'type': 'wallet',
-    },
-    {
-      'icon': Icons.money,
+      'icon': Icons.payments_rounded,
       'title': 'Cash on Delivery',
-      'subtitle': 'Pay when you receive',
+      'subtitle': 'Pay at doorstep upon delivery',
       'type': 'cash',
     },
   ];
@@ -219,7 +219,13 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                         ? 'Visa Card (•••• 4242)'
                         : _methods[_selectedMethod]['title'];
                     final combinedGrainNames = widget.cartItems.isNotEmpty
-                        ? widget.cartItems.map((i) => '${i['quantity']}kg ${i['name']}').join(', ')
+                        ? widget.cartItems.map((i) {
+                            final q = i['quantity'] ?? 1;
+                            final name = (i['name'] ?? 'Product').toString();
+                            final isMilling = name.toLowerCase().contains('milling') || name.toLowerCase().contains('grain') || i['unit'] == 'kg';
+                            final unitPrefix = isMilling ? '${q}kg' : '$q Unit';
+                            return '$unitPrefix $name';
+                          }).join(', ')
                         : 'Wheat';
                     final totalQuantityKg = widget.cartItems.fold<double>(
                         0.0, (s, i) => s + (double.tryParse(i['quantity'].toString()) ?? 1.0));

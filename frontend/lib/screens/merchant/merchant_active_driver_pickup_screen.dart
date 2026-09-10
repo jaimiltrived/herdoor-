@@ -39,6 +39,7 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
     try {
       final fetchedReady = await MerchantApiService.instance.getReadyOrders();
       final fetchedActive = await MerchantApiService.instance.getActiveOrders();
+      final fetchedCompleted = await MerchantApiService.instance.getCompletedOrders();
       if (mounted) {
         final List<MerchantOrder> combined = [];
         if (fetchedReady != null && fetchedReady.isNotEmpty) {
@@ -49,8 +50,19 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
               o.statusTag == 'READY FOR PICKUP' ||
               o.statusTag == 'READY' ||
               o.statusTag == 'Ready for Pickup' ||
-              o.statusTag == 'PACKING');
+              o.statusTag == 'OUT FOR DELIVERY' ||
+              o.statusTag == 'OUT_FOR_DELIVERY');
           for (var o in readyFromActive) {
+            if (!combined.any((x) => x.orderId == o.orderId)) {
+              combined.add(o);
+            }
+          }
+        }
+        if (fetchedCompleted != null) {
+          final outFromCompleted = fetchedCompleted.where((o) =>
+              o.statusTag == 'OUT FOR DELIVERY' ||
+              o.statusTag == 'OUT_FOR_DELIVERY');
+          for (var o in outFromCompleted) {
             if (!combined.any((x) => x.orderId == o.orderId)) {
               combined.add(o);
             }
@@ -59,8 +71,25 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
 
         setState(() {
           _readyOrders = combined
-              .where((o) => !_dispatchedOrders.any((d) => d.orderId == o.orderId))
+              .where((o) =>
+                  (o.statusTag == 'READY FOR PICKUP' ||
+                   o.statusTag == 'READY' ||
+                   o.statusTag == 'Ready for Pickup') &&
+                  !_dispatchedOrders.any((d) => d.orderId == o.orderId))
               .toList();
+
+          final dispatchedFromBackend = combined
+              .where((o) =>
+                  o.statusTag == 'OUT FOR DELIVERY' ||
+                  o.statusTag == 'OUT_FOR_DELIVERY')
+              .toList();
+
+          for (final d in dispatchedFromBackend) {
+            if (!_dispatchedOrders.any((x) => x.orderId == d.orderId)) {
+              _dispatchedOrders.add(d);
+            }
+          }
+
           if (showLoading) _isLoading = false;
         });
       }
@@ -386,7 +415,7 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
                               const Icon(Icons.qr_code_2_rounded, size: 12, color: Color(0xFF6E5616)),
                               const SizedBox(width: 4),
                               Text(
-                                '${idx + 1}. ${bag.productName} (${bag.quantityKg}kg)',
+                                '${idx + 1}. ${bag.productName} • ${bag.unitText}',
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 10.5,
                                   fontWeight: FontWeight.w600,

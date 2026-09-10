@@ -12,7 +12,7 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   int _currentStep = 1; // 1: Email Input, 2: OTP Entry, 3: New Password, 4: Success
-  final _emailController = TextEditingController(text: 'ramesh@example.com');
+  final _emailController = TextEditingController();
   final _otpControllers = List.generate(4, (_) => TextEditingController());
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -40,7 +40,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (result['success'] == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result['message'] ?? 'OTP Sent successfully (Code: 123456)'),
+          content: Text(result['message'] ?? 'OTP Sent successfully to your registered contact'),
           backgroundColor: AppTheme.primaryTerracotta,
         ),
       );
@@ -48,7 +48,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result['message'] ?? 'Unable to send OTP'),
+          content: Text(result['message'] ?? 'Unable to send OTP. Please check details.'),
           backgroundColor: AppTheme.primaryTerracotta,
         ),
       );
@@ -74,7 +74,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result['message'] ?? 'Invalid OTP code. Use 1234 or 123456.'),
+          content: Text(result['message'] ?? 'Invalid OTP code. Please try again.'),
           backgroundColor: AppTheme.primaryTerracotta,
         ),
       );
@@ -102,7 +102,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     setState(() => _isLoading = true);
     final result = await AuthApiService.instance.resetPassword(
       identifier: _emailController.text.trim(),
-      otp: _enteredOtp.isEmpty ? '123456' : _enteredOtp,
+      otp: _enteredOtp,
       newPassword: newPass,
     );
     if (!mounted) return;
@@ -113,7 +113,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result['message'] ?? 'Failed to reset password'),
+          content: Text(result['message'] ?? 'Failed to reset password. Please verify OTP.'),
           backgroundColor: AppTheme.primaryTerracotta,
         ),
       );

@@ -23,13 +23,13 @@ TRUNCATE TABLE `users`;
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- 1. Insert Initial Users (Hashed password: Password123!)
--- Hash: $2a$08$U4V2nNqTlnW9xU5qE0rOquk3V6/J65F/Z6uS3aU2eNqTlnW9xU5qE
+-- Hash: $2a$10$IB8Wa17N4.zImQI4zOgQKOxxo/JuH2PoYNRHgepQK9TB01Xbp5OOe
 INSERT INTO `users` (`id`, `name`, `email`, `phone`, `password`, `role`, `mill_id`, `vehicle_number`, `vehicle_type`, `is_online`, `rating`, `total_trips`, `profile_image`) VALUES
-(1, 'Ramesh Patel', 'ramesh@example.com', '+919876543210', '$2a$08$U4V2nNqTlnW9xU5qE0rOquk3V6/J65F/Z6uS3aU2eNqTlnW9xU5qE', 'CUSTOMER', NULL, NULL, NULL, 1, 5.00, 0, 'https://images.unsplash.com/photo-1534528741775-53994a69daeb'),
-(2, 'Suresh Mill Owner', 'shop@shreeganesh.com', '+919876543211', '$2a$08$U4V2nNqTlnW9xU5qE0rOquk3V6/J65F/Z6uS3aU2eNqTlnW9xU5qE', 'SHOPKEEPER', 101, NULL, NULL, 1, 4.80, 0, NULL),
-(3, 'Vikram Delivery Agent', 'delivery@herdoor.com', '+919876543212', '$2a$08$U4V2nNqTlnW9xU5qE0rOquk3V6/J65F/Z6uS3aU2eNqTlnW9xU5qE', 'DELIVERY', NULL, 'GJ-01-AB-1234', 'Electric Scooter', 1, 4.90, 184, 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d'),
-(4, 'Super Admin', 'admin@herdoor.com', '+919876543200', '$2a$08$U4V2nNqTlnW9xU5qE0rOquk3V6/J65F/Z6uS3aU2eNqTlnW9xU5qE', 'ADMIN', NULL, NULL, NULL, 1, 5.00, 0, NULL),
-(5, 'Rajesh Kumar', 'rajesh.rider@herdoor.com', '+919876543215', '$2a$08$U4V2nNqTlnW9xU5qE0rOquk3V6/J65F/Z6uS3aU2eNqTlnW9xU5qE', 'DELIVERY', NULL, 'GJ-01-EB-4821', 'Electric Bike', 1, 4.85, 96, NULL);
+(1, 'Ramesh Patel', 'ramesh@example.com', '+919876543210', '$2a$10$IB8Wa17N4.zImQI4zOgQKOxxo/JuH2PoYNRHgepQK9TB01Xbp5OOe', 'CUSTOMER', NULL, NULL, NULL, 1, 5.00, 0, 'https://images.unsplash.com/photo-1534528741775-53994a69daeb'),
+(2, 'Suresh Mill Owner', 'shop@shreeganesh.com', '+919876543211', '$2a$10$IB8Wa17N4.zImQI4zOgQKOxxo/JuH2PoYNRHgepQK9TB01Xbp5OOe', 'SHOPKEEPER', 101, NULL, NULL, 1, 4.80, 0, NULL),
+(3, 'Vikram Delivery Agent', 'delivery@herdoor.com', '+919876543212', '$2a$10$IB8Wa17N4.zImQI4zOgQKOxxo/JuH2PoYNRHgepQK9TB01Xbp5OOe', 'DELIVERY', NULL, 'GJ-01-AB-1234', 'Electric Scooter', 1, 4.90, 184, 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d'),
+(4, 'Super Admin', 'admin@herdoor.com', '+919876543200', '$2a$10$IB8Wa17N4.zImQI4zOgQKOxxo/JuH2PoYNRHgepQK9TB01Xbp5OOe', 'ADMIN', NULL, NULL, NULL, 1, 5.00, 0, NULL),
+(5, 'Rajesh Kumar', 'rajesh.rider@herdoor.com', '+919876543215', '$2a$10$IB8Wa17N4.zImQI4zOgQKOxxo/JuH2PoYNRHgepQK9TB01Xbp5OOe', 'DELIVERY', NULL, 'GJ-01-EB-4821', 'Electric Bike', 1, 4.85, 96, NULL);
 
 -- 2. Insert Saved Addresses
 INSERT INTO `addresses` (`id`, `user_id`, `address_line1`, `address_line2`, `city`, `state`, `pincode`, `latitude`, `longitude`, `is_default`) VALUES

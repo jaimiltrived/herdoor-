@@ -33,26 +33,7 @@ class CustomerApiService {
       _authToken = AuthApiService.instance.token;
       return true;
     }
-    if (_authToken != null) return true;
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/auth/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': 'ramesh@example.com',
-          'password': 'Password123!',
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        _authToken = data['data']?['token'];
-        return _authToken != null;
-      }
-    } catch (e) {
-      debugPrint('Customer API Auth Error: $e');
-    }
-    return false;
+    return _authToken != null;
   }
 
   /// Get Nearby Flour Mills from backend geospatial locator

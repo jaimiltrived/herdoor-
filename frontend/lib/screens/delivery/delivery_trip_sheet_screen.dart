@@ -37,6 +37,11 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        _loadTripSheetData(silentRefresh: true);
+      }
+    });
     _loadTripSheetData();
     _startRealtimeRefresh();
   }
@@ -59,7 +64,7 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
 
   void _startRealtimeRefresh() {
     _realtimeRefreshTimer?.cancel();
-    _realtimeRefreshTimer = Timer.periodic(const Duration(seconds: 20), (timer) {
+    _realtimeRefreshTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
       if (mounted) {
         _loadTripSheetData(silentRefresh: true);
       }
@@ -387,6 +392,23 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
   }
 
   void _showReceiptModal(Map<String, dynamic> pastOrder) {
+    final rawGrainType = (pastOrder['grainTypeName'] ?? 'Fresh Flour').toString();
+    final rawQtyKg = (pastOrder['quantityKg'] is num)
+        ? (pastOrder['quantityKg'] as num).toDouble()
+        : (double.tryParse(pastOrder['quantityKg']?.toString() ?? '5.0') ?? 5.0);
+
+    final rawParts = rawGrainType
+        .split(RegExp(r',|\+|\band\b|&'))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    final fallbackEach = rawParts.isNotEmpty
+        ? double.parse((rawQtyKg / rawParts.length).toStringAsFixed(1))
+        : rawQtyKg;
+
+    final parsedBags = rawParts.map((p) => ParsedProductUnitInfo.parse(p, fallbackEach)).toList();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -465,8 +487,14 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
 
             // Item Details
             _buildReceiptRow('Customer', pastOrder['customerName'] ?? 'Customer'),
-            _buildReceiptRow('Flour/Grain', pastOrder['grainTypeName'] ?? 'Fresh Atta'),
-            _buildReceiptRow('Quantity', '${pastOrder['quantityKg']} kg'),
+            _buildReceiptRow(
+              'Total Items / Units',
+              parsedBags.length > 1
+                  ? '${parsedBags.length} Products (${parsedBags.length} Units)'
+                  : (parsedBags.isNotEmpty ? parsedBags.first.unitText : '${pastOrder['quantityKg']} kg'),
+            ),
+            _buildReceiptRow('Flour / Products', pastOrder['grainTypeName'] ?? 'Fresh Atta'),
+            _buildReceiptRow('Total Weight', '${pastOrder['quantityKg']} kg'),
             _buildReceiptRow('Origin Chakki', pastOrder['millName'] ?? 'Shree Ganesh Flour Mill'),
             _buildReceiptRow('Delivered At', pastOrder['deliveredTimeAgo'] ?? 'Recently'),
             _buildReceiptRow('Payment Mode', pastOrder['paymentMode'] ?? 'Online Paid (UPI)'),
@@ -669,7 +697,19 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
   }
 
   Widget _buildActiveTripCard(DeliveryTrip trip) {
-    final isGrouped = trip.stops.length > 1;
+    final isGrouped = trip.isBatch ||
+        trip.stops.length > 1 ||
+        trip.productBags.length > 1 ||
+        (trip.groupCode != null && trip.groupCode!.isNotEmpty) ||
+        trip.orderNumber.toUpperCase().contains('POOL') ||
+        trip.orderNumber.toUpperCase().contains('GRP') ||
+        trip.orderNumber.toUpperCase().contains('BATCH');
+
+    final badgeLabel = trip.stops.length > 1
+        ? '${trip.stops.length}-STOP GROUPED BATCH'
+        : (trip.productBags.length > 1
+            ? '${trip.productBags.length}-ITEM GROUPED BATCH'
+            : (trip.isBatch ? 'GROUPED BATCH RUN' : 'SINGLE ACTIVE RUN'));
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -705,7 +745,7 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
                         Icon(isGrouped ? Icons.layers_rounded : Icons.local_shipping_rounded, size: 14, color: isGrouped ? const Color(0xFFC0392B) : const Color(0xFF1E8449)),
                         const SizedBox(width: 4),
                         Text(
-                          isGrouped ? '${trip.stops.length}-STOP GROUPED BATCH' : 'SINGLE ACTIVE RUN',
+                          badgeLabel,
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
@@ -728,8 +768,12 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
             ],
           ),
           const SizedBox(height: 12),
-          Text(trip.customerName, style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textPrimary)),
-          Text('${trip.quantityKg} kg • ${trip.grainTypeName}', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary)),
+          Text(
+            trip.productBags.length > 1
+                ? '${trip.productBags.length} Products (${trip.productBags.length} Units • ${trip.quantityKg.toStringAsFixed(trip.quantityKg.truncateToDouble() == trip.quantityKg ? 0 : 1)} kg) • ${trip.grainTypeName}'
+                : '${trip.productBags.isNotEmpty ? trip.productBags.first.unitText : "${trip.quantityKg} kg"} • ${trip.grainTypeName}',
+            style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary),
+          ),
           const SizedBox(height: 10),
 
           // Route Timeline Nodes
@@ -818,6 +862,11 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
               final stop = e.value;
               final pickupAddr = trip.isLeg1GrainPickup ? stop.homePickupAddress : trip.millAddress;
               final dropAddr = trip.isLeg1GrainPickup ? trip.millAddress : stop.deliveryAddress;
+              final stopBags = stop.productBags;
+              final stopUnitStr = stopBags.length > 1
+                  ? '${stopBags.length} Products (${stopBags.length} Units)'
+                  : (stopBags.isNotEmpty ? stopBags.first.unitText : '${stop.quantityKg.toStringAsFixed(1)} kg');
+
               return Container(
                 margin: const EdgeInsets.only(bottom: 6),
                 padding: const EdgeInsets.all(8),
@@ -832,12 +881,12 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Stop ${idx + 1}: ${stop.customerName}', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold)),
+                        Text('Stop ${idx + 1}: ${stop.customerName} ($stopUnitStr)', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold)),
                         Text('₹${stop.orderPayout.toStringAsFixed(0)}', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF1E8449))),
                       ],
                     ),
                     const SizedBox(height: 2),
-                    Text('📦 ${stop.quantityKg.toStringAsFixed(1)} kg • ${stop.grainTypeName}', style: GoogleFonts.plusJakartaSans(fontSize: 10, color: AppTheme.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text('📦 $stopUnitStr • ${stop.grainTypeName}', style: GoogleFonts.plusJakartaSans(fontSize: 10, color: AppTheme.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 2),
                     Text('📍 Pickup: $pickupAddr', style: GoogleFonts.plusJakartaSans(fontSize: 10, color: const Color(0xFF0284C7)), maxLines: 1, overflow: TextOverflow.ellipsis),
                     Text('🏡 Drop: $dropAddr', style: GoogleFonts.plusJakartaSans(fontSize: 10, color: const Color(0xFF16A34A)), maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -947,7 +996,14 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
                 ),
                 const SizedBox(height: 2),
                 Text(trip.customerName, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13)),
-                Text('${trip.quantityKg}kg • ${trip.grainTypeName}', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(
+                  trip.productBags.length > 1
+                      ? '${trip.productBags.length} Products (${trip.productBags.length} Units) • ${trip.grainTypeName}'
+                      : '${trip.productBags.isNotEmpty ? trip.productBags.first.unitText : "${trip.quantityKg} kg"} • ${trip.grainTypeName}',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),
@@ -1021,6 +1077,77 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
 
     final stopsList = (item['stops'] is List) ? (item['stops'] as List) : [];
 
+    int totalStopProducts = 0;
+    int totalStopUnits = 0;
+    double totalStopKg = 0.0;
+    double calculatedBatchPayout = 0.0;
+
+    for (final s in stopsList) {
+      if (s is Map) {
+        final stopGrain = (s['grainTypeName'] ?? 'Fresh Flour').toString();
+        final stopQty = (s['quantityKg'] is num)
+            ? (s['quantityKg'] as num).toDouble()
+            : (double.tryParse(s['quantityKg']?.toString() ?? '5.0') ?? 5.0);
+        totalStopKg += stopQty;
+
+        final stopPayout = (s['payout'] ?? s['orderPayout'] ?? 75.0);
+        calculatedBatchPayout += (stopPayout is num)
+            ? stopPayout.toDouble()
+            : (double.tryParse(stopPayout.toString()) ?? 75.0);
+
+        final stopParts = stopGrain
+            .split(RegExp(r',|\+|\band\b|&'))
+            .map((str) => str.trim())
+            .where((str) => str.isNotEmpty)
+            .toList();
+
+        final stopFallbackEach = stopParts.isNotEmpty
+            ? double.parse((stopQty / stopParts.length).toStringAsFixed(1))
+            : stopQty;
+
+        final stopBags = stopParts.map((p) => ParsedProductUnitInfo.parse(p, stopFallbackEach)).toList();
+        totalStopProducts += stopBags.isNotEmpty ? stopBags.length : 1;
+        totalStopUnits += stopBags.isNotEmpty ? stopBags.length : 1;
+      }
+    }
+
+    final rawGrainType = (item['grainTypeName'] ?? 'Fresh Flour').toString();
+    final rawQtyKg = (item['quantityKg'] is num)
+        ? (item['quantityKg'] as num).toDouble()
+        : (double.tryParse(item['quantityKg']?.toString() ?? '5.0') ?? 5.0);
+
+    final rawParts = rawGrainType
+        .split(RegExp(r',|\+|\band\b|&'))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    final fallbackEach = rawParts.isNotEmpty
+        ? double.parse((rawQtyKg / rawParts.length).toStringAsFixed(1))
+        : rawQtyKg;
+
+    final parsedBags = rawParts.map((p) => ParsedProductUnitInfo.parse(p, fallbackEach)).toList();
+    final isMultiProduct = parsedBags.length > 1;
+
+    final String headerUnitText;
+    if (isGrouped && stopsList.isNotEmpty) {
+      final stopCount = stopsList.length;
+      final kgFormatted = totalStopKg.toStringAsFixed(totalStopKg.truncateToDouble() == totalStopKg ? 0 : 1);
+      if (totalStopProducts > 1) {
+        headerUnitText = '$totalStopProducts Products ($totalStopUnits Units • $kgFormatted kg) • Stacked Batch: $stopCount Orders';
+      } else {
+        headerUnitText = '$kgFormatted kg • Stacked Batch: $stopCount Orders';
+      }
+    } else {
+      headerUnitText = isMultiProduct
+          ? '${parsedBags.length} Products (${parsedBags.length} Units • ${rawQtyKg.toStringAsFixed(rawQtyKg.truncateToDouble() == rawQtyKg ? 0 : 1)} kg)'
+          : (parsedBags.isNotEmpty ? '${parsedBags.first.unitText} • ${parsedBags.first.cleanName}' : '${rawQtyKg.toStringAsFixed(rawQtyKg.truncateToDouble() == rawQtyKg ? 0 : 1)} kg • $rawGrainType');
+    }
+
+    final double displayEarned = isGrouped && calculatedBatchPayout > 0
+        ? (calculatedBatchPayout > (item['totalEarned'] ?? 0) ? calculatedBatchPayout : (item['totalEarned'] is num ? (item['totalEarned'] as num).toDouble() : calculatedBatchPayout))
+        : (item['totalEarned'] is num ? (item['totalEarned'] as num).toDouble() : 75.0);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
@@ -1087,7 +1214,29 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(item['customerName'] ?? 'Customer', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14)),
-                    Text('${item['quantityKg']} kg • ${item['grainTypeName']}', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary)),
+                    const SizedBox(height: 2),
+                    Text(headerUnitText, style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
+                    if (isMultiProduct && !isGrouped) ...[
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: parsedBags.map((bag) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFAF6F0),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppTheme.borderLight),
+                            ),
+                            child: Text(
+                              '• ${bag.unitText} ${bag.cleanName}',
+                              style: GoogleFonts.plusJakartaSans(fontSize: 10, fontWeight: FontWeight.w500, color: AppTheme.textSecondary),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
                     const SizedBox(height: 6),
                     Text('Drop: ${item['deliveryAddress']}', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
                   ],
@@ -1096,7 +1245,7 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('₹${(item['totalEarned'] ?? 75.0).toStringAsFixed(0)}', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFF1E8449))),
+                  Text('₹${displayEarned.toStringAsFixed(0)}', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900, fontSize: 18, color: const Color(0xFF1E8449))),
                   Text('Earned Payout', style: GoogleFonts.plusJakartaSans(fontSize: 10, color: AppTheme.textSecondary)),
                 ],
               ),
@@ -1110,6 +1259,26 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
             ...stopsList.asMap().entries.map((e) {
               final idx = e.key;
               final stop = Map<String, dynamic>.from(e.value as Map);
+              final stopGrain = (stop['grainTypeName'] ?? 'Atta').toString();
+              final stopQty = (stop['quantityKg'] is num)
+                  ? (stop['quantityKg'] as num).toDouble()
+                  : (double.tryParse(stop['quantityKg']?.toString() ?? '5.0') ?? 5.0);
+
+              final stopParts = stopGrain
+                  .split(RegExp(r',|\+|\band\b|&'))
+                  .map((s) => s.trim())
+                  .where((s) => s.isNotEmpty)
+                  .toList();
+
+              final stopFallbackEach = stopParts.isNotEmpty
+                  ? double.parse((stopQty / stopParts.length).toStringAsFixed(1))
+                  : stopQty;
+
+              final stopBags = stopParts.map((p) => ParsedProductUnitInfo.parse(p, stopFallbackEach)).toList();
+              final stopSummary = stopBags.length > 1
+                  ? '${stopBags.length} Products (${stopBags.length} Units)'
+                  : (stopBags.isNotEmpty ? stopBags.first.unitText : '$stopQty kg');
+
               return Container(
                 margin: const EdgeInsets.only(bottom: 6),
                 padding: const EdgeInsets.all(8),
@@ -1125,8 +1294,9 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Stop ${idx + 1}: ${stop['customerName'] ?? 'Customer'}', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold)),
-                          Text('${stop['grainTypeName'] ?? 'Atta'} • Drop: ${stop['deliveryAddress'] ?? 'Ahmedabad'}', style: GoogleFonts.plusJakartaSans(fontSize: 10, color: AppTheme.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          Text('Stop ${idx + 1}: ${stop['customerName'] ?? 'Customer'} ($stopSummary)', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 2),
+                          Text('$stopSummary • $stopGrain • Drop: ${stop['deliveryAddress'] ?? 'Ahmedabad'}', style: GoogleFonts.plusJakartaSans(fontSize: 10, color: AppTheme.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
                         ],
                       ),
                     ),

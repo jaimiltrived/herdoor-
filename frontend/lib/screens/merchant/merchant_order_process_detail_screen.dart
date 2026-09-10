@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
 import '../../models/merchant_models.dart';
-import '../../services/merchant_api_service.dart';
-import 'merchant_delivery_handover_screen.dart';
 
 class MerchantOrderProcessDetailScreen extends StatefulWidget {
   final MerchantOrder order;
@@ -318,7 +316,7 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    '${idx + 1}. ${bag.productName} (${bag.quantityKg}kg) • ${bag.bagId}',
+                                    '${idx + 1}. ${bag.productName} • ${bag.unitText} • ${bag.bagId}',
                                     style: GoogleFonts.plusJakartaSans(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
@@ -353,103 +351,6 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
                         isLast: i == _displayOrder.timelineSteps.length - 1,
                         context: context,
                       ),
-                    const SizedBox(height: 16),
-
-                    // Action Controls: Dynamic based on current state
-                    if (_displayOrder.statusTag == 'IN PROGRESS' || _displayOrder.statusTag == 'PROCESSING' || _displayOrder.statusTag == 'ACCEPTED' || _displayOrder.statusTag == 'PACKING') ...[
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: ElevatedButton.icon(
-                          onPressed: () async {
-                            final int orderId = _displayOrder.numericId ?? 501;
-                            setState(() {
-                              _displayOrder.statusTag = 'READY FOR PICKUP';
-                              _displayOrder = MerchantOrder(
-                                numericId: _displayOrder.numericId,
-                                orderId: _displayOrder.orderId,
-                                customerName: _displayOrder.customerName,
-                                itemsSummary: _displayOrder.itemsSummary,
-                                grainType: _displayOrder.grainType,
-                                quantityText: _displayOrder.quantityText,
-                                timeAgo: _displayOrder.timeAgo,
-                                statusTag: 'READY FOR PICKUP',
-                                statusColor: const Color(0xFFFF8A80),
-                                binLocation: _displayOrder.binLocation,
-                                estimatedCompletionTime: _displayOrder.estimatedCompletionTime,
-                                deliveryDriverName: _displayOrder.deliveryDriverName,
-                                deliveryDriverPhone: _displayOrder.deliveryDriverPhone,
-                                deliveryDriverVehicle: _displayOrder.deliveryDriverVehicle,
-                                timelineSteps: _buildStepsForOrder(_displayOrder),
-                                totalPrice: _displayOrder.totalPrice,
-                                millName: _displayOrder.millName,
-                              );
-                            });
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                backgroundColor: const Color(0xFF2ECC71),
-                                content: Text('⚙️ Milling Complete! Order ${_displayOrder.orderId} is now Ready for Driver Pickup.'),
-                              ),
-                            );
-                            await MerchantApiService.instance.transitionOrderStatus(orderId, 'ready');
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primaryTerracotta,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 20),
-                          label: Text(
-                            'Move to Pickup State (Ready for Driver)',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-
-                    // Handover to Delivery Person
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          final dispatched = await Navigator.push<bool>(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => MerchantDeliveryHandoverScreen(order: _displayOrder),
-                            ),
-                          );
-                          if (dispatched == true && mounted) {
-                            setState(() {
-                              _displayOrder.statusTag = 'OUT FOR DELIVERY';
-                            });
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: (_displayOrder.statusTag == 'READY FOR PICKUP' || _displayOrder.statusTag == 'READY')
-                              ? AppTheme.primaryTerracotta
-                              : const Color(0xFF6E5616),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        icon: const Icon(Icons.handshake_outlined, color: Colors.white, size: 20),
-                        label: Text(
-                          'Handover to Delivery Person',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),

@@ -35,6 +35,7 @@ router.post('/location', deliveryController.updateLocation);
 router.post('/orders/:orderId/deliver', deliveryController.markDelivered);
 router.post('/orders/:orderId/delivered', deliveryController.markDelivered);
 router.post('/orders/:orderId/grain-drop', deliveryController.markGrainDroppedAtMill);
+router.post('/orders/:orderId/return-to-customer', deliveryController.confirmReturnToCustomer);
 
 // Live Tracking & Earnings
 router.get('/tracking/:deliveryId', deliveryController.getDeliveryTracking);

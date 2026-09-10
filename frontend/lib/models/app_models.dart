@@ -141,6 +141,55 @@ class OrderModel {
     this.pickupPin,
     this.deliveryOtp,
   });
+
+  /// Returns clean product-wise items with their individual weight/kg
+  List<Map<String, String>> get productItemsWithKg {
+    final double? totalQty = double.tryParse(quantityKg.replaceAll(RegExp(r'[^0-9.]'), ''));
+
+    if (items.isNotEmpty) {
+      return items.map((i) {
+        final name = (i['name'] ?? 'Product').toString();
+        final q = i['quantity'] ?? i['quantityKg'] ?? i['qty'];
+        final String kgStr = q != null ? '${q}kg' : (quantityKg.isNotEmpty ? quantityKg : '1kg');
+        return {
+          'name': name.replaceAll(RegExp(r'^\d+(\.\d+)?\s*(kg|g)\s*', caseSensitive: false), '').trim(),
+          'kg': kgStr,
+        };
+      }).toList();
+    }
+
+    String raw = itemSummary.isNotEmpty ? itemSummary : selectedGrain;
+
+    // Remove overall total kg prefix if present at start (e.g., "36kg ")
+    if (totalQty != null && totalQty > 0) {
+      final totalQtyInt = totalQty.toInt();
+      raw = raw.replaceFirst(RegExp('^($totalQty|$totalQtyInt)\\s*kg\\s*', caseSensitive: false), '');
+    }
+
+    final parts = raw.split(RegExp(r',\s*')).map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) {
+      return [{'name': selectedGrain, 'kg': quantityKg.isNotEmpty ? quantityKg : '1 kg'}];
+    }
+
+    final double eachQty = (totalQty != null && totalQty > 0 && parts.isNotEmpty) ? (totalQty / parts.length) : 0;
+    final String defaultEachStr = eachQty > 0
+        ? (eachQty % 1 == 0 ? '${eachQty.toInt()} kg' : '${eachQty.toStringAsFixed(1)} kg')
+        : (quantityKg.isNotEmpty ? quantityKg : '1 kg');
+
+    return parts.map((part) {
+      final match = RegExp(r'^(\d+(\.\d+)?\s*(?:kg|g|units?))\s*(.+)$', caseSensitive: false).firstMatch(part);
+      if (match != null) {
+        return {
+          'kg': match.group(1)!.trim(),
+          'name': match.group(3)!.trim(),
+        };
+      }
+      return {
+        'kg': defaultEachStr,
+        'name': part,
+      };
+    }).toList();
+  }
 }
 
 class MockData {

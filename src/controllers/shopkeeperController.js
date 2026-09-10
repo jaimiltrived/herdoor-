@@ -147,15 +147,15 @@ exports.getDashboard = async (req, res) => {
   const millOrders = await getLiveOrders(millId);
 
   const pendingCount = millOrders.filter(o => o.status === ORDER_STATUS.PLACED || o.status === 'NEW').length;
-  const activeCount = millOrders.filter(o => [ORDER_STATUS.ACCEPTED, ORDER_STATUS.PROCESSING, ORDER_STATUS.PACKING, ORDER_STATUS.READY, ORDER_STATUS.READY_FOR_PICKUP, ORDER_STATUS.OUT_FOR_DELIVERY].includes(o.status)).length;
-  const readyCount = millOrders.filter(o => [ORDER_STATUS.READY, ORDER_STATUS.READY_FOR_PICKUP].includes(o.status)).length;
+  const activeCount = millOrders.filter(o => [ORDER_STATUS.ACCEPTED, ORDER_STATUS.PROCESSING, ORDER_STATUS.PACKING, ORDER_STATUS.READY, ORDER_STATUS.READY_FOR_PICKUP, ORDER_STATUS.OUT_FOR_DELIVERY, 'IN PROGRESS', 'MILLING'].includes(o.status)).length;
+  const readyCount = millOrders.filter(o => [ORDER_STATUS.READY, ORDER_STATUS.READY_FOR_PICKUP, 'READY FOR PICKUP', ORDER_STATUS.OUT_FOR_DELIVERY, 'OUT FOR DELIVERY', 'READY'].includes(o.status)).length;
   const completedCount = millOrders.filter(o => [ORDER_STATUS.DELIVERED, ORDER_STATUS.PICKED_UP, ORDER_STATUS.COMPLETED].includes(o.status)).length;
   const totalRevenue = millOrders
     .filter(o => o.paymentStatus === 'PAID')
     .reduce((sum, o) => sum + o.totalAmount, 0);
 
   const activeOrders = millOrders
-    .filter(o => [ORDER_STATUS.PLACED, 'NEW', ORDER_STATUS.ACCEPTED, ORDER_STATUS.PROCESSING, ORDER_STATUS.PACKING, ORDER_STATUS.READY, ORDER_STATUS.READY_FOR_PICKUP].includes(o.status))
+    .filter(o => [ORDER_STATUS.PLACED, 'NEW', ORDER_STATUS.ACCEPTED, ORDER_STATUS.PROCESSING, ORDER_STATUS.PACKING, ORDER_STATUS.READY, ORDER_STATUS.READY_FOR_PICKUP, ORDER_STATUS.OUT_FOR_DELIVERY, 'IN PROGRESS', 'MILLING'].includes(o.status))
     .map(enrichOrder);
 
   res.json({
@@ -202,7 +202,7 @@ exports.getNewOrders = (req, res) => {
 exports.getActiveOrders = async (req, res) => {
   const millId = getShopkeeperMillId(req);
   const allOrders = await getLiveOrders(millId);
-  const activeStatuses = [ORDER_STATUS.ACCEPTED, ORDER_STATUS.PROCESSING, ORDER_STATUS.PACKING, 'MILLING', 'IN PROGRESS'];
+  const activeStatuses = [ORDER_STATUS.ACCEPTED, ORDER_STATUS.PROCESSING, ORDER_STATUS.PACKING, 'MILLING', 'IN PROGRESS', 'GRAIN_DROPPED', 'PENDING'];
   const active = allOrders.filter(o => activeStatuses.includes(o.status)).map(enrichOrder);
   res.json({ status: 'success', count: active.length, data: { orders: active } });
 };
@@ -210,7 +210,7 @@ exports.getActiveOrders = async (req, res) => {
 exports.getReadyOrders = async (req, res) => {
   const millId = getShopkeeperMillId(req);
   const allOrders = await getLiveOrders(millId);
-  const readyStatuses = [ORDER_STATUS.READY, ORDER_STATUS.READY_FOR_PICKUP, 'READY FOR PICKUP'];
+  const readyStatuses = [ORDER_STATUS.READY, ORDER_STATUS.READY_FOR_PICKUP, 'READY FOR PICKUP', ORDER_STATUS.OUT_FOR_DELIVERY, 'OUT FOR DELIVERY'];
   const ready = allOrders.filter(o => readyStatuses.includes(o.status)).map(enrichOrder);
   res.json({ status: 'success', count: ready.length, data: { orders: ready } });
 };
@@ -218,7 +218,7 @@ exports.getReadyOrders = async (req, res) => {
 exports.getCompletedOrders = async (req, res) => {
   const millId = getShopkeeperMillId(req);
   const allOrders = await getLiveOrders(millId);
-  const completedStatuses = [ORDER_STATUS.DELIVERED, ORDER_STATUS.PICKED_UP, ORDER_STATUS.COMPLETED, ORDER_STATUS.OUT_FOR_DELIVERY, 'OUT FOR DELIVERY'];
+  const completedStatuses = [ORDER_STATUS.DELIVERED, ORDER_STATUS.PICKED_UP, ORDER_STATUS.COMPLETED];
   const completed = allOrders.filter(o => completedStatuses.includes(o.status)).map(enrichOrder);
   res.json({ status: 'success', count: completed.length, data: { orders: completed } });
 };
@@ -320,6 +320,96 @@ exports.rejectOrder = async (req, res) => {
   const updatedOrder = liveOrders.find(o => o.id === targetId) || order;
 
   res.json({ status: 'success', message: 'Order rejected', data: { order: enrichOrder(updatedOrder || { id: targetId, status: ORDER_STATUS.REJECTED }) } });
+};
+
+/**
+ * @desc Grain Intake Inspection & Scan (Accept or Reject Grain at Mill Drop-off)
+ * @route POST /api/v1/shopkeeper/orders/:orderId/intake-inspection
+ */
+exports.intakeGrainInspection = async (req, res) => {
+  const millId = getShopkeeperMillId(req);
+  const rawParam = (req.params.orderId || '').toString().trim();
+  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam);
+  const order = findOrder(req.params.orderId);
+  const {
+    isAccepted = true,
+    reason = 'Contaminated Grain / Quality Mismatch',
+    notes = '',
+    bagDecisions = [],
+    photoCount = 0
+  } = req.body;
+
+  if (!orderId && !order) {
+    return res.status(404).json({ status: 'error', message: 'Order not found' });
+  }
+
+  const targetId = order ? order.id : orderId;
+  const newStatus = isAccepted ? ORDER_STATUS.READY : ORDER_STATUS.REJECTED_AT_MILL;
+  const deliveryStatus = isAccepted ? 'GRAIN_DROPPED' : 'RETURN_TO_CUSTOMER';
+
+  try {
+    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [newStatus, targetId]);
+    await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [deliveryStatus, targetId]);
+
+    const title = isAccepted ? 'Grain Intake & Milling Completed' : 'Grain Intake Rejected at Mill';
+    const desc = isAccepted
+      ? 'Shopkeeper inspected & scanned all bags. Quality verified and order is ready for dispatch.'
+      : `Shopkeeper rejected grain intake: ${reason}. Driver instructed to return bags to customer.`;
+
+    await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [
+      targetId,
+      newStatus,
+      title,
+      desc
+    ]);
+  } catch (err) {
+    console.warn('MySQL intakeGrainInspection update warning:', err.message);
+  }
+
+  if (order) {
+    order.status = newStatus;
+    order.intakeStatus = isAccepted ? 'ACCEPTED' : 'REJECTED';
+    order.rejectionReason = isAccepted ? null : reason;
+    order.rejectionNotes = notes;
+    order.bagDecisions = bagDecisions;
+
+    if (!order.timeline) order.timeline = [];
+    order.timeline.push({
+      status: newStatus,
+      timestamp: new Date().toISOString(),
+      note: isAccepted
+        ? 'Bags inspected, verified & milling completed'
+        : `Rejected by mill owner: ${reason}. Return to customer initiated.`
+    });
+  }
+
+  // Update in-memory deliveries / dataStore
+  if (store.deliveries) {
+    const del = store.deliveries.find(d => d.orderId === targetId || d.id === targetId);
+    if (del) {
+      del.status = deliveryStatus;
+      del.rejectionReason = isAccepted ? null : reason;
+      del.isRejectedByMill = !isAccepted;
+    }
+  }
+
+  const liveOrders = await getLiveOrders(millId);
+  const updatedOrder = liveOrders.find(o => o.id === targetId) || order;
+
+  res.json({
+    status: 'success',
+    message: isAccepted
+      ? 'Grain bags scanned & verified! Order moved to Completed queue.'
+      : `Grain rejected: ${reason}. Delivery partner notified to return bags to customer.`,
+    data: {
+      orderId: targetId,
+      isAccepted,
+      status: newStatus,
+      deliveryStatus,
+      rejectionReason: isAccepted ? null : reason,
+      order: enrichOrder(updatedOrder || { id: targetId, status: newStatus })
+    }
+  });
 };
 
 /**
@@ -486,43 +576,54 @@ exports.markReady = async (req, res) => {
  * @route POST /api/v1/shopkeeper/orders/:orderId/handover
  */
 exports.handoverDelivery = async (req, res) => {
+  const millId = getShopkeeperMillId(req);
+  const rawParam = (req.params.orderId || '').toString().trim();
+  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam);
   const order = findOrder(req.params.orderId);
 
-  if (!order) {
+  if (!orderId && !order) {
     return res.status(404).json({ status: 'error', message: 'Order not found' });
   }
 
-  const orderId = order.id;
+  const targetId = order ? order.id : orderId;
   const { pin } = req.body;
 
   // Check PIN if provided
-  if (pin && order.pickupPin && pin !== order.pickupPin) {
+  if (pin && order?.pickupPin && pin !== order.pickupPin) {
     return res.status(400).json({ status: 'error', message: 'Invalid driver handover verification PIN' });
   }
 
-  order.status = ORDER_STATUS.OUT_FOR_DELIVERY;
-  if (!order.timeline) order.timeline = [];
-  order.timeline.push({
-    status: ORDER_STATUS.OUT_FOR_DELIVERY,
-    timestamp: new Date().toISOString(),
-    note: 'Handed over to delivery partner for doorstep delivery'
-  });
-
   try {
-    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.OUT_FOR_DELIVERY, orderId]);
-    await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [orderId, ORDER_STATUS.OUT_FOR_DELIVERY, 'Out For Delivery', 'Handed over to delivery partner']);
+    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.OUT_FOR_DELIVERY, targetId]);
+    await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [targetId, ORDER_STATUS.OUT_FOR_DELIVERY, 'Out For Delivery', 'Handed over to delivery partner']);
+    await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.OUT_FOR_DELIVERY, targetId]);
   } catch (err) {
     console.warn('MySQL handoverDelivery update warning:', err.message);
   }
 
-  // Update associated delivery record if exists
-  const delivery = store.deliveries.find(d => d.orderId === orderId);
-  if (delivery) {
-    delivery.status = DELIVERY_STATUS.OUT_FOR_DELIVERY;
-    delivery.updatedAt = new Date().toISOString();
+  if (order) {
+    order.status = ORDER_STATUS.OUT_FOR_DELIVERY;
+    if (!order.timeline) order.timeline = [];
+    order.timeline.push({
+      status: ORDER_STATUS.OUT_FOR_DELIVERY,
+      timestamp: new Date().toISOString(),
+      note: 'Handed over to delivery partner for doorstep delivery'
+    });
   }
 
-  res.json({ status: 'success', message: 'Order handed over to delivery rider', data: { order: enrichOrder(order) } });
+  // Update associated delivery record if exists
+  if (store.deliveries) {
+    const delivery = store.deliveries.find(d => d.orderId === targetId || d.id === targetId);
+    if (delivery) {
+      delivery.status = DELIVERY_STATUS.OUT_FOR_DELIVERY;
+      delivery.updatedAt = new Date().toISOString();
+    }
+  }
+
+  const liveOrders = await getLiveOrders(millId);
+  const updatedOrder = liveOrders.find(o => o.id === targetId) || order;
+
+  res.json({ status: 'success', message: 'Order handed over to delivery rider', data: { order: enrichOrder(updatedOrder || { id: targetId, status: ORDER_STATUS.OUT_FOR_DELIVERY }) } });
 };
 
 /**
@@ -530,30 +631,41 @@ exports.handoverDelivery = async (req, res) => {
  * @route POST /api/v1/shopkeeper/orders/:orderId/complete
  */
 exports.completeOrder = async (req, res) => {
+  const millId = getShopkeeperMillId(req);
+  const rawParam = (req.params.orderId || '').toString().trim();
+  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam);
   const order = findOrder(req.params.orderId);
 
-  if (!order) {
+  if (!orderId && !order) {
     return res.status(404).json({ status: 'error', message: 'Order not found' });
   }
 
-  const statusVal = order.fulfillmentType === FULFILLMENT_TYPES.PICKUP ? ORDER_STATUS.PICKED_UP : ORDER_STATUS.COMPLETED;
-  order.status = statusVal;
-  order.paymentStatus = 'PAID';
-  if (!order.timeline) order.timeline = [];
-  order.timeline.push({
-    status: statusVal,
-    timestamp: new Date().toISOString(),
-    note: 'Order successfully completed'
-  });
+  const targetId = order ? order.id : orderId;
+  const statusVal = (order && order.fulfillmentType === FULFILLMENT_TYPES.PICKUP) ? ORDER_STATUS.PICKED_UP : ORDER_STATUS.COMPLETED;
 
   try {
-    await query('UPDATE orders SET status = ?, payment_status = ?, updated_at = NOW() WHERE id = ?', [statusVal, 'PAID', order.id]);
-    await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [order.id, statusVal, 'Order Completed', 'Order marked as completed / picked up']);
+    await query('UPDATE orders SET status = ?, payment_status = ?, updated_at = NOW() WHERE id = ?', [statusVal, 'PAID', targetId]);
+    await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [targetId, statusVal, 'Order Completed', 'Order marked as completed / picked up']);
+    await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.DELIVERED, targetId]);
   } catch (err) {
     console.warn('MySQL completeOrder update warning:', err.message);
   }
 
-  res.json({ status: 'success', message: 'Order completed', data: { order: enrichOrder(order) } });
+  if (order) {
+    order.status = statusVal;
+    order.paymentStatus = 'PAID';
+    if (!order.timeline) order.timeline = [];
+    order.timeline.push({
+      status: statusVal,
+      timestamp: new Date().toISOString(),
+      note: 'Order successfully completed'
+    });
+  }
+
+  const liveOrders = await getLiveOrders(millId);
+  const updatedOrder = liveOrders.find(o => o.id === targetId) || order;
+
+  res.json({ status: 'success', message: 'Order completed', data: { order: enrichOrder(updatedOrder || { id: targetId, status: statusVal }) } });
 };
 
 /**

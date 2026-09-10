@@ -688,7 +688,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Column(
       children: [
         SizedBox(
-          height: 185,
+          height: 228,
           child: PageView.builder(
             controller: _activeOrderPageController,
             physics: const PageScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
@@ -735,6 +735,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildActiveOrderCard(OrderModel order) {
+    final productItems = order.productItemsWithKg;
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -747,7 +749,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Container(
         width: double.infinity,
         margin: const EdgeInsets.symmetric(horizontal: 2),
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
@@ -796,22 +798,145 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${order.itemSummary} • ${order.quantityKg}',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
-                    height: 1.25,
+                // Product-wise kg breakdown
+                if (productItems.length > 1)
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 5,
+                    children: productItems.map((item) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF9F5EF),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE2D8C9)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryTerracotta.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                item['kg'] ?? '',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppTheme.primaryTerracotta,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                item['name'] ?? '',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.textPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  )
+                else
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryTerracotta.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          productItems.isNotEmpty ? productItems.first['kg']! : order.quantityKg,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.primaryTerracotta,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          productItems.isNotEmpty ? productItems.first['name']! : order.itemSummary,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+
+                const SizedBox(height: 8),
+
+                // Total Summary Row: Total Weight & Total Price
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFDF8F3),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFF3E8DB)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.scale_outlined, size: 15, color: Color(0xFF92400E)),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Total Weight: ',
+                            style: GoogleFonts.plusJakartaSans(fontSize: 11.5, color: AppTheme.textSecondary),
+                          ),
+                          Text(
+                            order.quantityKg.toLowerCase().endsWith('kg') ? order.quantityKg : '${order.quantityKg} kg',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF92400E),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          Text(
+                            'Total: ',
+                            style: GoogleFonts.plusJakartaSans(fontSize: 11.5, color: AppTheme.textSecondary),
+                          ),
+                          Text(
+                            '₹${order.totalPrice.toStringAsFixed(2)}',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w900,
+                              color: const Color(0xFF1E8449),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 3),
+
+                const SizedBox(height: 6),
                 Text(
                   '${order.millName} — ${order.statusStep}',
                   style: GoogleFonts.plusJakartaSans(
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
                     color: AppTheme.mustardDark,
                   ),
@@ -822,7 +947,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Text(
                   'Delivery: ${order.estimatedDelivery}',
                   style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
+                    fontSize: 11.5,
                     color: AppTheme.textSecondary,
                   ),
                 ),

@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'models/merchant_models.dart';
+import 'services/auth_api_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/main_navigation_screen.dart';
 import 'screens/merchant/merchant_main_navigation_screen.dart';
 import 'screens/delivery/delivery_main_navigation_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AuthApiService.instance.init();
   runApp(const HerDoorApp());
 }
 
@@ -25,6 +27,22 @@ class _HerDoorAppState extends State<HerDoorApp> {
   UserRole _activeRole = UserRole.customer; // Default to Citizen / Customer
 
   @override
+  void initState() {
+    super.initState();
+    if (AuthApiService.instance.token != null) {
+      _isLoggedIn = true;
+      _activeRole = AuthApiService.instance.savedRole ?? UserRole.customer;
+    }
+  }
+
+  void _handleLogout() async {
+    await AuthApiService.instance.logout();
+    if (mounted) {
+      setState(() => _isLoggedIn = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'HerDoor Flour Mill',
@@ -37,7 +55,7 @@ class _HerDoorAppState extends State<HerDoorApp> {
           : (_isLoggedIn
               ? (_activeRole == UserRole.merchant
                   ? MerchantMainNavigationScreen(
-                      onLogout: () => setState(() => _isLoggedIn = false),
+                      onLogout: _handleLogout,
                       onSwitchToCustomer: () {
                         setState(() {
                           _activeRole = UserRole.customer;
@@ -46,7 +64,7 @@ class _HerDoorAppState extends State<HerDoorApp> {
                     )
                   : (_activeRole == UserRole.delivery
                       ? DeliveryMainNavigationScreen(
-                          onLogout: () => setState(() => _isLoggedIn = false),
+                          onLogout: _handleLogout,
                           onSwitchToCustomer: () {
                             setState(() {
                               _activeRole = UserRole.customer;
@@ -59,7 +77,7 @@ class _HerDoorAppState extends State<HerDoorApp> {
                           },
                         )
                       : MainNavigationScreen(
-                          onLogout: () => setState(() => _isLoggedIn = false),
+                          onLogout: _handleLogout,
                           onSwitchToMerchant: () {
                             setState(() {
                               _activeRole = UserRole.merchant;

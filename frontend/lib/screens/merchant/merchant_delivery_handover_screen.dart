@@ -528,7 +528,7 @@ class _MerchantDeliveryHandoverScreenState extends State<MerchantDeliveryHandove
                                       const Icon(Icons.qr_code_2_rounded, size: 12, color: AppTheme.primaryTerracotta),
                                       const SizedBox(width: 4),
                                       Text(
-                                        '${idx + 1}. ${bag.productName} (${bag.quantityKg}kg)',
+                                        '${idx + 1}. ${bag.productName} • ${bag.unitText}',
                                         style: GoogleFonts.plusJakartaSans(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,

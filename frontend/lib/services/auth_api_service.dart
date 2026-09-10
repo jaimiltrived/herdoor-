@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import '../models/merchant_models.dart';
 
@@ -8,6 +9,8 @@ class AuthApiService {
   factory AuthApiService() => instance;
   AuthApiService._internal();
 
+  static const _storage = FlutterSecureStorage();
+
   String get baseUrl {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return 'http://10.0.2.2:5000/api/v1';
@@ -15,17 +18,56 @@ class AuthApiService {
     return 'http://localhost:5000/api/v1';
   }
 
-  static const Duration _timeout = Duration(seconds: 4);
+  static const Duration _timeout = Duration(seconds: 5);
   String? _token;
   Map<String, dynamic>? _currentUser;
+  UserRole? _savedRole;
 
   String? get token => _token;
   Map<String, dynamic>? get currentUser => _currentUser;
+  UserRole? get savedRole => _savedRole;
 
   Map<String, String> get headers => {
         'Content-Type': 'application/json',
         if (_token != null) 'Authorization': 'Bearer $_token',
       };
+
+  /// Initialize session from secure storage on app launch
+  Future<void> init() async {
+    if (kIsWeb) return;
+    try {
+      _token = await _storage.read(key: 'jwt_token');
+      final userStr = await _storage.read(key: 'current_user');
+      final roleStr = await _storage.read(key: 'current_role');
+
+      if (userStr != null && userStr.isNotEmpty) {
+        _currentUser = jsonDecode(userStr);
+      }
+      if (roleStr != null) {
+        if (roleStr == 'merchant' || roleStr == 'SHOPKEEPER') {
+          _savedRole = UserRole.merchant;
+        } else if (roleStr == 'delivery' || roleStr == 'DELIVERY') {
+          _savedRole = UserRole.delivery;
+        } else {
+          _savedRole = UserRole.customer;
+        }
+      }
+    } catch (e) {
+      debugPrint('Auth storage load error: $e');
+    }
+  }
+
+  /// Logout and clear storage
+  Future<void> logout() async {
+    _token = null;
+    _currentUser = null;
+    _savedRole = null;
+    if (!kIsWeb) {
+      try {
+        await _storage.deleteAll();
+      } catch (_) {}
+    }
+  }
 
   /// User / Merchant / Rider / Admin Login
   Future<Map<String, dynamic>> login({
@@ -52,10 +94,28 @@ class AuthApiService {
           )
           .timeout(_timeout);
 
-      final data = jsonDecode(response.body);
+      Map<String, dynamic> data = {};
+      try {
+        data = jsonDecode(response.body);
+      } catch (_) {}
+
       if (response.statusCode == 200) {
         _token = data['data']?['token'];
         _currentUser = data['data']?['user'];
+        _savedRole = role ?? UserRole.customer;
+
+        if (!kIsWeb) {
+          try {
+            if (_token != null) {
+              await _storage.write(key: 'jwt_token', value: _token);
+            }
+            if (_currentUser != null) {
+              await _storage.write(key: 'current_user', value: jsonEncode(_currentUser));
+            }
+            await _storage.write(key: 'current_role', value: roleString);
+          } catch (_) {}
+        }
+
         return {
           'success': true,
           'message': data['message'] ?? 'Logged in successfully',
@@ -72,8 +132,7 @@ class AuthApiService {
       debugPrint('Auth Login Error: $e');
       return {
         'success': false,
-        'message': 'Unable to connect to HerDoor server. Using offline session.',
-        'offline': true,
+        'message': 'Unable to connect to HerDoor server. Please check your internet connection.',
       };
     }
   }
@@ -101,10 +160,27 @@ class AuthApiService {
           )
           .timeout(_timeout);
 
-      final data = jsonDecode(response.body);
+      Map<String, dynamic> data = {};
+      try {
+        data = jsonDecode(response.body);
+      } catch (_) {}
+
       if (response.statusCode == 201 || response.statusCode == 200) {
         _token = data['data']?['token'];
         _currentUser = data['data']?['user'];
+
+        if (!kIsWeb) {
+          try {
+            if (_token != null) {
+              await _storage.write(key: 'jwt_token', value: _token);
+            }
+            if (_currentUser != null) {
+              await _storage.write(key: 'current_user', value: jsonEncode(_currentUser));
+            }
+            await _storage.write(key: 'current_role', value: role);
+          } catch (_) {}
+        }
+
         return {
           'success': true,
           'message': data['message'] ?? 'Registered successfully',
@@ -121,7 +197,7 @@ class AuthApiService {
       debugPrint('Auth Register Error: $e');
       return {
         'success': false,
-        'message': 'Registration server error: $e',
+        'message': 'Registration server error. Please try again.',
       };
     }
   }
@@ -139,17 +215,20 @@ class AuthApiService {
           )
           .timeout(_timeout);
 
-      final data = jsonDecode(response.body);
+      Map<String, dynamic> data = {};
+      try {
+        data = jsonDecode(response.body);
+      } catch (_) {}
+
       return {
         'success': response.statusCode == 200,
-        'message': data['message'] ?? 'OTP sent',
+        'message': data['message'] ?? (response.statusCode == 200 ? 'OTP sent successfully' : 'Unable to send OTP'),
         'data': data['data'],
       };
     } catch (e) {
       return {
-        'success': true,
-        'message': 'Reset code sent to $identifier (Code: 123456)',
-        'data': {'otpHint': '123456'},
+        'success': false,
+        'message': 'Unable to connect to server to send OTP. Please check your internet connection.',
       };
     }
   }
@@ -168,16 +247,21 @@ class AuthApiService {
           )
           .timeout(_timeout);
 
-      final data = jsonDecode(response.body);
+      Map<String, dynamic> data = {};
+      try {
+        data = jsonDecode(response.body);
+      } catch (_) {}
+
       return {
         'success': response.statusCode == 200,
         'message': data['message'] ?? 'OTP verification result',
-        'verified': data['data']?['verified'] ?? false,
+        'verified': data['data']?['verified'] ?? (response.statusCode == 200),
       };
     } catch (e) {
       return {
-        'success': otp == '1234' || otp == '123456',
-        'verified': otp == '1234' || otp == '123456',
+        'success': false,
+        'verified': false,
+        'message': 'Failed to verify OTP with server.',
       };
     }
   }
@@ -195,15 +279,19 @@ class AuthApiService {
           )
           .timeout(_timeout);
 
-      final data = jsonDecode(response.body);
+      Map<String, dynamic> data = {};
+      try {
+        data = jsonDecode(response.body);
+      } catch (_) {}
+
       return {
         'success': response.statusCode == 200,
-        'message': data['message'] ?? 'OTP code resent',
+        'message': data['message'] ?? (response.statusCode == 200 ? 'OTP code resent' : 'Unable to resend OTP'),
       };
     } catch (e) {
       return {
-        'success': true,
-        'message': 'OTP resent (Code: 123456)',
+        'success': false,
+        'message': 'Network error while resending OTP.',
       };
     }
   }
@@ -227,15 +315,19 @@ class AuthApiService {
           )
           .timeout(_timeout);
 
-      final data = jsonDecode(response.body);
+      Map<String, dynamic> data = {};
+      try {
+        data = jsonDecode(response.body);
+      } catch (_) {}
+
       return {
         'success': response.statusCode == 200,
-        'message': data['message'] ?? 'Password reset completed',
+        'message': data['message'] ?? (response.statusCode == 200 ? 'Password reset completed' : 'Password reset failed'),
       };
     } catch (e) {
       return {
-        'success': true,
-        'message': 'Password reset successful',
+        'success': false,
+        'message': 'Failed to reach server to reset password.',
       };
     }
   }

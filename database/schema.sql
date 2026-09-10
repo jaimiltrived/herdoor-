@@ -123,7 +123,7 @@ CREATE TABLE `orders` (
   `mill_id` INT NOT NULL,
   `grain_source` VARCHAR(50) NOT NULL DEFAULT 'CUSTOMER',
   `grain_type_id` INT NOT NULL,
-  `grain_type_name` VARCHAR(100) NOT NULL,
+  `grain_type_name` TEXT NOT NULL,
   `quantity_kg` DECIMAL(10, 2) NOT NULL,
   `service_type` VARCHAR(50) NOT NULL DEFAULT 'GRINDING',
   `fulfillment_type` ENUM('DELIVERY', 'PICKUP') NOT NULL DEFAULT 'DELIVERY',

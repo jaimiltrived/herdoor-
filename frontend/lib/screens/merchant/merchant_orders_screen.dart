@@ -6,7 +6,6 @@ import '../../models/merchant_models.dart';
 import '../../services/merchant_api_service.dart';
 import '../../widgets/status_light.dart';
 import 'merchant_order_process_detail_screen.dart';
-import 'merchant_active_driver_pickup_screen.dart';
 import 'mill_owner_qr_scanner_screen.dart';
 
 class MerchantOrdersScreen extends StatefulWidget {
@@ -68,17 +67,17 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
 
           _pendingOrders.clear();
           if (fetchedActive != null) {
-            _pendingOrders.addAll(fetchedActive.where((o) => o.statusTag == 'IN PROGRESS' || o.statusTag == 'PROCESSING' || o.statusTag == 'ACCEPTED' || o.statusTag == 'MILLING' || o.statusTag == 'PACKING'));
+            _pendingOrders.addAll(fetchedActive.where((o) => o.statusTag == 'IN PROGRESS' || o.statusTag == 'PROCESSING' || o.statusTag == 'ACCEPTED' || o.statusTag == 'MILLING' || o.statusTag == 'PACKING' || o.statusTag == 'GRAIN_DROPPED' || o.statusTag == 'GRAIN DROPPED' || o.statusTag == 'PENDING'));
           }
 
           _completedMillingOrders.clear();
           if (fetchedReady != null) {
-            _completedMillingOrders.addAll(fetchedReady);
+            _completedMillingOrders.addAll(fetchedReady.where((o) => o.statusTag != 'DELIVERED' && o.statusTag != 'COMPLETED' && o.statusTag != 'PICKED_UP'));
           }
 
           _deliveredOrders.clear();
           if (fetchedCompleted != null) {
-            _deliveredOrders.addAll(fetchedCompleted);
+            _deliveredOrders.addAll(fetchedCompleted.where((o) => o.statusTag == 'DELIVERED' || o.statusTag == 'COMPLETED' || o.statusTag == 'PICKED_UP'));
           }
 
           if (showLoading) _isLoading = false;
@@ -470,24 +469,6 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _handleCompleteMillingAndMoveToHandover(MerchantOrder order) async {
-    final orderId = order.numericId ?? 501;
-    setState(() {
-      _pendingOrders.removeWhere((o) => o.orderId == order.orderId);
-      order.statusTag = 'READY FOR PICKUP';
-      order.statusColor = const Color(0xFFFF8A80);
-      _completedMillingOrders.insert(0, order);
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF2ECC71),
-        content: Text('⚙️ Milling Finished! Order ${order.orderId} moved to Handover (Ready).'),
-      ),
-    );
-    await MerchantApiService.instance.transitionOrderStatus(orderId, 'ready');
-    if (mounted) _fetchOrdersData();
   }
 
   @override
@@ -921,8 +902,8 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                             ),
                             Text(
                               order.productBags.length > 1
-                                  ? '${order.productBags.length} Units (${order.quantityText})'
-                                  : order.quantityText,
+                                  ? '${order.productBags.length} Products (${order.productBags.length} Units • ${order.quantityText})'
+                                  : (order.productBags.isNotEmpty ? order.productBags.first.unitText : order.quantityText),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.plusJakartaSans(
@@ -958,7 +939,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                                 const Icon(Icons.qr_code_2_rounded, size: 12, color: Color(0xFF6E5616)),
                                 const SizedBox(width: 4),
                                 Text(
-                                  '${idx + 1}. ${bag.productName} (${bag.quantityKg}kg)',
+                                  '${idx + 1}. ${bag.productName} • ${bag.unitText}',
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 10.5,
                                     fontWeight: FontWeight.w600,
@@ -987,84 +968,61 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
 
   Widget _buildOrderCardActions(BuildContext context, MerchantOrder order) {
     if (_selectedFilterTab == 0) {
-      // 1. NEW: Accept or Decline with proof
-      return Row(
-        children: [
-          Expanded(
-            child: SizedBox(
-              height: 44,
-              child: OutlinedButton.icon(
-                onPressed: () => _showDeclineOrderWithProofModal(context, order),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.red.shade700,
-                  side: BorderSide(color: Colors.red.shade300),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                icon: const Icon(Icons.close_rounded, size: 16),
-                label: Text(
-                  'Decline',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: SizedBox(
-              height: 44,
-              child: ElevatedButton(
-                onPressed: () => _showAcceptOrderTimeModal(context, order),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6E5616),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Text(
-                  'Accept Order',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    } else if (_selectedFilterTab == 1) {
+      // 1. NEW: Accept, Decline with proof, or Scan & Inspect Incoming Grain
       return Column(
         children: [
-          // 1-Click Fast Action: Complete Milling & Ready for Dispatch
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton.icon(
-              onPressed: () => _handleCompleteMillingAndMoveToHandover(order),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryTerracotta,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 1,
-              ),
-              icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 20),
-              label: Text(
-                'Complete & Ready to Dispatch (Leg 2)',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showDeclineOrderWithProofModal(context, order),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red.shade700,
+                      side: BorderSide(color: Colors.red.shade300),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    icon: const Icon(Icons.close_rounded, size: 16),
+                    label: Text(
+                      'Decline',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: ElevatedButton(
+                    onPressed: () => _showAcceptOrderTimeModal(context, order),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6E5616),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: Text(
+                      'Accept Order',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
-            height: 42,
+            height: 40,
             child: OutlinedButton.icon(
               onPressed: () async {
                 await Navigator.push(
@@ -1078,84 +1036,92 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                 }
               },
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF6E5616),
-                side: const BorderSide(color: Color(0xFF6E5616)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                foregroundColor: const Color(0xFFB7791F),
+                side: const BorderSide(color: Color(0xFFD69E2E)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                backgroundColor: const Color(0xFFFFFBEB),
               ),
-              icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+              icon: const Icon(Icons.qr_code_scanner_rounded, size: 16, color: Color(0xFFB7791F)),
               label: Text(
-                'Scan Driver Handover QR',
+                '🌾 Scan & Inspect Grain Bags (Accept / Reject)',
                 style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.bold,
+                  color: const Color(0xFF92400E),
                 ),
               ),
             ),
           ),
         ],
       );
-    } else if (_selectedFilterTab == 2) {
-      // 3. Ready for Handover
-      return Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF9F5EF),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE8DFC8)),
-            ),
-            child: Center(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF6E5616), size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Milling Finished • Ready for Handover',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF6E5616),
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
+    } else if (_selectedFilterTab == 1) {
+      return SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: ElevatedButton.icon(
+          onPressed: () async {
+            final res = await Navigator.push<bool>(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MillOwnerQrScannerScreen(order: order),
               ),
+            );
+            if (mounted) {
+              if (res == true) {
+                setState(() {
+                  _selectedFilterTab = 2;
+                });
+              }
+              _fetchOrdersData();
+            }
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppTheme.primaryTerracotta,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 1,
+          ),
+          icon: const Icon(Icons.qr_code_scanner_rounded, size: 20, color: Colors.white),
+          label: Text(
+            '🌾 Scan & Inspect Grain Bags (Accept / Reject)',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
             ),
           ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            height: 46,
-            child: ElevatedButton.icon(
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const MerchantActiveDriverPickupScreen(),
-                  ),
-                );
-                if (mounted) {
-                  _fetchOrdersData();
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryTerracotta,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    } else if (_selectedFilterTab == 2) {
+      final isOutForDelivery = order.statusTag == 'OUT FOR DELIVERY' || order.statusTag == 'OUT_FOR_DELIVERY';
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isOutForDelivery ? const Color(0xFFEBF5FB) : const Color(0xFFF9F5EF),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isOutForDelivery ? const Color(0xFF85C1E9) : const Color(0xFFE8DFC8)),
+        ),
+        child: Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                isOutForDelivery ? Icons.two_wheeler_rounded : Icons.check_circle_outline_rounded,
+                color: isOutForDelivery ? const Color(0xFF21618C) : const Color(0xFF6E5616),
+                size: 18,
               ),
-              icon: const Icon(Icons.handshake_outlined, color: Colors.white, size: 18),
-              label: Text(
-                'Handover to Delivery Person',
+              const SizedBox(width: 8),
+              Text(
+                isOutForDelivery ? 'Out for Delivery • Driver En Route to Customer' : 'Milling Complete • Ready for Pickup',
                 style: GoogleFonts.plusJakartaSans(
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  fontSize: 14,
+                  color: isOutForDelivery ? const Color(0xFF21618C) : const Color(0xFF6E5616),
+                  fontSize: 13,
                 ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       );
     } else {
       // 4. Delivered: Delivered to Home

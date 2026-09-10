@@ -19,8 +19,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _phoneController = TextEditingController(text: 'ramesh@example.com');
-  final _passwordController = TextEditingController(text: 'Password123!');
+  final _phoneController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _rememberMe = true;
   bool _obscurePassword = true;
   bool _isLoading = false;
@@ -29,14 +29,6 @@ class _LoginScreenState extends State<LoginScreen> {
   void _onRoleChanged(UserRole role) {
     setState(() {
       _selectedRole = role;
-      if (role == UserRole.merchant) {
-        _phoneController.text = 'shop@shreeganesh.com';
-      } else if (role == UserRole.delivery) {
-        _phoneController.text = 'delivery@herdoor.com';
-      } else {
-        _phoneController.text = 'ramesh@example.com';
-      }
-      _passwordController.text = 'Password123!';
     });
   }
 

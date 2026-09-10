@@ -152,6 +152,9 @@ class MerchantOrder {
   final List<MerchantProcessStep> timelineSteps;
   final double totalPrice;
   final String millName;
+  final String? intakeStatus; // 'ACCEPTED' | 'REJECTED' | 'PENDING'
+  final String? rejectionReason;
+  final String? rejectionNotes;
 
   MerchantOrder({
     this.numericId,
@@ -171,6 +174,9 @@ class MerchantOrder {
     required this.timelineSteps,
     this.totalPrice = 90.0,
     this.millName = 'Artisan Mill Co.',
+    this.intakeStatus,
+    this.rejectionReason,
+    this.rejectionNotes,
   });
 
   factory MerchantOrder.fromJson(Map<String, dynamic> json) {
@@ -202,14 +208,37 @@ class MerchantOrder {
     } else if (rawStatus == 'COMPLETED' || rawStatus == 'DELIVERED' || rawStatus == 'PICKED_UP') {
       mappedTag = 'COMPLETED';
       mappedColor = const Color(0xFF2ECC71);
+    } else if (rawStatus == 'REJECTED' || rawStatus == 'REJECTED_AT_MILL' || rawStatus == 'RETURN_TO_CUSTOMER') {
+      mappedTag = 'REJECTED';
+      mappedColor = const Color(0xFFE74C3C);
     } else {
       mappedTag = rawStatus;
     }
 
     final String custName = json['customerName'] ?? json['userName'] ?? 'Customer ${rawId ?? ""}';
     final String grainName = json['grainTypeName'] ?? 'Wheat (Gehun)';
-    final String qty = '${json['quantityKg'] ?? 10} kg';
-    final String items = '${json['quantityKg'] ?? 10}kg $grainName';
+    final double rawQtyNum = (json['quantityKg'] as num?)?.toDouble() ?? 10.0;
+    final String qty = rawQtyNum % 1 == 0 ? '${rawQtyNum.toInt()} kg' : '${rawQtyNum.toStringAsFixed(1)} kg';
+
+    // Parse product-wise names and weights:
+    final rawParts = grainName.split(RegExp(r',\s*')).map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
+    String items;
+    if (rawParts.length > 1) {
+      final hasIndividualKg = rawParts.any((p) => RegExp(r'^\d+(\.\d+)?\s*(kg|g|unit)', caseSensitive: false).hasMatch(p));
+      if (hasIndividualKg) {
+        items = rawParts.join(', ');
+      } else {
+        final perItemQty = rawQtyNum / rawParts.length;
+        final perItemQtyStr = perItemQty % 1 == 0 ? '${perItemQty.toInt()}kg' : '${perItemQty.toStringAsFixed(1)}kg';
+        items = rawParts.map((p) => '$perItemQtyStr $p').join(', ');
+      }
+    } else {
+      if (RegExp(r'^\d+(\.\d+)?\s*(kg|g|unit)', caseSensitive: false).hasMatch(grainName)) {
+        items = grainName;
+      } else {
+        items = '$qty $grainName';
+      }
+    }
     final String created = json['createdAt'] != null && json['createdAt'].toString().length >= 16
         ? 'Ordered at ${json['createdAt'].toString().substring(11, 16)}'
         : 'Recently';
@@ -245,13 +274,16 @@ class MerchantOrder {
       timelineSteps: steps,
       totalPrice: price,
       millName: resolvedMill,
+      intakeStatus: json['intakeStatus'],
+      rejectionReason: json['rejectionReason'],
+      rejectionNotes: json['rejectionNotes'],
     );
   }
 
   List<ProductBagItem> get productBags {
     final rawParts = grainType
         .split(RegExp(r',|\+|\band\b|&'))
-        .map((s) => s.trim().replaceAll(RegExp(r'^\d+(\.\d+)?\s*kg\s*', caseSensitive: false), ''))
+        .map((s) => s.trim())
         .where((s) => s.isNotEmpty)
         .toList();
 
@@ -265,13 +297,15 @@ class MerchantOrder {
     final baseTag = 'HD-BAG-$rawOrderId';
 
     if (rawParts.isEmpty) {
+      final parsed = ParsedProductUnitInfo.parse(grainType, qtyNum);
       return [
         ProductBagItem(
           bagId: baseTag,
           orderId: rawOrderId,
           orderNumber: orderId,
-          productName: grainType.isNotEmpty ? grainType : 'Fresh Ground Flour',
-          quantityKg: qtyNum,
+          productName: parsed.cleanName.isNotEmpty ? parsed.cleanName : 'Fresh Ground Flour',
+          quantityKg: parsed.quantityKg,
+          unitText: parsed.unitText,
           customerName: customerName,
           customerPhone: deliveryDriverPhone ?? '',
           deliveryAddress: 'Customer Address',
@@ -282,11 +316,12 @@ class MerchantOrder {
       ];
     }
 
-    final eachWeight = double.parse((qtyNum / rawParts.length).toStringAsFixed(1));
+    final fallbackEachWeight = double.parse((qtyNum / rawParts.length).toStringAsFixed(1));
 
     return rawParts.asMap().entries.map((entry) {
       final idx = entry.key;
-      final name = entry.value;
+      final rawName = entry.value;
+      final parsed = ParsedProductUnitInfo.parse(rawName, fallbackEachWeight);
       final tag = rawParts.length == 1
           ? baseTag
           : '$baseTag-${(idx + 1).toString().padLeft(2, '0')}';
@@ -295,8 +330,9 @@ class MerchantOrder {
         bagId: tag,
         orderId: rawOrderId,
         orderNumber: orderId,
-        productName: name,
-        quantityKg: eachWeight,
+        productName: parsed.cleanName,
+        quantityKg: parsed.quantityKg,
+        unitText: parsed.unitText,
         customerName: customerName,
         customerPhone: deliveryDriverPhone ?? '',
         deliveryAddress: 'Customer Address',
@@ -635,18 +671,20 @@ class DeliveryTripStop {
   List<ProductBagItem> get productBags {
     final rawParts = grainTypeName
         .split(RegExp(r',|\+|\band\b|&'))
-        .map((s) => s.trim().replaceAll(RegExp(r'^\d+(\.\d+)?\s*kg\s*', caseSensitive: false), ''))
+        .map((s) => s.trim())
         .where((s) => s.isNotEmpty)
         .toList();
 
     if (rawParts.isEmpty) {
+      final parsed = ParsedProductUnitInfo.parse(grainTypeName, quantityKg);
       return [
         ProductBagItem(
           bagId: barcodeNumber,
           orderId: orderId,
           orderNumber: orderNumber,
-          productName: grainTypeName.isNotEmpty ? grainTypeName : 'Fresh Stone Ground Flour',
-          quantityKg: quantityKg,
+          productName: parsed.cleanName.isNotEmpty ? parsed.cleanName : 'Fresh Stone Ground Flour',
+          quantityKg: parsed.quantityKg,
+          unitText: parsed.unitText,
           customerName: customerName,
           customerPhone: customerPhone,
           deliveryAddress: deliveryAddress,
@@ -661,12 +699,13 @@ class DeliveryTripStop {
       ];
     }
 
-    final eachWeight = double.parse((quantityKg / rawParts.length).toStringAsFixed(1));
+    final fallbackEachWeight = double.parse((quantityKg / rawParts.length).toStringAsFixed(1));
     final baseTag = barcodeNumber.replaceAll(RegExp(r'-\d+$'), '');
 
     return rawParts.asMap().entries.map((entry) {
       final idx = entry.key;
-      final name = entry.value;
+      final rawName = entry.value;
+      final parsed = ParsedProductUnitInfo.parse(rawName, fallbackEachWeight);
       final tag = rawParts.length == 1
           ? barcodeNumber
           : '$baseTag-${(idx + 1).toString().padLeft(2, '0')}';
@@ -675,8 +714,9 @@ class DeliveryTripStop {
         bagId: tag,
         orderId: orderId,
         orderNumber: orderNumber,
-        productName: name,
-        quantityKg: eachWeight,
+        productName: parsed.cleanName,
+        quantityKg: parsed.quantityKg,
+        unitText: parsed.unitText,
         customerName: customerName,
         customerPhone: customerPhone,
         deliveryAddress: deliveryAddress,
@@ -692,12 +732,100 @@ class DeliveryTripStop {
   }
 }
 
+class ParsedProductUnitInfo {
+  final String cleanName;
+  final double quantityKg;
+  final String unitText;
+
+  ParsedProductUnitInfo({
+    required this.cleanName,
+    required this.quantityKg,
+    required this.unitText,
+  });
+
+  static ParsedProductUnitInfo parse(String rawItem, double fallbackWeight) {
+    final trimmed = rawItem.trim();
+    if (trimmed.isEmpty) {
+      final w = fallbackWeight > 0 ? fallbackWeight : 1.0;
+      return ParsedProductUnitInfo(
+        cleanName: 'Product',
+        quantityKg: w,
+        unitText: fallbackWeight > 0 ? '${w.toStringAsFixed(w.truncateToDouble() == w ? 0 : 1)} kg' : '1 Unit',
+      );
+    }
+
+    // Pattern 1: e.g. "5kg Multigrain Mix (Milling)", "5 kg Maize", "1 Unit Flour", "2 Bags Rice", "1 each Sharbati"
+    final regexPrefix = RegExp(r'^(\d+(?:\.\d+)?)\s*(kg|kgs|g|gm|units?|packs?|bags?|each|pcs?|items?)\s*(?:•|-|x|of)?\s*(.*)$', caseSensitive: false);
+    final matchPrefix = regexPrefix.firstMatch(trimmed);
+    if (matchPrefix != null) {
+      final val = double.tryParse(matchPrefix.group(1) ?? '1') ?? 1.0;
+      final unit = (matchPrefix.group(2) ?? 'Unit').toLowerCase();
+      final name = (matchPrefix.group(3) ?? '').trim();
+      String formattedUnit;
+      if (unit.startsWith('kg') || unit == 'g' || unit == 'gm') {
+        formattedUnit = '${val.toStringAsFixed(val.truncateToDouble() == val ? 0 : 1)} kg';
+      } else if (unit.startsWith('pack')) {
+        formattedUnit = '${val.toInt()} ${val.toInt() == 1 ? 'Pack' : 'Packs'}';
+      } else if (unit.startsWith('bag')) {
+        formattedUnit = '${val.toInt()} ${val.toInt() == 1 ? 'Bag' : 'Bags'}';
+      } else {
+        formattedUnit = '${val.toInt()} ${val.toInt() == 1 ? 'Unit' : 'Units'}';
+      }
+      return ParsedProductUnitInfo(
+        cleanName: name.isNotEmpty ? name : trimmed,
+        quantityKg: (unit.startsWith('kg') || unit == 'g' || unit == 'gm') ? val : 1.0,
+        unitText: formattedUnit,
+      );
+    }
+
+    // Pattern 2: e.g. "Multigrain Mix (5 kg)", "Dietary Flour (1 Unit)"
+    final regexSuffix = RegExp(r'^(.*?)\s*[\(\[]\s*(\d+(?:\.\d+)?)\s*(kg|kgs|g|gm|units?|packs?|bags?|each|pcs?|items?)\s*[\)\]]$', caseSensitive: false);
+    final matchSuffix = regexSuffix.firstMatch(trimmed);
+    if (matchSuffix != null) {
+      final name = (matchSuffix.group(1) ?? '').trim();
+      final val = double.tryParse(matchSuffix.group(2) ?? '1') ?? 1.0;
+      final unit = (matchSuffix.group(3) ?? 'Unit').toLowerCase();
+      String formattedUnit;
+      if (unit.startsWith('kg')) {
+        formattedUnit = '${val.toStringAsFixed(val.truncateToDouble() == val ? 0 : 1)} kg';
+      } else {
+        formattedUnit = '${val.toInt()} ${val.toInt() == 1 ? 'Unit' : 'Units'}';
+      }
+      return ParsedProductUnitInfo(
+        cleanName: name.isNotEmpty ? name : trimmed,
+        quantityKg: unit.startsWith('kg') ? val : 1.0,
+        unitText: formattedUnit,
+      );
+    }
+
+    // Default fallback based on product nature
+    final lower = trimmed.toLowerCase();
+    final isMilling = lower.contains('milling') || lower.contains('grain') || lower.contains('chakki') || lower.contains('grinding') || lower.contains('wheat') || lower.contains('makai') || lower.contains('jowar') || lower.contains('bajra') || lower.contains('chawal') || lower.contains('ragi');
+    
+    if (isMilling) {
+      final w = fallbackWeight > 0 ? fallbackWeight : 5.0;
+      return ParsedProductUnitInfo(
+        cleanName: trimmed,
+        quantityKg: w,
+        unitText: '${w.toStringAsFixed(w.truncateToDouble() == w ? 0 : 1)} kg',
+      );
+    }
+
+    return ParsedProductUnitInfo(
+      cleanName: trimmed,
+      quantityKg: 1.0,
+      unitText: '1 Unit',
+    );
+  }
+}
+
 class ProductBagItem {
   final String bagId;
   final int orderId;
   final String orderNumber;
   final String productName;
   final double quantityKg;
+  final String unitText;
   final String customerName;
   final String customerPhone;
   final String deliveryAddress;
@@ -708,6 +836,9 @@ class ProductBagItem {
   final String deliveryOtp;
   final bool isPickedUp;
   final bool isDelivered;
+  final bool isInspected;
+  final bool? isAccepted;
+  final String? rejectionReason;
 
   ProductBagItem({
     required this.bagId,
@@ -715,6 +846,7 @@ class ProductBagItem {
     required this.orderNumber,
     required this.productName,
     required this.quantityKg,
+    this.unitText = '1 Unit',
     required this.customerName,
     required this.customerPhone,
     required this.deliveryAddress,
@@ -725,11 +857,18 @@ class ProductBagItem {
     required this.deliveryOtp,
     this.isPickedUp = false,
     this.isDelivered = false,
+    this.isInspected = false,
+    this.isAccepted,
+    this.rejectionReason,
   });
 
   ProductBagItem copyWith({
     bool? isPickedUp,
     bool? isDelivered,
+    bool? isInspected,
+    bool? isAccepted,
+    String? rejectionReason,
+    String? unitText,
     String? homePickupAddress,
     String? deliveryAddress,
   }) {
@@ -739,6 +878,7 @@ class ProductBagItem {
       orderNumber: orderNumber,
       productName: productName,
       quantityKg: quantityKg,
+      unitText: unitText ?? this.unitText,
       customerName: customerName,
       customerPhone: customerPhone,
       deliveryAddress: deliveryAddress ?? this.deliveryAddress,
@@ -749,6 +889,9 @@ class ProductBagItem {
       deliveryOtp: deliveryOtp,
       isPickedUp: isPickedUp ?? this.isPickedUp,
       isDelivered: isDelivered ?? this.isDelivered,
+      isInspected: isInspected ?? this.isInspected,
+      isAccepted: isAccepted ?? this.isAccepted,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
     );
   }
 }
@@ -766,7 +909,7 @@ class DeliveryTrip {
   final String? homePickupLandmark;
   final String? homePickupInstructions;
   final bool isHomeGrainPickup;
-  final String legType; // 'LEG_1_GRAIN_PICKUP' | 'LEG_2_FLOUR_DELIVERY'
+  final String legType; // 'LEG_1_GRAIN_PICKUP' | 'LEG_2_FLOUR_DELIVERY' | 'RETURN_LEG_GRAIN_RETURN'
   final String? tripBadge;
   final String? originTitle;
   final String? destinationTitle;
@@ -793,6 +936,9 @@ class DeliveryTrip {
   final String vehicleTypeAllowed; // 'ANY' | 'CAR_VAN' | 'BIKE_EV'
   final String? groupCode;
   final int? groupId;
+  final bool isReturnLeg;
+  final bool isRejectedByMill;
+  final String? rejectionReason;
   final List<DeliveryTripStop> stops;
 
   DeliveryTrip({
@@ -835,20 +981,43 @@ class DeliveryTrip {
     this.vehicleTypeAllowed = 'ANY',
     this.groupCode,
     this.groupId,
+    this.isReturnLeg = false,
+    this.isRejectedByMill = false,
+    this.rejectionReason,
     this.stops = const [],
   });
 
+  bool get isReturnToCustomer =>
+      isReturnLeg ||
+      isRejectedByMill ||
+      legType == 'RETURN_LEG_GRAIN_RETURN' ||
+      status == 'RETURN_TO_CUSTOMER' ||
+      status == 'REJECTED_AT_MILL';
+
   bool get isLeg1GrainPickup =>
-      legType == 'LEG_1_GRAIN_PICKUP' ||
-      (isHomeGrainPickup && (status == 'PLACED' || status == 'ACCEPTED' || status == 'CONFIRMED' || status == 'PENDING' || status == 'NEW'));
+      !isReturnToCustomer &&
+      (legType == 'LEG_1_GRAIN_PICKUP' ||
+          (isHomeGrainPickup && (status == 'PLACED' || status == 'ACCEPTED' || status == 'CONFIRMED' || status == 'PENDING' || status == 'NEW')));
 
-  bool get isLeg2FlourDelivery => !isLeg1GrainPickup;
+  bool get isLeg2FlourDelivery => !isLeg1GrainPickup && !isReturnToCustomer;
 
-  String get resolvedLegBadge => tripBadge ?? (isLeg1GrainPickup ? '🌾 Grain Pickup (Home ➔ Mill)' : '🍞 Flour Delivery (Mill ➔ Home)');
+  String get resolvedLegBadge =>
+      tripBadge ??
+      (isReturnToCustomer
+          ? '⚠️ Return Grain (Rejected by Mill)'
+          : (isLeg1GrainPickup ? '🌾 Grain Pickup (Home ➔ Mill)' : '🍞 Flour Delivery (Mill ➔ Home)'));
 
-  String get resolvedOriginName => originTitle ?? (isLeg1GrainPickup ? 'Customer Home ($customerName)' : millName);
+  String get resolvedOriginName =>
+      originTitle ??
+      (isReturnToCustomer
+          ? '$millName (Return Rejected Grain)'
+          : (isLeg1GrainPickup ? 'Customer Home ($customerName)' : millName));
 
-  String get resolvedDestinationName => destinationTitle ?? (isLeg1GrainPickup ? '$millName (Drop for Grinding)' : 'Customer Doorstep ($customerName)');
+  String get resolvedDestinationName =>
+      destinationTitle ??
+      (isReturnToCustomer
+          ? 'Customer Doorstep ($customerName)'
+          : (isLeg1GrainPickup ? '$millName (Drop for Grinding)' : 'Customer Doorstep ($customerName)'));
 
   String get effectivePickupLocation => isLeg1GrainPickup ? homePickupAddress : millAddress;
 
@@ -934,6 +1103,9 @@ class DeliveryTrip {
       vehicleTypeAllowed: json['vehicleTypeAllowed'] ?? 'ANY',
       groupCode: json['groupCode']?.toString(),
       groupId: json['groupId'] is int ? json['groupId'] as int : (json['groupId'] != null ? int.tryParse(json['groupId'].toString()) : null),
+      isReturnLeg: json['isReturnLeg'] ?? (statusStr == 'RETURN_TO_CUSTOMER' || statusStr == 'REJECTED_AT_MILL' || parsedLeg == 'RETURN_LEG_GRAIN_RETURN'),
+      isRejectedByMill: json['isRejectedByMill'] ?? (statusStr == 'RETURN_TO_CUSTOMER' || statusStr == 'REJECTED_AT_MILL'),
+      rejectionReason: json['rejectionReason']?.toString(),
       stops: parsedStops,
     );
   }

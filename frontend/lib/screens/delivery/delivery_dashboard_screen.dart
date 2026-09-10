@@ -23,125 +23,45 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
   bool _isOnline = true;
   bool _isAutoAccept = false;
   String _selectedFilter = 'All'; // 'All' | 'HomeToMill' | 'MillToHome'
-  String _selectedHotspot = 'All Zones';
   String _selectedVehicle = 'CAR_VAN'; // 'ALL' | 'CAR_VAN' | 'BIKE_EV'
   final double _selectedRadiusKm = 5.0; // Strict 5.0 km radius
   int? _hoveredMapOrderId;
-  final Set<int> _selectedOrderIds = {};
 
   RiderProfile? _profile;
   RiderEarnings? _earnings;
   List<DeliveryTrip> _allTrips = [];
+  final Set<int> _selectedTripOrderIds = <int>{};
   DeliveryTrip? _incomingAlertTrip;
   int _alertCountdown = 30;
   Timer? _alertTimer;
   Timer? _realtimeSyncTimer;
   late AnimationController _radarPulseController;
 
-  void _toggleOrderSelection(int orderId) {
+  void _toggleTripSelection(int orderId) {
     setState(() {
-      if (_selectedOrderIds.contains(orderId)) {
-        _selectedOrderIds.remove(orderId);
+      if (_selectedTripOrderIds.contains(orderId)) {
+        _selectedTripOrderIds.remove(orderId);
       } else {
-        _selectedOrderIds.add(orderId);
+        _selectedTripOrderIds.add(orderId);
       }
     });
   }
 
-  void _selectAllOrders() {
+  void _selectAllFilteredTrips() {
     setState(() {
-      _selectedOrderIds.addAll(_filteredTrips.map((t) => t.orderId));
-    });
-  }
-
-  void _clearSelectedOrders() {
-    setState(() {
-      _selectedOrderIds.clear();
-    });
-  }
-
-  Future<void> _acceptCombinedSelectedOrders() async {
-    final selectedTrips = _allTrips.where((t) => _selectedOrderIds.contains(t.orderId)).toList();
-    if (selectedTrips.isEmpty) return;
-
-    if (selectedTrips.length == 1) {
-      _acceptOrder(selectedTrips.first);
-      return;
-    }
-
-    // Combine all stops into one grouped multi-stop trip
-    List<DeliveryTripStop> combinedStops = [];
-    double totalKg = 0.0;
-    double totalFee = 0.0;
-    double totalSurge = 0.0;
-    double totalHeavyBonus = 0.0;
-    double maxDistance = 0.0;
-
-    for (var trip in selectedTrips) {
-      combinedStops.addAll(trip.resolvedStops);
-      totalKg += trip.quantityKg;
-      totalFee += trip.deliveryFee;
-      totalSurge += trip.surgeBonus;
-      totalHeavyBonus += trip.heavyBagBonus;
-      if (trip.distanceKm > maxDistance) {
-        maxDistance = trip.distanceKm;
+      final currentIds = _filteredTrips.map((t) => t.orderId).toSet();
+      if (_selectedTripOrderIds.containsAll(currentIds)) {
+        _selectedTripOrderIds.clear();
+      } else {
+        _selectedTripOrderIds.addAll(currentIds);
       }
-    }
-
-    final firstTrip = selectedTrips.first;
-    final uniqueCustomerNames = combinedStops.map((s) => s.customerName).toSet().toList();
-    final customerSummary = uniqueCustomerNames.length == 1
-        ? '${uniqueCustomerNames.first} • ${combinedStops.length} Orders'
-        : uniqueCustomerNames.join(' + ');
-    final grainSummaries = selectedTrips.map((t) => t.grainTypeName.split('(').first.trim()).toSet().join(' + ');
-
-    final uniqueSeq = 8000 + (DateTime.now().millisecondsSinceEpoch % 1000);
-    final uniqueBatchCode = '#HD-POOL-${selectedTrips.length}X-$uniqueSeq';
-
-    final combinedTrip = DeliveryTrip(
-      orderId: firstTrip.orderId,
-      orderNumber: uniqueBatchCode,
-      customerName: 'Grouped ${selectedTrips.length}x Batch ($customerSummary)',
-      customerPhone: firstTrip.customerPhone,
-      millName: firstTrip.millName,
-      millAddress: firstTrip.millAddress,
-      millPhone: firstTrip.millPhone,
-      homePickupAddress: firstTrip.isLeg1GrainPickup
-          ? 'Multiple Customer Homes (${combinedStops.length} Pickups)'
-          : firstTrip.millAddress,
-      deliveryAddress: firstTrip.isLeg1GrainPickup
-          ? firstTrip.millAddress
-          : 'Multi-Stop Delivery (${combinedStops.length} Customer Homes)',
-      quantityKg: totalKg,
-      grainTypeName: 'Stacked Batch: ${selectedTrips.length} Orders ($grainSummaries)',
-      deliveryFee: totalFee,
-      distanceKm: maxDistance,
-      status: 'READY',
-      legType: firstTrip.legType,
-      isHomeGrainPickup: firstTrip.isHomeGrainPickup,
-      tripBadge: firstTrip.isLeg1GrainPickup ? '🌾 Grouped Grain Pickup' : '🍞 Grouped Flour Delivery',
-      pickupPin: firstTrip.pickupPin,
-      deliveryOtp: combinedStops.first.deliveryOtp,
-      barcodeNumber: firstTrip.barcodeNumber,
-      currentLatitude: firstTrip.currentLatitude,
-      currentLongitude: firstTrip.currentLongitude,
-      millLatitude: firstTrip.millLatitude,
-      millLongitude: firstTrip.millLongitude,
-      isBatch: true,
-      batchOrderCount: combinedStops.length,
-      surgeBonus: totalSurge,
-      heavyBagBonus: totalHeavyBonus,
-      estimatedMins: (15 + (combinedStops.length * 7)),
-      pickupZone: firstTrip.pickupZone,
-      vehicleTypeAllowed: _selectedVehicle,
-      stops: combinedStops,
-    );
-
-    setState(() {
-      _selectedOrderIds.clear();
     });
+  }
 
-    _acceptOrder(combinedTrip);
+  void _clearSelectedTrips() {
+    setState(() {
+      _selectedTripOrderIds.clear();
+    });
   }
 
   @override
@@ -166,7 +86,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
 
   void _startRealtimeLiveSync() {
     _realtimeSyncTimer?.cancel();
-    _realtimeSyncTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
+    _realtimeSyncTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
       if (!mounted || !_isOnline) return;
       try {
         final results = await Future.wait([
@@ -177,10 +97,28 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           ),
           DeliveryApiService.instance.getEarnings(),
           DeliveryApiService.instance.getAssignedTrips(),
+          DeliveryApiService.instance.getCompletedTrips(),
         ]);
         final trips = results[0] as List<DeliveryTrip>;
         final earnings = results[1] as RiderEarnings;
         final assigned = results[2] as List<DeliveryTrip>;
+        final completed = results[3] as List<Map<String, dynamic>>;
+
+        final completedKeys = <dynamic>{};
+        for (final c in completed) {
+          if (c['orderId'] != null) completedKeys.add(c['orderId']);
+          if (c['orderNumber'] != null) completedKeys.add(c['orderNumber']);
+          if (c['groupCode'] != null) completedKeys.add(c['groupCode']);
+          if (c['groupId'] != null) completedKeys.add(c['groupId']);
+          if (c['stops'] is List) {
+            for (final s in (c['stops'] as List)) {
+              if (s is Map) {
+                if (s['orderId'] != null) completedKeys.add(s['orderId']);
+                if (s['orderNumber'] != null) completedKeys.add(s['orderNumber']);
+              }
+            }
+          }
+        }
 
         final assignedIds = assigned.map((a) => a.orderId).toSet();
         final assignedNums = assigned.map((a) => a.orderNumber).toSet();
@@ -190,8 +128,23 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
         }
 
         final filteredTrips = trips.where((t) {
-          if (assignedIds.contains(t.orderId) || assignedNums.contains(t.orderNumber)) return false;
-          if (t.isBatch && t.stops.any((s) => assignedIds.contains(s.orderId) || assignedNums.contains(s.orderNumber))) return false;
+          if (completedKeys.contains(t.orderId) ||
+              completedKeys.contains(t.orderNumber) ||
+              (t.groupCode != null && completedKeys.contains(t.groupCode))) {
+            return false;
+          }
+          if (assignedIds.contains(t.orderId) ||
+              assignedNums.contains(t.orderNumber) ||
+              (t.groupCode != null && assignedNums.contains(t.groupCode))) {
+            return false;
+          }
+          if (t.isBatch && t.stops.any((s) =>
+              completedKeys.contains(s.orderId) ||
+              completedKeys.contains(s.orderNumber) ||
+              assignedIds.contains(s.orderId) ||
+              assignedNums.contains(s.orderNumber))) {
+            return false;
+          }
           return true;
         }).toList();
 
@@ -203,6 +156,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
             setState(() {
               _allTrips = filteredTrips;
               _earnings = earnings;
+              _selectedTripOrderIds.retainAll(filteredTrips.map((t) => t.orderId));
             });
 
             if (newTrips.isNotEmpty && _incomingAlertTrip == null && _isOnline) {
@@ -226,10 +180,28 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           forceRefresh: true,
         ),
         DeliveryApiService.instance.getAssignedTrips(),
+        DeliveryApiService.instance.getCompletedTrips(),
       ]);
 
       final trips = results[2] as List<DeliveryTrip>;
       final assigned = results[3] as List<DeliveryTrip>;
+      final completed = results[4] as List<Map<String, dynamic>>;
+
+      final completedKeys = <dynamic>{};
+      for (final c in completed) {
+        if (c['orderId'] != null) completedKeys.add(c['orderId']);
+        if (c['orderNumber'] != null) completedKeys.add(c['orderNumber']);
+        if (c['groupCode'] != null) completedKeys.add(c['groupCode']);
+        if (c['groupId'] != null) completedKeys.add(c['groupId']);
+        if (c['stops'] is List) {
+          for (final s in (c['stops'] as List)) {
+            if (s is Map) {
+              if (s['orderId'] != null) completedKeys.add(s['orderId']);
+              if (s['orderNumber'] != null) completedKeys.add(s['orderNumber']);
+            }
+          }
+        }
+      }
 
       final assignedIds = assigned.map((a) => a.orderId).toSet();
       final assignedNums = assigned.map((a) => a.orderNumber).toSet();
@@ -239,8 +211,23 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
       }
 
       final filteredTrips = trips.where((t) {
-        if (assignedIds.contains(t.orderId) || assignedNums.contains(t.orderNumber)) return false;
-        if (t.isBatch && t.stops.any((s) => assignedIds.contains(s.orderId) || assignedNums.contains(s.orderNumber))) return false;
+        if (completedKeys.contains(t.orderId) ||
+            completedKeys.contains(t.orderNumber) ||
+            (t.groupCode != null && completedKeys.contains(t.groupCode))) {
+          return false;
+        }
+        if (assignedIds.contains(t.orderId) ||
+            assignedNums.contains(t.orderNumber) ||
+            (t.groupCode != null && assignedNums.contains(t.groupCode))) {
+          return false;
+        }
+        if (t.isBatch && t.stops.any((s) =>
+            completedKeys.contains(s.orderId) ||
+            completedKeys.contains(s.orderNumber) ||
+            assignedIds.contains(s.orderId) ||
+            assignedNums.contains(s.orderNumber))) {
+          return false;
+        }
         return true;
       }).toList();
 
@@ -250,7 +237,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           _isOnline = _profile?.isOnline ?? true;
           _earnings = results[1] as RiderEarnings;
           _allTrips = filteredTrips;
-          _selectedOrderIds.clear();
+          _selectedTripOrderIds.retainAll(filteredTrips.map((t) => t.orderId));
           _isLoading = false;
         });
       }
@@ -313,8 +300,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
 
     setState(() {
       _incomingAlertTrip = null;
-      _selectedOrderIds.remove(trip.orderId);
-      _selectedOrderIds.removeAll(batchIds);
+      _selectedTripOrderIds.remove(trip.orderId);
       _allTrips.removeWhere((t) =>
           t.orderId == trip.orderId ||
           t.orderNumber == trip.orderNumber ||
@@ -374,11 +360,314 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
     }
   }
 
+  Future<void> _acceptCustomBatch(List<DeliveryTrip> selectedTrips) async {
+    if (selectedTrips.isEmpty) return;
+    if (selectedTrips.length == 1) {
+      return _acceptOrder(selectedTrips.first);
+    }
+
+    _alertTimer?.cancel();
+    final selectedIds = selectedTrips.map((t) => t.orderId).toSet();
+    final selectedNums = selectedTrips.map((t) => t.orderNumber).toSet();
+
+    // Combine stops from all selected trips
+    final List<DeliveryTripStop> allStops = [];
+    for (final trip in selectedTrips) {
+      if (trip.stops.isNotEmpty) {
+        allStops.addAll(trip.stops);
+      } else {
+        allStops.add(DeliveryTripStop(
+          orderId: trip.orderId,
+          orderNumber: trip.orderNumber,
+          customerName: trip.customerName,
+          customerPhone: trip.customerPhone,
+          deliveryAddress: trip.deliveryAddress,
+          homePickupAddress: trip.homePickupAddress,
+          homePickupLandmark: trip.homePickupLandmark,
+          homePickupInstructions: trip.homePickupInstructions,
+          isHomeGrainPickup: trip.isLeg1GrainPickup,
+          quantityKg: trip.quantityKg,
+          grainTypeName: trip.grainTypeName,
+          deliveryOtp: trip.deliveryOtp,
+          pickupPin: trip.pickupPin,
+          barcodeNumber: trip.barcodeNumber,
+          distanceKm: trip.distanceKm,
+          customerNotes: trip.customerNotes,
+          orderPayout: trip.deliveryFee,
+        ));
+      }
+    }
+
+    final totalPayout = selectedTrips.fold(0.0, (sum, t) => sum + t.deliveryFee);
+    final totalQuantity = selectedTrips.fold(0.0, (sum, t) => sum + t.quantityKg);
+    final totalSurge = selectedTrips.fold(0.0, (sum, t) => sum + t.surgeBonus);
+    final totalHeavy = selectedTrips.fold(0.0, (sum, t) => sum + t.heavyBagBonus);
+    final primary = selectedTrips.first;
+
+    final timestampStr = DateTime.now().millisecondsSinceEpoch.toString();
+    final groupSuffix = timestampStr.length > 5 ? timestampStr.substring(timestampStr.length - 5) : timestampStr;
+    final groupCode = '#HD-GRP-${selectedTrips.length}X-$groupSuffix';
+
+    final groupedTrip = DeliveryTrip(
+      orderId: primary.orderId,
+      orderNumber: groupCode,
+      customerName: selectedTrips.map((t) => t.customerName).toSet().join(' & '),
+      customerPhone: primary.customerPhone,
+      millName: primary.millName,
+      millAddress: primary.millAddress,
+      millPhone: primary.millPhone,
+      deliveryAddress: selectedTrips.map((t) => t.deliveryAddress).join(' • '),
+      homePickupAddress: selectedTrips.map((t) => t.homePickupAddress).join(' • '),
+      homePickupLandmark: primary.homePickupLandmark,
+      homePickupInstructions: primary.homePickupInstructions,
+      isHomeGrainPickup: selectedTrips.any((t) => t.isLeg1GrainPickup),
+      legType: selectedTrips.every((t) => t.isLeg1GrainPickup)
+          ? 'LEG_1_GRAIN_PICKUP'
+          : (selectedTrips.every((t) => t.isLeg2FlourDelivery) ? 'LEG_2_FLOUR_DELIVERY' : 'MULTI_STOP_BATCH'),
+      tripBadge: '⚡ ${selectedTrips.length}x Custom Grouped Batch',
+      originTitle: 'Multi-Stop Pickup',
+      destinationTitle: 'Multi-Stop Drop',
+      quantityKg: totalQuantity,
+      grainTypeName: selectedTrips.map((t) => t.grainTypeName).join(', '),
+      deliveryFee: totalPayout,
+      distanceKm: selectedTrips.fold(0.0, (sum, t) => sum + t.distanceKm),
+      status: 'ASSIGNED',
+      pickupPin: primary.pickupPin,
+      deliveryOtp: primary.deliveryOtp,
+      barcodeNumber: 'HD-BAG-GRP-$groupSuffix',
+      isBatch: true,
+      batchOrderCount: selectedTrips.length,
+      surgeBonus: totalSurge,
+      heavyBagBonus: totalHeavy,
+      estimatedMins: 20 + (selectedTrips.length * 8),
+      groupCode: groupCode,
+      stops: allStops,
+    );
+
+    setState(() {
+      _incomingAlertTrip = null;
+      _allTrips.removeWhere((t) => selectedIds.contains(t.orderId) || selectedNums.contains(t.orderNumber));
+      _selectedTripOrderIds.clear();
+    });
+
+    final stopsPayload = allStops.map((s) => {
+      'orderId': s.orderId,
+      'orderNumber': s.orderNumber,
+      'customerName': s.customerName,
+      'customerPhone': s.customerPhone,
+      'homePickupAddress': s.homePickupAddress,
+      'deliveryAddress': s.deliveryAddress,
+      'quantityKg': s.quantityKg,
+      'grainTypeName': s.grainTypeName,
+      'barcodeNumber': s.barcodeNumber,
+      'pickupPin': s.pickupPin,
+      'deliveryOtp': s.deliveryOtp,
+      'orderPayout': s.orderPayout,
+      'distanceKm': s.distanceKm,
+    }).toList();
+
+    final success = await DeliveryApiService.instance.acceptGroupTrip(
+      groupCode: groupCode,
+      orderIds: selectedTrips.map((t) => t.orderId).toList(),
+      stops: stopsPayload,
+      totalFee: totalPayout,
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Grouped Batch $groupCode Accepted (${selectedTrips.length} Stops • ₹${totalPayout.toStringAsFixed(0)})!'),
+          backgroundColor: const Color(0xFF1E8449),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+
+      if (widget.onTripAccepted != null) {
+        widget.onTripAccepted!(groupedTrip);
+      } else {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ActiveTripScreen(
+              trip: groupedTrip,
+              onTripCompleted: () {
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
+                _loadDashboardData();
+              },
+            ),
+          ),
+        ).then((_) => _loadDashboardData());
+      }
+    }
+  }
+
+  Widget _buildStickyBatchActionBar() {
+    final selectedTrips = _allTrips.where((t) => _selectedTripOrderIds.contains(t.orderId)).toList();
+    if (selectedTrips.isEmpty) return const SizedBox.shrink();
+
+    final count = selectedTrips.length;
+    final totalPayout = selectedTrips.fold(0.0, (sum, t) => sum + t.deliveryFee);
+    final totalWeight = selectedTrips.fold(0.0, (sum, t) => sum + t.quantityKg);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFC0392B),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.layers_rounded, color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            count > 1 ? '$count Orders Selected (Batch)' : '1 Order Selected',
+                            style: GoogleFonts.plusJakartaSans(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF334155),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${totalWeight.toStringAsFixed(totalWeight.truncateToDouble() == totalWeight ? 0 : 1)} kg',
+                              style: GoogleFonts.plusJakartaSans(
+                                color: const Color(0xFFF1F5F9),
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        count > 1
+                            ? 'Ready to accept combined multi-stop run'
+                            : 'Select 1 more order to bundle into a group run',
+                        style: GoogleFonts.plusJakartaSans(
+                          color: count > 1 ? const Color(0xFF94A3B8) : const Color(0xFFF59E0B),
+                          fontSize: 11,
+                          fontWeight: count > 1 ? FontWeight.normal : FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'TOTAL PAY',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: const Color(0xFF94A3B8),
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    Text(
+                      '₹${totalPayout.toStringAsFixed(0)}',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: const Color(0xFF4ADE80),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: _clearSelectedTrips,
+                  icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 20),
+                  tooltip: 'Clear selection',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  if (count > 1) {
+                    _acceptCustomBatch(selectedTrips);
+                  } else {
+                    _acceptOrder(selectedTrips.first);
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: count > 1 ? const Color(0xFFC0392B) : const Color(0xFF1E8449),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 3,
+                ),
+                icon: Icon(count > 1 ? Icons.alt_route_rounded : Icons.navigation_rounded, size: 18, color: Colors.white),
+                label: Text(
+                  count > 1
+                      ? 'ACCEPT GROUPED BATCH ($count ORDERS • ₹${totalPayout.toStringAsFixed(0)})'
+                      : 'ACCEPT SINGLE ORDER (₹${totalPayout.toStringAsFixed(0)})',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.3,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   List<DeliveryTrip> get _filteredTrips {
     return _allTrips.where((t) {
       if (t.distanceKm > _selectedRadiusKm) return false;
-      if (_selectedVehicle == 'CAR_VAN' && t.vehicleTypeAllowed == 'BIKE_EV') return false;
       if (_selectedVehicle == 'BIKE_EV' && t.vehicleTypeAllowed == 'CAR_VAN') return false;
+      if (_selectedVehicle == 'BIKE_EV' && t.quantityKg > 15.0) return false;
       if (_selectedFilter == 'HomeToMill' && !t.isLeg1GrainPickup) return false;
       if (_selectedFilter == 'MillToHome' && !t.isLeg2FlourDelivery) return false;
       return true;
@@ -389,7 +678,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      bottomNavigationBar: _selectedOrderIds.isNotEmpty ? _buildMultiOrderCombinedBottomBar() : null,
+      bottomNavigationBar: _selectedTripOrderIds.isEmpty ? null : _buildStickyBatchActionBar(),
       body: SafeArea(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryTerracotta))
@@ -423,10 +712,6 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                         _buildIncomingOrderModal(_incomingAlertTrip!),
                         const SizedBox(height: 18),
                       ],
-
-                      // Live Chakki Demand Hotspots & Surge Heatmap
-                      _buildDemandHotspots(),
-                      const SizedBox(height: 18),
 
                       // Rider Shift & Vehicle Status HUD
                       _buildRiderShiftHUD(),
@@ -725,140 +1010,6 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           ],
         ],
       ),
-    );
-  }
-
-  Widget _buildDemandHotspots() {
-    final hotspots = [
-      {'zone': 'Ellisbridge Hub', 'surge': '+₹25', 'mills': '14 Mills', 'color': const Color(0xFFC0392B)},
-      {'zone': 'Satellite & Bodakdev', 'surge': '+₹30', 'mills': '22 Mills', 'color': const Color(0xFFD35400)},
-      {'zone': 'Navrangpura Chakki', 'surge': '+₹15', 'mills': '8 Mills', 'color': const Color(0xFF27AE60)},
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.local_fire_department_rounded, size: 18, color: Color(0xFFE74C3C)),
-                const SizedBox(width: 6),
-                Text(
-                  'Live Demand Hotspots & Surge',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-              ],
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFDEDEC),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                '🔥 Active Rush',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFFC0392B),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 74,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: hotspots.length,
-            separatorBuilder: (ctx, i) => const SizedBox(width: 10),
-            itemBuilder: (ctx, i) {
-              final h = hotspots[i];
-              final isHotSelected = _selectedHotspot == h['zone'];
-              return InkWell(
-                onTap: () {
-                  setState(() {
-                    _selectedHotspot = isHotSelected ? 'All Zones' : (h['zone'] as String);
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Focusing Radar on ${h['zone']} with ${h['surge']} surge')),
-                  );
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: 180,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isHotSelected ? const Color(0xFFFDEDEC) : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: isHotSelected ? const Color(0xFFC0392B) : AppTheme.borderLight, width: isHotSelected ? 1.5 : 1),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.03),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              h['zone'] as String,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.textPrimary,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: (h['color'] as Color).withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              h['surge'] as String,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                color: h['color'] as Color,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${h['mills']} currently grinding',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
     );
   }
 
@@ -1192,7 +1343,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                       style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
                     ),
                     Text(
-                      '${trip.effectivePickupLocation} (${trip.quantityKg} kg)',
+                      '${trip.effectivePickupLocation} (${trip.productBags.length > 1 ? "${trip.productBags.length} Products (${trip.productBags.length} Units)" : (trip.productBags.isNotEmpty ? trip.productBags.first.unitText : "${trip.quantityKg} kg")})',
                       style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1722,6 +1873,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
 
   Widget _buildAvailableTripsSection() {
     final trips = _filteredTrips;
+    final allSelected = trips.isNotEmpty && _selectedTripOrderIds.containsAll(trips.map((t) => t.orderId));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1729,15 +1881,68 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Nearby 5km Delivery Requests (${trips.length})',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Nearby 5km Delivery Requests (${trips.length})',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  if (trips.length > 1)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        'Select multiple orders to create a custom batch',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
-            if (_isOnline)
+            const SizedBox(width: 8),
+            if (trips.length > 1)
+              InkWell(
+                onTap: _selectAllFilteredTrips,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: allSelected ? const Color(0xFFFDEDEC) : const Color(0xFFF3ECE1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: allSelected ? const Color(0xFFE74C3C) : const Color(0xFFD4AF37),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        allSelected ? Icons.deselect_rounded : Icons.checklist_rounded,
+                        size: 14,
+                        color: allSelected ? const Color(0xFFC0392B) : const Color(0xFF6E5616),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        allSelected ? 'Deselect All' : '⚡ Group All (${trips.length})',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: allSelected ? const Color(0xFFC0392B) : const Color(0xFF6E5616),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else if (_isOnline)
               Row(
                 children: [
                   Container(
@@ -1758,61 +1963,143 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
               ),
           ],
         ),
-        const SizedBox(height: 10),
-
-        // Multi-Order Selection Action Bar
-        if (_isOnline && trips.isNotEmpty)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: _selectedOrderIds.isNotEmpty ? const Color(0xFFE8F8F5) : Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: _selectedOrderIds.isNotEmpty ? const Color(0xFF2ECC71) : AppTheme.borderLight,
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      _selectedOrderIds.isNotEmpty ? Icons.check_box_rounded : Icons.checklist_rtl_rounded,
-                      color: _selectedOrderIds.isNotEmpty ? const Color(0xFF1E8449) : AppTheme.primaryTerracotta,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _selectedOrderIds.isNotEmpty
-                          ? '${_selectedOrderIds.length} of ${trips.length} Orders Selected'
-                          : 'Select multiple orders to combine on 1 map:',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: _selectedOrderIds.isNotEmpty ? const Color(0xFF1E8449) : AppTheme.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    if (_selectedOrderIds.isNotEmpty)
-                      TextButton(
-                        onPressed: _clearSelectedOrders,
-                        style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
-                        child: Text('Clear', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: const Color(0xFFC0392B), fontWeight: FontWeight.bold)),
-                      ),
-                    TextButton(
-                      onPressed: _selectAllOrders,
-                      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
-                      child: Text('Select All', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: const Color(0xFF1E8449), fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
         const SizedBox(height: 12),
+
+        // Custom Grouped Batch Summary Banner if items selected
+        if (_selectedTripOrderIds.isNotEmpty) ...[
+          Builder(builder: (context) {
+            final selectedTrips = _allTrips.where((t) => _selectedTripOrderIds.contains(t.orderId)).toList();
+            final count = selectedTrips.length;
+            final totalPayout = selectedTrips.fold(0.0, (sum, t) => sum + t.deliveryFee);
+            final totalWeight = selectedTrips.fold(0.0, (sum, t) => sum + t.quantityKg);
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFFF7ED), Color(0xFFFEF3C7)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFF59E0B), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF59E0B),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.alt_route_rounded, color: Colors.white, size: 16),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            count > 1 ? '⚡ Custom Grouped Batch ($count Orders)' : '⚡ 1 Order Selected for Group',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF78350F),
+                            ),
+                          ),
+                        ],
+                      ),
+                      TextButton.icon(
+                        onPressed: _clearSelectedTrips,
+                        icon: const Icon(Icons.close_rounded, size: 14, color: Color(0xFFB45309)),
+                        label: Text(
+                          'Clear',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFFB45309),
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Total Weight: ${totalWeight.toStringAsFixed(totalWeight.truncateToDouble() == totalWeight ? 0 : 1)} kg  •  $count Stops',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF92400E),
+                        ),
+                      ),
+                      Text(
+                        'Combined: ₹${totalPayout.toStringAsFixed(0)}',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF1E8449),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (count > 1) ...[
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 42,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _acceptCustomBatch(selectedTrips),
+                        icon: const Icon(Icons.bolt_rounded, size: 18, color: Colors.white),
+                        label: Text(
+                          'ACCEPT BATCH ($count ORDERS • ₹${totalPayout.toStringAsFixed(0)})',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.3,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFC0392B),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          elevation: 2,
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      '👉 Select another order below to bundle them together into 1 multi-stop trip!',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                        color: const Color(0xFFB45309),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }),
+        ],
 
         if (!_isOnline)
           Container(
@@ -1889,24 +2176,24 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
 
   Widget _buildTripCard(DeliveryTrip trip) {
     final isGrouped = trip.stops.length > 1;
-    final isSelected = _selectedOrderIds.contains(trip.orderId);
+    final isSelected = _selectedTripOrderIds.contains(trip.orderId);
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isSelected ? const Color(0xFFF3FBF7) : Colors.white,
+        color: isSelected ? const Color(0xFFFFFBF9) : Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isSelected
-              ? const Color(0xFF1E8449)
-              : isGrouped
-                  ? const Color(0xFFC0392B)
-                  : AppTheme.borderLight,
+              ? const Color(0xFFC0392B)
+              : (isGrouped ? const Color(0xFFC0392B) : AppTheme.borderLight),
           width: isSelected ? 2.2 : (isGrouped ? 1.8 : 1),
         ),
         boxShadow: [
           BoxShadow(
-            color: isSelected ? const Color(0xFF1E8449).withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.05),
+            color: isSelected
+                ? const Color(0xFFC0392B).withValues(alpha: 0.12)
+                : Colors.black.withValues(alpha: 0.05),
             blurRadius: isSelected ? 14 : 10,
             offset: const Offset(0, 3),
           ),
@@ -1915,29 +2202,43 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Badges, Multi-select Checkbox & Total Pay (Wrapped to prevent overflow on small screens)
+          // Badges & Total Pay & Multi-Select Checkbox
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Tappable Checkbox for Multi-Order Combining
+              // Checkbox Toggle for custom grouping
               InkWell(
-                onTap: () => _toggleOrderSelection(trip.orderId),
+                onTap: () => _toggleTripSelection(trip.orderId),
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  padding: const EdgeInsets.all(4),
-                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  margin: const EdgeInsets.only(right: 6),
                   decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFF1E8449) : const Color(0xFFFAF6F0),
+                    color: isSelected ? const Color(0xFFC0392B) : const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: isSelected ? const Color(0xFF1E8449) : const Color(0xFFCBD5E0),
-                      width: 1.5,
+                      color: isSelected ? const Color(0xFF962D22) : const Color(0xFFCBD5E1),
+                      width: 1.2,
                     ),
                   ),
-                  child: Icon(
-                    isSelected ? Icons.check_rounded : Icons.add_rounded,
-                    size: 16,
-                    color: isSelected ? Colors.white : AppTheme.textSecondary,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isSelected ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                        size: 15,
+                        color: isSelected ? Colors.white : const Color(0xFF64748B),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isSelected ? 'Selected' : 'Group',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          color: isSelected ? Colors.white : const Color(0xFF475569),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -2054,8 +2355,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
               Expanded(
                 child: Text(
                   trip.productBags.length > 1
-                      ? '${trip.productBags.length} Bags (${trip.quantityKg} kg) • ${trip.grainTypeName}'
-                      : '${trip.quantityKg} kg • ${trip.grainTypeName} (${trip.isLeg1GrainPickup ? "Raw Grain for Grinding" : "Fresh Packed Flour"})',
+                      ? '${trip.productBags.length} Products (${trip.productBags.length} Units • ${trip.quantityKg.toStringAsFixed(trip.quantityKg.truncateToDouble() == trip.quantityKg ? 0 : 1)} kg) • ${trip.grainTypeName}'
+                      : '${trip.productBags.isNotEmpty ? trip.productBags.first.unitText : "${trip.quantityKg} kg"} • ${trip.grainTypeName} (${trip.isLeg1GrainPickup ? "Raw Grain for Grinding" : "Fresh Packed Flour"})',
                   style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -2103,7 +2404,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                         const Icon(Icons.qr_code_2_rounded, size: 12, color: Color(0xFF6E5616)),
                         const SizedBox(width: 4),
                         Text(
-                          '${idx + 1}. ${bag.productName} (${bag.quantityKg}kg)',
+                          '${idx + 1}. ${bag.productName} • ${bag.unitText}',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
@@ -2308,7 +2609,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '${stop.customerName} (${stop.quantityKg} kg) • ${stop.deliveryAddress}',
+                                  '${stop.customerName} (${stop.productBags.length > 1 ? "${stop.productBags.length} Products (${stop.productBags.length} Units)" : (stop.productBags.isNotEmpty ? stop.productBags.first.unitText : "${stop.quantityKg} kg")}) • ${stop.deliveryAddress}',
                                   style: GoogleFonts.plusJakartaSans(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -2326,172 +2627,103 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           ],
           const SizedBox(height: 14),
 
-          // Accept Action Buttons: Multi-Select Toggle & Instant Accept
-          Row(
-            children: [
-              OutlinedButton.icon(
-                onPressed: () => _toggleOrderSelection(trip.orderId),
-                icon: Icon(isSelected ? Icons.check_circle_rounded : Icons.add_circle_outline_rounded, size: 16, color: isSelected ? const Color(0xFF1E8449) : AppTheme.primaryTerracotta),
-                label: Text(
-                  isSelected ? 'Selected in Batch' : 'Select for Batch',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: isSelected ? const Color(0xFF1E8449) : AppTheme.primaryTerracotta,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  side: BorderSide(color: isSelected ? const Color(0xFF1E8449) : AppTheme.borderLight),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => _acceptOrder(trip),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isGrouped ? const Color(0xFF8C4A3E) : const Color(0xFF1E8449),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    elevation: 2,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(isGrouped ? Icons.alt_route_rounded : Icons.navigation_rounded, size: 16, color: Colors.white),
-                      const SizedBox(width: 6),
-                      Text(
-                        isGrouped ? 'ACCEPT ${trip.stops.length}-STOP RUN' : 'ACCEPT RUN ONLY',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.3,
-                          color: Colors.white,
+          // Accept Action Button: Full-width direct action or Dual Batch/Solo Actions
+          if (isSelected && _selectedTripOrderIds.length >= 2) ...[
+            Builder(builder: (context) {
+              final selectedTrips = _allTrips.where((t) => _selectedTripOrderIds.contains(t.orderId)).toList();
+              final totalBatchPayout = selectedTrips.fold(0.0, (s, t) => s + t.deliveryFee);
+
+              return Row(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: () => _acceptCustomBatch(selectedTrips),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFC0392B),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          elevation: 2,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.alt_route_rounded, size: 18, color: Colors.white),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                'ACCEPT ${_selectedTripOrderIds.length} BATCH (₹${totalBatchPayout.toStringAsFixed(0)})',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.3,
+                                  color: Colors.white,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Multi-Order Combined Bottom Floating Bar
-  Widget _buildMultiOrderCombinedBottomBar() {
-    final selectedTrips = _allTrips.where((t) => _selectedOrderIds.contains(t.orderId)).toList();
-    final totalKg = selectedTrips.fold<double>(0.0, (sum, t) => sum + t.quantityKg);
-    final totalFee = selectedTrips.fold<double>(0.0, (sum, t) => sum + t.deliveryFee);
-    final totalStops = selectedTrips.fold<int>(0, (sum, t) => sum + (t.stops.isNotEmpty ? t.stops.length : 1));
-
-    final isOverCapacity = _selectedVehicle == 'BIKE_EV' && totalKg > 15.0;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E242B),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 18,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2ECC71).withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(10),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: SizedBox(
+                      height: 48,
+                      child: OutlinedButton(
+                        onPressed: () => _acceptOrder(trip),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFF1E8449), width: 1.5),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: Text(
+                          'RUN SOLO',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF1E8449),
+                          ),
+                        ),
                       ),
-                      child: const Icon(Icons.playlist_add_check_circle_rounded, color: Color(0xFF2ECC71), size: 20),
                     ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${_selectedOrderIds.length} Runs Selected ($totalStops Total Drops)',
-                          style: GoogleFonts.plusJakartaSans(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          'Combined: ${totalKg.toStringAsFixed(1)} kg • 1 Unified Map',
-                          style: GoogleFonts.plusJakartaSans(
-                            color: isOverCapacity ? const Color(0xFFE74C3C) : Colors.white70,
-                            fontSize: 11,
-                            fontWeight: isOverCapacity ? FontWeight.bold : FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                TextButton(
-                  onPressed: _clearSelectedOrders,
-                  style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                  child: Text(
-                    'Clear All',
-                    style: GoogleFonts.plusJakartaSans(color: Colors.white60, fontSize: 12, fontWeight: FontWeight.bold),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            if (isOverCapacity) ...[
-              Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFDEDEC),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '⚠️ ${totalKg.toStringAsFixed(1)} kg exceeds Bike limit (15 kg). Switch to 🚗 Car mode or reduce selection.',
-                  style: GoogleFonts.plusJakartaSans(fontSize: 10, color: const Color(0xFFC0392B), fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
+                ],
+              );
+            }),
+          ] else ...[
             SizedBox(
               width: double.infinity,
               height: 48,
-              child: ElevatedButton.icon(
-                onPressed: _acceptCombinedSelectedOrders,
-                icon: const Icon(Icons.alt_route_rounded, color: Colors.white, size: 20),
-                label: Text(
-                  'ACCEPT COMBINED TRIP (${_selectedOrderIds.length} RUNS • ₹${totalFee.toStringAsFixed(0)})',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.3,
-                    color: Colors.white,
-                  ),
-                ),
+              child: ElevatedButton(
+                onPressed: () => _acceptOrder(trip),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E8449),
+                  backgroundColor: isGrouped ? const Color(0xFF8C4A3E) : const Color(0xFF1E8449),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 4,
+                  elevation: 2,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(isGrouped ? Icons.alt_route_rounded : Icons.navigation_rounded, size: 18, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text(
+                      isGrouped ? 'ACCEPT ${trip.stops.length}-STOP RUN' : 'ACCEPT RUN',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.4,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ],
-        ),
+        ],
       ),
     );
   }

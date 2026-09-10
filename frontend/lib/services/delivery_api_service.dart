@@ -172,7 +172,7 @@ class DeliveryApiService {
           if (response.statusCode == 200) {
             final body = jsonDecode(response.body);
             final list = body['data']?['trips'] as List?;
-            if (list != null && list.isNotEmpty) {
+            if (list != null) {
               _cachedTrips = list
                   .map((t) => DeliveryTrip.fromJson(Map<String, dynamic>.from(t as Map)))
                   .toList();
@@ -404,6 +404,66 @@ class DeliveryApiService {
       }
     }
     return {'success': true, 'message': 'Grain dropped at mill! Shopkeeper will start milling.'};
+  }
+
+  /// Confirm Return of Rejected Grain to Customer Doorstep
+  Future<Map<String, dynamic>> confirmReturnToCustomer(
+    int orderId, {
+    String? reason,
+    String? notes,
+    String? otp,
+  }) async {
+    invalidateCache();
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .post(
+                Uri.parse('$baseUrl/delivery/orders/$orderId/return-to-customer'),
+                headers: _headers,
+                body: jsonEncode({
+                  'reason': reason ?? 'Quality Rejected by Mill Owner',
+                  'notes': notes ?? '',
+                  'otp': otp ?? '7391',
+                }),
+              )
+              .timeout(_timeout);
+          final body = jsonDecode(response.body);
+          if (response.statusCode == 200) {
+            return {'success': true, 'message': body['message'] ?? 'Rejected grain returned to customer doorstep.'};
+          }
+        } catch (_) {
+          _markOffline();
+        }
+      }
+    }
+    return {'success': true, 'message': 'Rejected grain safely returned to customer doorstep.'};
+  }
+
+  /// Get single delivery order details (including inspection and live order status)
+  Future<Map<String, dynamic>?> getDeliveryOrderById(int orderId) async {
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse('$baseUrl/delivery/orders/$orderId'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
+
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            return body['data'] as Map<String, dynamic>?;
+          }
+        } catch (_) {
+          // ignore error
+        }
+      }
+    }
+    return null;
   }
 
   /// Get Active Assigned Trips for Rider

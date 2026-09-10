@@ -25,6 +25,7 @@ router.get('/revenue', shopkeeperController.getRevenue);
 // Order Acceptance & Completion
 router.post('/orders/:orderId/accept', shopkeeperController.acceptOrder);
 router.post('/orders/:orderId/reject', shopkeeperController.rejectOrder);
+router.post('/orders/:orderId/intake-inspection', shopkeeperController.intakeGrainInspection);
 router.put('/orders/:orderId/completion-time', shopkeeperController.setCompletionTime);
 
 // Processing State Machine Transitions

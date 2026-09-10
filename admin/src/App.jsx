@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import DesktopHeader from './components/DesktopHeader';
 
 // Pages
+import LoginPage from './pages/LoginPage';
 import AccountingPage from './pages/AccountingPage';
 import CommissionsPage from './pages/CommissionsPage';
 import CitizensPage from './pages/CitizensPage';
@@ -18,7 +19,9 @@ import { apiService } from './services/apiService';
 import './styles/admin.css';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState(1); // Default to Flour Mills as seen in user screenshot
+  const [isAuthenticated, setIsAuthenticated] = useState(apiService.isAuthenticated());
+  const [currentUser, setCurrentUser] = useState(apiService.getCurrentUser());
+  const [activeTab, setActiveTab] = useState(0); // Default to Dashboard
   const [orders, setOrders] = useState(initialOrders);
   const [ridersList, setRidersList] = useState([]);
   const [wholesalersList, setWholesalersList] = useState([]);
@@ -28,10 +31,21 @@ export default function App() {
   const [refundsList, setRefundsList] = useState([]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     loadAllLivePlatformData();
     const interval = setInterval(loadAllLivePlatformData, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isAuthenticated]);
+
+  const handleLoginSuccess = (user) => {
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    apiService.logout();
+    setIsAuthenticated(false);
+  };
 
   const loadAllLivePlatformData = async () => {
     try {
@@ -207,17 +221,23 @@ export default function App() {
     },
   };
 
+  if (!isAuthenticated) {
+    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
     <div className="desktop-admin-shell">
       {/* Super Admin Navigation Sidebar */}
       <Sidebar
         activeTab={activeTab}
         onSelectTab={(tabId) => setActiveTab(tabId)}
+        onLogout={handleLogout}
+        currentUser={currentUser}
       />
 
       {/* Main Content Area */}
       <div className="desktop-main-wrapper">
-        <DesktopHeader />
+        <DesktopHeader currentUser={currentUser} onLogout={handleLogout} />
 
         <div className="desktop-content-body">
           {activeTab === 0 && <DashboardPage orders={orders} onNavigateTab={setActiveTab} />}

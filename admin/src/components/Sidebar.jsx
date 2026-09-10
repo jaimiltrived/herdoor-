@@ -20,7 +20,9 @@ import {
   LogOut
 } from 'lucide-react';
 
-export default function Sidebar({ activeTab, onSelectTab }) {
+export default function Sidebar({ activeTab, onSelectTab, onLogout, currentUser }) {
+  const user = currentUser || { name: 'Super Admin', role: 'Platform Lead' };
+
   const navItems = [
     { id: 0, label: 'Dashboard', icon: LayoutGrid },
     { id: 1, label: 'Flour Mills', icon: Store },
@@ -87,10 +89,10 @@ export default function Sidebar({ activeTab, onSelectTab }) {
             className="footer-avatar"
           />
           <div className="profile-text">
-            <span className="profile-name">Super Admin</span>
-            <span className="profile-role">Platform Lead</span>
+            <span className="profile-name">{user.name || 'Super Admin'}</span>
+            <span className="profile-role">{user.role === 'ADMIN' ? 'Platform Lead' : (user.role || 'Super Admin')}</span>
           </div>
-          <button className="icon-btn logout-btn" title="Log Out">
+          <button className="icon-btn logout-btn" title="Log Out" onClick={onLogout}>
             <LogOut size={16} />
           </button>
         </div>

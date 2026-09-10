@@ -111,10 +111,32 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
                 height: 54,
                 child: ElevatedButton(
                   onPressed: () {
+                    final pricePerKg = widget.grainSource == 2 ? 35.0 : 10.0;
+                    final subtotal = (widget.quantityKg * pricePerKg).toDouble();
+                    final pickupFee = widget.grainSource == 1 ? 20.0 : 0.0;
+                    final deliveryFee = 30.0;
+                    final total = subtotal + pickupFee + deliveryFee;
+                    final cartItems = [
+                      {
+                        'name': widget.selectedGrain,
+                        'quantity': widget.quantityKg,
+                        'price': pricePerKg,
+                        'category': 'GRAIN',
+                      }
+                    ];
+
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const PaymentMethodsScreen(),
+                        builder: (context) => PaymentMethodsScreen(
+                          cartItems: cartItems,
+                          millName: widget.millName,
+                          subtotal: subtotal,
+                          pickupFee: pickupFee,
+                          deliveryFee: deliveryFee,
+                          total: total,
+                          address: _dropLocation,
+                        ),
                       ),
                     );
                   },

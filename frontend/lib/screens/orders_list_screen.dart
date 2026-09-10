@@ -79,7 +79,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
           orderId: o.orderId,
           millName: o.millName.isNotEmpty ? o.millName : 'Artisan Mill Co.',
           itemSummary: o.itemsSummary,
-          quantityKg: o.quantityText,
+          quantityKg: o.productBags.length > 1 ? '${o.productBags.length} Products (${o.productBags.length} Units)' : (o.productBags.isNotEmpty ? o.productBags.first.unitText : o.quantityText),
           estimatedDelivery: 'Within 20 minutes',
           statusStep: o.statusTag,
           totalPrice: o.totalPrice,
