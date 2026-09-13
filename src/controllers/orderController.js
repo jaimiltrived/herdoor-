@@ -453,7 +453,27 @@ exports.getOrderStatus = async (req, res) => {
   });
 };
 
-exports.getOrderTimeline = (req, res) => {
+exports.getOrderTimeline = async (req, res) => {
+  const param = req.params.orderId;
+  const numId = parseInt(String(param).replace(/[^0-9]/g, ''));
+  try {
+    const dbTimeline = await query(`
+      SELECT * FROM order_timeline
+      WHERE order_id = ? OR order_id = (SELECT id FROM orders WHERE order_number = ? LIMIT 1)
+      ORDER BY id ASC
+    `, [numId || 0, String(param)]);
+
+    if (dbTimeline && dbTimeline.length > 0) {
+      return res.json({
+        status: 'success',
+        data: {
+          orderId: numId || param,
+          timeline: dbTimeline
+        }
+      });
+    }
+  } catch (_) {}
+
   const order = findOrder(req.params.orderId);
 
   if (!order) {
@@ -549,15 +569,41 @@ exports.getEstimatedTime = (req, res) => {
   });
 };
 
-exports.getOrderTracking = (req, res) => {
-  const orderId = parseInt(req.params.orderId);
-  const order = store.orders.find(o => o.id === orderId);
+exports.getOrderTracking = async (req, res) => {
+  const param = req.params.orderId;
+  const numId = parseInt(String(param).replace(/[^0-9]/g, ''));
+  let dbOrder = null;
+  let dbTimeline = [];
+  let dbDelivery = null;
 
+  try {
+    const oRows = await query('SELECT * FROM orders WHERE id = ? OR order_number = ? LIMIT 1', [numId || 0, String(param)]);
+    if (oRows && oRows.length > 0) dbOrder = oRows[0];
+    const tlRows = await query('SELECT * FROM order_timeline WHERE order_id = ? OR order_id = (SELECT id FROM orders WHERE order_number = ? LIMIT 1) ORDER BY id ASC', [numId || 0, String(param)]);
+    if (tlRows && tlRows.length > 0) dbTimeline = tlRows;
+    const dRows = await query('SELECT * FROM deliveries WHERE order_id = ? LIMIT 1', [numId || (dbOrder ? dbOrder.id : 0)]);
+    if (dRows && dRows.length > 0) dbDelivery = dRows[0];
+  } catch (_) {}
+
+  if (dbOrder) {
+    return res.json({
+      status: 'success',
+      data: {
+        orderId: dbOrder.id,
+        orderNumber: dbOrder.order_number,
+        status: dbOrder.status,
+        timeline: dbTimeline,
+        delivery: dbDelivery
+      }
+    });
+  }
+
+  const order = findOrder(req.params.orderId);
   if (!order) {
     return res.status(404).json({ status: 'error', message: 'Order not found' });
   }
 
-  const delivery = store.deliveries.find(d => d.orderId === orderId);
+  const delivery = store.deliveries.find(d => d.orderId === (order.id || numId));
 
   res.json({
     status: 'success',

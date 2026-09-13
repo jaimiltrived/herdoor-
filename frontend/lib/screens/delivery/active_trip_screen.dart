@@ -8,12 +8,16 @@ import '../../services/delivery_api_service.dart';
 import '../../services/merchant_api_service.dart';
 
 enum TripStage {
+  headingToCustomer,
+  atCustomerPickup,
   headingToMill,
   atMillPickup,
-  headingToCustomer,
+  atMillDelivery,
   atCustomerDelivery,
   returningToCustomer,
   atCustomerReturn,
+  returningToMill,
+  atMillReturn,
   completed,
 }
 
@@ -43,7 +47,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
   int _currentStopIndex = 0;
   bool _isFlashlightOn = false;
 
-  // Mill Inspection & Return State
+  // Mill Inspection & Leg 1 Return State
   bool _isRejectedAtMill = false;
   String _millRejectionReason = '';
   Timer? _inspectionPollTimer;
@@ -52,6 +56,16 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
 
   bool get _allMillBagsScanned =>
       _productBags.isNotEmpty && _scannedMillBags.length >= _productBags.length;
+
+  // Customer Quality Inspection & Leg 2 Return State
+  bool _isRejectedAtDoorstep = false;
+  String _customerRejectionReason = '';
+  final Set<String> _scannedCustomerBags = {};
+
+  bool get _allCustomerBagsScanned {
+    final currentStopBags = _productBags.where((b) => b.orderId == _activeStop.orderId).toList();
+    return currentStopBags.isNotEmpty && _scannedCustomerBags.length >= currentStopBags.length;
+  }
 
   // Real-Time Navigation Simulation State
   Timer? _navSimulationTimer;
@@ -99,9 +113,17 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
     _otpController.text = _activeStop.deliveryOtp;
     _isRejectedAtMill = widget.trip.isReturnToCustomer;
     _millRejectionReason = widget.trip.rejectionReason ?? '';
+    _isRejectedAtDoorstep = widget.trip.isReturnToMill;
+    _customerRejectionReason = widget.trip.rejectionReason ?? '';
 
     if (_isRejectedAtMill) {
       _currentStage = TripStage.returningToCustomer;
+    } else if (_isRejectedAtDoorstep) {
+      _currentStage = TripStage.returningToMill;
+    } else if (widget.trip.isLeg1GrainPickup) {
+      _currentStage = TripStage.headingToCustomer;
+    } else {
+      _currentStage = TripStage.headingToMill;
     }
 
     _pulseController = AnimationController(
@@ -117,7 +139,9 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
     _startRealtimeNavigationSimulation();
 
     if (widget.trip.isLeg1GrainPickup &&
-        (_currentStage == TripStage.atCustomerDelivery || _currentStage == TripStage.atMillPickup)) {
+        (_currentStage == TripStage.atMillDelivery ||
+            _currentStage == TripStage.atCustomerDelivery ||
+            _currentStage == TripStage.atMillPickup)) {
       _startMerchantInspectionPolling();
     }
   }
@@ -140,7 +164,9 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
         timer.cancel();
         return;
       }
-      if (_currentStage != TripStage.atCustomerDelivery && _currentStage != TripStage.atMillPickup) {
+      if (_currentStage != TripStage.atCustomerDelivery &&
+          _currentStage != TripStage.atMillPickup &&
+          _currentStage != TripStage.atMillDelivery) {
         timer.cancel();
         return;
       }
@@ -222,7 +248,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
     }
   }
 
-  Future<void> _simulateMerchantDecision(bool isAccepted) async {
+  Future<void> _simulateMerchantDecision(bool isAccepted, {String? reason}) async {
     setState(() => _isProcessing = true);
     try {
       if (isAccepted) {
@@ -255,13 +281,14 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
           );
         }
       } else {
+        final rejectReason = reason ?? 'Grain moisture > 16% & foreign impurities found';
         await MerchantApiService.instance.submitGrainIntakeInspection(
           _activeStop.orderId,
           isAccepted: false,
-          reason: 'Grain moisture > 16% & foreign impurities found',
+          reason: rejectReason,
           notes: 'Rejected by shopkeeper during grain intake quality scan',
         );
-        _resetNavigationForReturnStage('Grain moisture > 16% & foreign impurities found');
+        _resetNavigationForReturnStage(rejectReason);
       }
     } catch (e) {
       if (mounted) {
@@ -293,7 +320,9 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
             _currentSpeedKmH = 28 + (_routeProgress * 10).toInt() % 12;
 
             if (_routeProgress > 0.6) {
-              _currentTurnInstruction = 'In 80m, destination on your left (${widget.trip.millName})';
+              _currentTurnInstruction = widget.trip.isLeg1GrainPickup
+                  ? 'In 80m, arrive at ${widget.trip.millName} to drop raw grain'
+                  : 'In 80m, destination on your left (${widget.trip.millName})';
               _currentTurnIcon = Icons.turn_left_rounded;
               _trafficCondition = 'CLEAR';
             } else {
@@ -317,7 +346,9 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
             _currentSpeedKmH = 34 + (_routeProgress * 15).toInt() % 14;
 
             if (_routeProgress > 0.7) {
-              _currentTurnInstruction = 'Turn left towards Stop ${_currentStopIndex + 1} (${_activeStop.customerName})';
+              _currentTurnInstruction = widget.trip.isLeg1GrainPickup
+                  ? 'Turn left towards Stop ${_currentStopIndex + 1} (${_activeStop.customerName}) for Grain Pickup'
+                  : 'Turn left towards Stop ${_currentStopIndex + 1} (${_activeStop.customerName}) for Flour Delivery';
               _currentTurnIcon = Icons.turn_left_rounded;
             } else if (_routeProgress > 0.4) {
               _currentTurnInstruction = 'Take flyover towards Satellite Road';
@@ -362,6 +393,33 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
             _currentTurnIcon = Icons.check_circle_rounded;
           }
         });
+      } else if (_currentStage == TripStage.returningToMill) {
+        setState(() {
+          if (_routeProgress < 0.95) {
+            _routeProgress += 0.07;
+            _distanceMeters = (_distanceMeters - 90).clamp(30, 4000);
+            _etaSeconds = (_etaSeconds - 18).clamp(10, 900);
+            _currentSpeedKmH = 32 + (_routeProgress * 12).toInt() % 10;
+
+            if (_routeProgress > 0.7) {
+              _currentTurnInstruction = 'Turn right towards ${widget.trip.millName} for Return Handover';
+              _currentTurnIcon = Icons.turn_right_rounded;
+            } else if (_routeProgress > 0.4) {
+              _currentTurnInstruction = 'Return route: Head back to ${widget.trip.millName} via Ring Road';
+              _currentTurnIcon = Icons.u_turn_left_rounded;
+              _trafficCondition = 'CLEAR';
+            } else {
+              _currentTurnInstruction = 'Returning rejected flour: Head straight towards mill';
+              _currentTurnIcon = Icons.straight_rounded;
+              _trafficCondition = 'MODERATE';
+            }
+          } else {
+            _distanceMeters = 15;
+            _etaSeconds = 0;
+            _currentTurnInstruction = 'Arrived back at ${widget.trip.millName} for Return Handover';
+            _currentTurnIcon = Icons.check_circle_rounded;
+          }
+        });
       }
 
       // Sync Live GPS Coordinates & Telemetry to Backend
@@ -387,7 +445,9 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
       _distanceMeters = 1850;
       _etaSeconds = 480; // 8 minutes
       _currentSpeedKmH = 35;
-      _currentTurnInstruction = 'Head west towards Stop ${_currentStopIndex + 1} (${_activeStop.customerName})';
+      _currentTurnInstruction = widget.trip.isLeg1GrainPickup
+          ? 'Head towards Stop ${_currentStopIndex + 1} (${_activeStop.customerName}) for Grain Pickup'
+          : 'Head towards Stop ${_currentStopIndex + 1} (${_activeStop.customerName}) for Flour Delivery';
       _currentTurnIcon = Icons.straight_rounded;
       _trafficCondition = 'CLEAR';
       _otpController.text = _activeStop.deliveryOtp;
@@ -409,10 +469,32 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
     });
   }
 
+  void _resetNavigationForReturnToMillStage(String reason) {
+    setState(() {
+      _isRejectedAtDoorstep = true;
+      _customerRejectionReason = reason;
+      _currentStage = TripStage.returningToMill;
+      _routeProgress = 0.10;
+      _distanceMeters = 1850;
+      _etaSeconds = 450;
+      _currentSpeedKmH = 32;
+      _currentTurnInstruction = 'U-Turn from ${_activeStop.customerName} Doorstep - Returning rejected flour to ${widget.trip.millName}';
+      _currentTurnIcon = Icons.u_turn_left_rounded;
+      _trafficCondition = 'CLEAR';
+    });
+  }
+
   Future<void> _launchGoogleMaps() async {
-    final destination = _currentStage == TripStage.headingToMill || _currentStage == TripStage.atMillPickup
+    final bool isMillDestination =
+        _currentStage == TripStage.headingToMill ||
+        _currentStage == TripStage.atMillPickup ||
+        _currentStage == TripStage.atMillDelivery ||
+        _currentStage == TripStage.returningToMill ||
+        _currentStage == TripStage.atMillReturn;
+
+    final destination = isMillDestination
         ? '${widget.trip.millName}, ${widget.trip.millAddress}'
-        : '${_activeStop.customerName}, ${_activeStop.deliveryAddress}';
+        : '${_activeStop.customerName}, ${_activeStop.homePickupAddress.isNotEmpty ? _activeStop.homePickupAddress : _activeStop.deliveryAddress}';
 
     final Uri googleMapsUrl = Uri.parse(
       'https://www.google.com/maps/dir/?api=1&destination=${Uri.encodeComponent(destination)}&travelmode=driving',
@@ -1053,6 +1135,81 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
     }
   }
 
+  Future<void> _handleConfirmLeg1CustomerPickup() async {
+    final enteredPin = _pinController.text.trim();
+    final effectivePin = enteredPin.isNotEmpty
+        ? enteredPin
+        : (_activeStop.pickupPin.isNotEmpty
+            ? _activeStop.pickupPin
+            : (widget.trip.pickupPin.isNotEmpty ? widget.trip.pickupPin : '4821'));
+
+    setState(() {
+      _isProcessing = true;
+      _pinController.text = effectivePin;
+    });
+
+    final res = await DeliveryApiService.instance.confirmPickup(
+      _activeStop.orderId,
+      pin: effectivePin,
+    );
+
+    if (!mounted) return;
+    setState(() => _isProcessing = false);
+
+    if (res['success'] == true) {
+      final idx = _currentStopIndex;
+      if (idx < _tripStops.length) {
+        _tripStops[idx] = _tripStops[idx].copyWith(isPickedUp: true);
+      }
+      _productBags = _productBags.map((b) {
+        if (b.orderId == _activeStop.orderId) {
+          return b.copyWith(isPickedUp: true);
+        }
+        return b;
+      }).toList();
+
+      if (_currentStopIndex < _tripStops.length - 1) {
+        // Advance to next customer stop in group batch
+        setState(() {
+          _currentStopIndex++;
+          _currentStage = TripStage.headingToCustomer;
+          _resetNavigationForCustomerStage();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Grain collected for Stop $_currentStopIndex! Heading to Stop ${_currentStopIndex + 1} (${_activeStop.customerName}).'),
+            backgroundColor: const Color(0xFF1E8449),
+          ),
+        );
+      } else {
+        // All customer stops collected -> proceed to mill!
+        setState(() {
+          _currentStage = TripStage.headingToMill;
+          _routeProgress = 0.10;
+          _distanceMeters = 1850;
+          _etaSeconds = 380;
+          _currentSpeedKmH = 34;
+          _currentTurnInstruction = 'All grain bags collected! Head towards ${widget.trip.millName}';
+          _currentTurnIcon = Icons.straight_rounded;
+          _trafficCondition = 'CLEAR';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ All grain bags collected! Navigating to ${widget.trip.millName} for drop-off & inspection.'),
+            backgroundColor: const Color(0xFF1E8449),
+          ),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res['message'] ?? 'Customer grain pickup failed'),
+          backgroundColor: const Color(0xFFC0392B),
+        ),
+      );
+    }
+  }
+
   Future<void> _handleConfirmDelivery() async {
     final isLeg1GrainDrop = widget.trip.isHomeGrainPickup;
 
@@ -1362,6 +1519,117 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
     );
   }
 
+  Future<void> _handleConfirmReturnToMill() async {
+    setState(() => _isProcessing = true);
+
+    final res = await DeliveryApiService.instance.confirmReturnToMill(
+      _activeStop.orderId,
+      reason: _customerRejectionReason.isNotEmpty ? _customerRejectionReason : 'Flour returned to mill by driver',
+    );
+
+    if (!mounted) return;
+    setState(() => _isProcessing = false);
+
+    if (res['success'] == true) {
+      setState(() {
+        _currentStage = TripStage.completed;
+      });
+      _navSimulationTimer?.cancel();
+      _showMillReturnCompletionDialog();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res['message'] ?? 'Return handover confirmation failed'),
+          backgroundColor: const Color(0xFFC0392B),
+        ),
+      );
+    }
+  }
+
+  void _showMillReturnCompletionDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xFFFDEDEC),
+              ),
+              child: const Icon(Icons.assignment_return_rounded, size: 40, color: Color(0xFFC0392B)),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '🔄 Flour Returned to Mill!',
+              style: GoogleFonts.playfairDisplay(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Rejected flour has been safely returned to ${widget.trip.millName}.\n\nReason: "${_customerRejectionReason.isNotEmpty ? _customerRejectionReason : 'Quality inspection rejected by customer'}"',
+              style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9F5EF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2D8C9)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Return Trip Compensation', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
+                  Text(
+                    '+₹${(widget.trip.deliveryFee * 1.2).toStringAsFixed(0)}',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                      color: const Color(0xFF1E8449),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryTerracotta,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                if (widget.onTripCompleted != null) {
+                  widget.onTripCompleted!();
+                } else if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
+              },
+              child: Text('Close & Back to Radar', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showCompletionDialog() {
     showDialog(
       context: context,
@@ -1497,6 +1765,11 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
           ),
           actions: [
             IconButton(
+              onPressed: _openOrderTimelineSheet,
+              icon: const Icon(Icons.timeline_rounded, color: AppTheme.primaryTerracotta),
+              tooltip: 'Order Timeline',
+            ),
+            IconButton(
               onPressed: () => setState(() => _isVoiceMuted = !_isVoiceMuted),
               icon: Icon(_isVoiceMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded, color: AppTheme.primaryTerracotta),
               tooltip: _isVoiceMuted ? 'Unmute Audio HUD' : 'Mute Audio HUD',
@@ -1513,12 +1786,64 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
             // Stage Timeline Progress Bar
             _buildStageProgressBar(),
 
+            // Quick Live Order Timeline Strip
+            InkWell(
+              onTap: _openOrderTimelineSheet,
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(18, 10, 18, 2),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppTheme.borderLight),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryTerracotta.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.timeline_rounded, size: 16, color: AppTheme.primaryTerracotta),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Track Milestone History & Live Timeline',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Text(
+                          'View',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryTerracotta),
+                        ),
+                        const Icon(Icons.chevron_right_rounded, size: 16, color: AppTheme.primaryTerracotta),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(18),
                 child: Column(
                   children: [
-                    if (_currentStage == TripStage.completed && (!widget.trip.isLeg1GrainPickup || _allMillBagsScanned))
+                    if (_currentStage == TripStage.completed)
                       _buildCompletedTripCard()
                     else ...[
                       // Real-time Turn-by-Turn Navigation HUD Card
@@ -1534,12 +1859,18 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                       const SizedBox(height: 16),
 
                       // Stage Specific Action Section
-                      if (_currentStage == TripStage.headingToMill || _currentStage == TripStage.atMillPickup)
-                        _buildMillPickupSection()
-                      else if (_currentStage == TripStage.headingToCustomer || _currentStage == TripStage.atCustomerDelivery)
-                        _buildCustomerDeliverySection()
+                      if (_currentStage == TripStage.headingToCustomer || _currentStage == TripStage.atCustomerPickup)
+                        (widget.trip.isLeg1GrainPickup ? _buildLeg1CustomerPickupSection() : _buildLeg2CustomerDoorstepSection())
+                      else if (_currentStage == TripStage.headingToMill || _currentStage == TripStage.atMillPickup)
+                        (widget.trip.isLeg1GrainPickup ? _buildLeg1HeadingToMillSection() : _buildLeg2MillPickupSection())
+                      else if (_currentStage == TripStage.atMillDelivery)
+                        _buildLeg1MillDropSection()
+                      else if (_currentStage == TripStage.atCustomerDelivery)
+                        _buildLeg2CustomerDoorstepSection()
                       else if (_currentStage == TripStage.returningToCustomer || _currentStage == TripStage.atCustomerReturn)
-                        _buildCustomerReturnSection(),
+                        _buildCustomerReturnSection()
+                      else if (_currentStage == TripStage.returningToMill || _currentStage == TripStage.atMillReturn)
+                        _buildMillReturnSection(),
                     ],
 
                     const SizedBox(height: 20),
@@ -1575,17 +1906,21 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
             height: 72,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: _isRejectedAtMill ? const Color(0xFFFDEDEC) : const Color(0xFFE8F8F5),
+              color: (_isRejectedAtMill || _isRejectedAtDoorstep) ? const Color(0xFFFDEDEC) : const Color(0xFFE8F8F5),
             ),
             child: Icon(
-              _isRejectedAtMill ? Icons.assignment_return_rounded : Icons.check_circle_rounded,
+              (_isRejectedAtMill || _isRejectedAtDoorstep) ? Icons.assignment_return_rounded : Icons.check_circle_rounded,
               size: 48,
-              color: _isRejectedAtMill ? const Color(0xFFC0392B) : const Color(0xFF1E8449),
+              color: (_isRejectedAtMill || _isRejectedAtDoorstep) ? const Color(0xFFC0392B) : const Color(0xFF1E8449),
             ),
           ),
           const SizedBox(height: 16),
           Text(
-            _isRejectedAtMill ? 'Return Handover Completed!' : 'Trip ${widget.trip.orderNumber.startsWith('#') ? widget.trip.orderNumber : '#${widget.trip.orderNumber}'} Completed!',
+            _isRejectedAtMill
+                ? 'Grain Return Completed!'
+                : (_isRejectedAtDoorstep
+                    ? 'Flour Return Completed!'
+                    : 'Trip ${widget.trip.orderNumber.startsWith('#') ? widget.trip.orderNumber : '#${widget.trip.orderNumber}'} Completed!'),
             style: GoogleFonts.playfairDisplay(
               fontSize: 22,
               fontWeight: FontWeight.bold,
@@ -1596,8 +1931,10 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
           const SizedBox(height: 8),
           Text(
             _isRejectedAtMill
-                ? 'Rejected grain bags returned to customer doorstep. Return payout added to your wallet.'
-                : 'All ${_tripStops.length} stop(s) successfully delivered. Payout added to your daily wallet.',
+                ? 'Rejected grain bags safely returned to customer doorstep. Return payout added to your wallet.'
+                : (_isRejectedAtDoorstep
+                    ? 'Rejected flour bags safely returned to mill. Return payout added to your wallet.'
+                    : 'All ${_tripStops.length} stop(s) successfully delivered. Payout added to your daily wallet.'),
             style: GoogleFonts.plusJakartaSans(
               fontSize: 13,
               color: AppTheme.textSecondary,
@@ -1615,11 +1952,11 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  _isRejectedAtMill ? 'Return Trip Compensation' : 'Total Payout Credited',
+                  (_isRejectedAtMill || _isRejectedAtDoorstep) ? 'Return Trip Compensation' : 'Total Payout Credited',
                   style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 Text(
-                  _isRejectedAtMill
+                  (_isRejectedAtMill || _isRejectedAtDoorstep)
                       ? '+₹${(widget.trip.deliveryFee * 1.2).toStringAsFixed(0)}'
                       : '+₹${widget.trip.deliveryFee.toStringAsFixed(0)}',
                   style: GoogleFonts.plusJakartaSans(
@@ -1666,145 +2003,220 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
   String _getStageTitle() {
     final bool isLeg1 = widget.trip.isLeg1GrainPickup;
     switch (_currentStage) {
-      case TripStage.headingToMill:
-        return isLeg1 ? 'Leg 1: Heading to Customer Home (Grain Pickup)' : 'Leg 2: Heading to Mill (Flour Pickup)';
-      case TripStage.atMillPickup:
-        return isLeg1 ? 'Leg 1: At Mill Drop-off (Mill Intake & Bag Inspection)' : 'Leg 2: At Mill Handover (Scan Flour Bags)';
       case TripStage.headingToCustomer:
-        return isLeg1 ? 'Leg 1: Heading to Flour Mill (Drop Grain for Grinding)' : 'Leg 2: Heading to Stop ${_currentStopIndex + 1} (${_activeStop.customerName})';
+        return isLeg1
+            ? 'Leg 1: Heading to Stop ${_currentStopIndex + 1} (${_activeStop.customerName}) - Grain Pickup'
+            : 'Leg 2: Heading to Stop ${_currentStopIndex + 1} (${_activeStop.customerName}) - Flour Delivery';
+      case TripStage.atCustomerPickup:
+        return 'Leg 1: At Stop ${_currentStopIndex + 1} (${_activeStop.customerName}) - Pick Up Raw Grain';
+      case TripStage.headingToMill:
+        return isLeg1
+            ? 'Leg 1: Heading to Mill (${widget.trip.millName}) - Drop Grain'
+            : 'Leg 2: Heading to Mill (${widget.trip.millName}) - Flour Pickup';
+      case TripStage.atMillPickup:
+        return 'Leg 2: At Mill (${widget.trip.millName}) - Pick Up Milled Flour';
+      case TripStage.atMillDelivery:
+        return 'Leg 1: At Mill (${widget.trip.millName}) - Shopkeeper Intake & Scan';
       case TripStage.atCustomerDelivery:
-        return isLeg1 ? 'Leg 1: At Mill (Handover Grain to Mill Owner)' : 'Leg 2: At Stop ${_currentStopIndex + 1} Doorstep (Verify OTP)';
+        return 'Leg 2: At Stop ${_currentStopIndex + 1} Doorstep - Customer Scan & Delivery';
       case TripStage.returningToCustomer:
-        return 'Return Leg: Returning Rejected Grain to Customer';
+        return 'Leg 1 Return: Returning Rejected Grain to ${_activeStop.customerName}';
       case TripStage.atCustomerReturn:
-        return 'Return Leg: At Customer Doorstep (Return Handover)';
+        return 'Leg 1 Return: At Customer Doorstep - Return Handover';
+      case TripStage.returningToMill:
+        return 'Leg 2 Return: Returning Rejected Flour to ${widget.trip.millName}';
+      case TripStage.atMillReturn:
+        return 'Leg 2 Return: At Mill - Return Handover';
       case TripStage.completed:
-        if (_isRejectedAtMill) return 'Return Completed (Grain Returned to Customer)';
+        if (_isRejectedAtMill) return 'Leg 1 Return Completed (Grain Handed Back to Customer)';
+        if (_isRejectedAtDoorstep) return 'Leg 2 Return Completed (Flour Handed Back to Mill)';
         return isLeg1 ? 'Leg 1 Completed (Grain Handed to Mill)' : 'Leg 2 Completed (Flour Delivered)';
     }
   }
 
   Widget _buildStageProgressBar() {
     final bool isLeg1 = widget.trip.isLeg1GrainPickup;
-    final bool isReturning = _isRejectedAtMill ||
+    final bool isReturningToCustomer = _isRejectedAtMill ||
         _currentStage == TripStage.returningToCustomer ||
         _currentStage == TripStage.atCustomerReturn;
+    final bool isReturningToMill = _isRejectedAtDoorstep ||
+        _currentStage == TripStage.returningToMill ||
+        _currentStage == TripStage.atMillReturn;
+    final bool isReturning = isReturningToCustomer || isReturningToMill;
 
-    final List<Map<String, dynamic>> stages = isReturning
-        ? [
-            {
-              'title': 'Accept',
-              'done': true,
-              'isHold': false,
-              'isCurrent': false,
-              'description': 'Trip accepted. Route started.',
-            },
-            {
-              'title': 'Mill Drop',
-              'done': true,
-              'isHold': false,
-              'isCurrent': false,
-              'description': 'Arrived at mill and submitted grain bags for intake testing.',
-            },
-            {
-              'title': 'Quality',
-              'done': true,
-              'isHold': false,
-              'isCurrent': false,
-              'isRejected': true,
-              'description': 'Mill owner rejected grain quality. Return process initiated.',
-            },
-            {
-              'title': 'Return Home',
-              'done': _currentStage == TripStage.completed,
-              'isHold': _currentStage == TripStage.returningToCustomer || _currentStage == TripStage.atCustomerReturn,
-              'isCurrent': _currentStage == TripStage.returningToCustomer || _currentStage == TripStage.atCustomerReturn,
-              'description': 'Returning rejected raw grain to customer doorstep.',
-            },
-            {
-              'title': 'Done',
-              'done': _currentStage == TripStage.completed,
-              'isHold': false,
-              'isCurrent': _currentStage == TripStage.completed,
-              'description': 'Return leg complete. Grain handed back to customer.',
-            },
-          ]
-        : isLeg1
-            ? [
-                {
-                  'title': 'Accept',
-                  'done': true,
-                  'isHold': false,
-                  'isCurrent': false,
-                  'description': 'Trip accepted. Driver is on duty.',
-                },
-                {
-                  'title': 'Home',
-                  'done': _currentStage.index > TripStage.headingToMill.index,
-                  'isHold': _currentStage == TripStage.headingToMill,
-                  'isCurrent': _currentStage == TripStage.headingToMill,
-                  'description': 'Heading to customer doorstep to pick up raw grain bags.',
-                },
-                {
-                  'title': 'Grain',
-                  'done': _currentStage.index >= TripStage.headingToCustomer.index,
-                  'isHold': _currentStage == TripStage.atMillPickup,
-                  'isCurrent': _currentStage == TripStage.atMillPickup,
-                  'description': 'Grain bags collected, weighed, and verified with customer.',
-                },
-                {
-                  'title': 'Mill',
-                  'done': _allMillBagsScanned && _currentStage == TripStage.completed,
-                  'isHold': !_allMillBagsScanned && (_currentStage == TripStage.headingToCustomer || _currentStage == TripStage.atCustomerDelivery),
-                  'isCurrent': (_currentStage == TripStage.headingToCustomer || _currentStage == TripStage.atCustomerDelivery) && _currentStage != TripStage.completed,
-                  'description': 'At mill for raw grain handover. Mill owner must inspect and scan each product bag.',
-                  'holdReason': 'Awaiting Mill Owner Scan (${_scannedMillBags.length}/${_productBags.length} Verified)',
-                },
-                {
-                  'title': 'Done',
-                  'done': _currentStage == TripStage.completed && _allMillBagsScanned,
-                  'isHold': false,
-                  'isCurrent': _currentStage == TripStage.completed,
-                  'description': 'Leg 1 completed. Grain safely handed over to mill owner.',
-                },
-              ]
-            : [
-                {
-                  'title': 'Accept',
-                  'done': true,
-                  'isHold': false,
-                  'isCurrent': false,
-                  'description': 'Trip accepted. Route started.',
-                },
-                {
-                  'title': 'Mill',
-                  'done': _currentStage.index > TripStage.headingToMill.index,
-                  'isHold': _currentStage == TripStage.headingToMill,
-                  'isCurrent': _currentStage == TripStage.headingToMill,
-                  'description': 'Heading to flour mill to pick up milled flour bags.',
-                },
-                {
-                  'title': 'Flour',
-                  'done': _currentStage.index >= TripStage.headingToCustomer.index,
-                  'isHold': _currentStage == TripStage.atMillPickup,
-                  'isCurrent': _currentStage == TripStage.atMillPickup,
-                  'description': 'Flour bags collected and scanned at mill.',
-                },
-                {
-                  'title': 'Home',
-                  'done': _currentStage == TripStage.completed,
-                  'isHold': _currentStage == TripStage.headingToCustomer || _currentStage == TripStage.atCustomerDelivery,
-                  'isCurrent': _currentStage == TripStage.headingToCustomer || _currentStage == TripStage.atCustomerDelivery,
-                  'description': 'Delivering flour bags to customer doorstep & verifying OTP.',
-                },
-                {
-                  'title': 'Done',
-                  'done': _currentStage == TripStage.completed,
-                  'isHold': false,
-                  'isCurrent': _currentStage == TripStage.completed,
-                  'description': 'Delivery complete. Customer received fresh flour.',
-                },
-              ];
+    final List<Map<String, dynamic>> stages;
+
+    if (isReturningToCustomer) {
+      stages = [
+        {
+          'title': 'Accept',
+          'done': true,
+          'isHold': false,
+          'isCurrent': false,
+          'description': 'Trip accepted. Route started.',
+        },
+        {
+          'title': 'Mill Drop',
+          'done': true,
+          'isHold': false,
+          'isCurrent': false,
+          'description': 'Arrived at mill and submitted grain bags for intake testing.',
+        },
+        {
+          'title': 'Quality',
+          'done': true,
+          'isHold': false,
+          'isCurrent': false,
+          'isRejected': true,
+          'description': 'Mill owner rejected grain quality. Return process initiated.',
+        },
+        {
+          'title': 'Return Home',
+          'done': _currentStage == TripStage.completed,
+          'isHold': _currentStage == TripStage.returningToCustomer || _currentStage == TripStage.atCustomerReturn,
+          'isCurrent': _currentStage == TripStage.returningToCustomer || _currentStage == TripStage.atCustomerReturn,
+          'description': 'Returning rejected raw grain to customer doorstep.',
+        },
+        {
+          'title': 'Done',
+          'done': _currentStage == TripStage.completed,
+          'isHold': false,
+          'isCurrent': _currentStage == TripStage.completed,
+          'description': 'Return leg complete. Grain handed back to customer.',
+        },
+      ];
+    } else if (isReturningToMill) {
+      stages = [
+        {
+          'title': 'Accept',
+          'done': true,
+          'isHold': false,
+          'isCurrent': false,
+          'description': 'Trip accepted. Route started.',
+        },
+        {
+          'title': 'Mill Pick',
+          'done': true,
+          'isHold': false,
+          'isCurrent': false,
+          'description': 'Flour picked up from mill.',
+        },
+        {
+          'title': 'Doorstep',
+          'done': true,
+          'isHold': false,
+          'isCurrent': false,
+          'description': 'Arrived at customer doorstep.',
+        },
+        {
+          'title': 'Quality',
+          'done': true,
+          'isHold': false,
+          'isCurrent': false,
+          'isRejected': true,
+          'description': 'Customer rejected flour quality. Return initiated.',
+        },
+        {
+          'title': 'Return Mill',
+          'done': _currentStage == TripStage.completed,
+          'isHold': _currentStage == TripStage.returningToMill || _currentStage == TripStage.atMillReturn,
+          'isCurrent': _currentStage == TripStage.returningToMill || _currentStage == TripStage.atMillReturn,
+          'description': 'Returning rejected flour bags back to mill.',
+        },
+        {
+          'title': 'Done',
+          'done': _currentStage == TripStage.completed,
+          'isHold': false,
+          'isCurrent': _currentStage == TripStage.completed,
+          'description': 'Return complete. Flour handed back to mill shopkeeper.',
+        },
+      ];
+    } else if (isLeg1) {
+      final bool pickDone = _currentStage != TripStage.headingToCustomer && _currentStage != TripStage.atCustomerPickup;
+      final bool transitDone = pickDone && _currentStage != TripStage.headingToMill;
+      final bool dropDone = transitDone && (_allMillBagsScanned || _currentStage == TripStage.completed);
+
+      stages = [
+        {
+          'title': 'Accept',
+          'done': true,
+          'isHold': false,
+          'isCurrent': false,
+          'description': 'Trip accepted. Driver is on duty.',
+        },
+        {
+          'title': 'Pick Grain',
+          'done': pickDone,
+          'isHold': _currentStage == TripStage.headingToCustomer || _currentStage == TripStage.atCustomerPickup,
+          'isCurrent': _currentStage == TripStage.headingToCustomer || _currentStage == TripStage.atCustomerPickup,
+          'description': 'Collecting raw grain bags from customer homes.',
+        },
+        {
+          'title': 'To Mill',
+          'done': transitDone,
+          'isHold': _currentStage == TripStage.headingToMill,
+          'isCurrent': _currentStage == TripStage.headingToMill,
+          'description': 'Heading to flour mill with raw grain bags.',
+        },
+        {
+          'title': 'Mill Scan',
+          'done': dropDone,
+          'isHold': _currentStage == TripStage.atMillDelivery && !_allMillBagsScanned,
+          'isCurrent': _currentStage == TripStage.atMillDelivery,
+          'description': 'At mill. Shopkeeper inspecting & scanning all grain bags.',
+          'holdReason': 'Awaiting Shopkeeper Scan (${_scannedMillBags.length}/${_productBags.length} Verified)',
+        },
+        {
+          'title': 'Done',
+          'done': _currentStage == TripStage.completed && _allMillBagsScanned,
+          'isHold': false,
+          'isCurrent': _currentStage == TripStage.completed,
+          'description': 'Leg 1 completed. Grain safely accepted at mill for grinding.',
+        },
+      ];
+    } else {
+      final bool pickDone = _currentStage != TripStage.headingToMill && _currentStage != TripStage.atMillPickup;
+      final bool transitDone = pickDone && _currentStage != TripStage.headingToCustomer;
+      final bool deliveryDone = _currentStage == TripStage.completed;
+
+      stages = [
+        {
+          'title': 'Accept',
+          'done': true,
+          'isHold': false,
+          'isCurrent': false,
+          'description': 'Trip accepted. Route started.',
+        },
+        {
+          'title': 'Mill Pick',
+          'done': pickDone,
+          'isHold': _currentStage == TripStage.headingToMill || _currentStage == TripStage.atMillPickup,
+          'isCurrent': _currentStage == TripStage.headingToMill || _currentStage == TripStage.atMillPickup,
+          'description': 'Heading to flour mill to pick up milled flour bags.',
+        },
+        {
+          'title': 'To Home',
+          'done': transitDone,
+          'isHold': _currentStage == TripStage.headingToCustomer,
+          'isCurrent': _currentStage == TripStage.headingToCustomer,
+          'description': 'Delivering flour bags to customer doorstep.',
+        },
+        {
+          'title': 'Doorstep',
+          'done': deliveryDone,
+          'isHold': _currentStage == TripStage.atCustomerDelivery,
+          'isCurrent': _currentStage == TripStage.atCustomerDelivery,
+          'description': 'Customer scanning & inspecting flour bags, verifying OTP.',
+        },
+        {
+          'title': 'Done',
+          'done': _currentStage == TripStage.completed,
+          'isHold': false,
+          'isCurrent': _currentStage == TripStage.completed,
+          'description': 'Delivery complete. Customer received fresh flour.',
+        },
+      ];
+    }
 
     return Container(
       color: Colors.white,
@@ -2318,13 +2730,17 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('PICKUP: ${widget.trip.millName}', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                              Text(widget.trip.isLeg1GrainPickup ? 'DESTINATION: ${widget.trip.millName}' : 'PICKUP: ${widget.trip.millName}', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                               Text(
-                                _currentStage.index >= TripStage.headingToCustomer.index ? '✅ PICKED' : 'PENDING',
+                                (widget.trip.isLeg1GrainPickup
+                                    ? (_allMillBagsScanned ? '✅ ACCEPTED' : 'PENDING')
+                                    : (_currentStage != TripStage.headingToMill && _currentStage != TripStage.atMillPickup ? '✅ PICKED' : 'PENDING')),
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
-                                  color: _currentStage.index >= TripStage.headingToCustomer.index ? const Color(0xFF2ECC71) : const Color(0xFFF1C40F),
+                                  color: (widget.trip.isLeg1GrainPickup
+                                      ? (_allMillBagsScanned ? const Color(0xFF2ECC71) : const Color(0xFFF1C40F))
+                                      : (_currentStage != TripStage.headingToMill && _currentStage != TripStage.atMillPickup ? const Color(0xFF2ECC71) : const Color(0xFFF1C40F))),
                                 ),
                               ),
                             ],
@@ -2340,7 +2756,14 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                 ..._tripStops.asMap().entries.map((entry) {
                   final idx = entry.key;
                   final stop = entry.value;
-                  final isCurrent = idx == _currentStopIndex && (_currentStage == TripStage.headingToCustomer || _currentStage == TripStage.atCustomerDelivery || _currentStage == TripStage.returningToCustomer || _currentStage == TripStage.atCustomerReturn);
+                  final isCurrent = idx == _currentStopIndex &&
+                      (_currentStage == TripStage.headingToCustomer ||
+                          _currentStage == TripStage.atCustomerPickup ||
+                          _currentStage == TripStage.atCustomerDelivery ||
+                          _currentStage == TripStage.returningToCustomer ||
+                          _currentStage == TripStage.atCustomerReturn ||
+                          _currentStage == TripStage.returningToMill ||
+                          _currentStage == TripStage.atMillReturn);
                   final isDone = stop.isDelivered;
                   final isLast = idx == _tripStops.length - 1;
 
@@ -2617,16 +3040,24 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
           InkWell(
             onTap: () {
               setState(() {
-                if (_currentStage == TripStage.headingToMill) {
-                  _currentStage = TripStage.atMillPickup;
-                } else if (_currentStage == TripStage.headingToCustomer) {
-                  _currentStage = TripStage.atCustomerDelivery;
+                if (_currentStage == TripStage.headingToCustomer) {
+                  _currentStage = widget.trip.isLeg1GrainPickup
+                      ? TripStage.atCustomerPickup
+                      : TripStage.atCustomerDelivery;
+                } else if (_currentStage == TripStage.headingToMill) {
+                  _currentStage = widget.trip.isLeg1GrainPickup
+                      ? TripStage.atMillDelivery
+                      : TripStage.atMillPickup;
                 } else if (_currentStage == TripStage.returningToCustomer) {
                   _currentStage = TripStage.atCustomerReturn;
+                } else if (_currentStage == TripStage.returningToMill) {
+                  _currentStage = TripStage.atMillReturn;
                 }
               });
               if (widget.trip.isLeg1GrainPickup &&
-                  (_currentStage == TripStage.atCustomerDelivery || _currentStage == TripStage.atMillPickup)) {
+                  (_currentStage == TripStage.atMillDelivery ||
+                      _currentStage == TripStage.atCustomerDelivery ||
+                      _currentStage == TripStage.atMillPickup)) {
                 _startMerchantInspectionPolling();
               }
             },
@@ -2648,9 +3079,364 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
     );
   }
 
-  Widget _buildMillPickupSection() {
-    final isLeg1 = widget.trip.isLeg1GrainPickup;
+  Widget _buildLeg1CustomerPickupSection() {
+    final stop = _activeStop;
+    final stopBags = _productBags.where((b) => b.orderId == stop.orderId).toList();
 
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppTheme.borderLight),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Stop Header & Contact
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.home_filled, color: AppTheme.primaryTerracotta),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Stop ${_currentStopIndex + 1} of ${_tripStops.length}: Grain Pickup',
+                    style: GoogleFonts.playfairDisplay(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () => _callParty(stop.customerPhone, stop.customerName),
+                    icon: const Icon(Icons.call_outlined, color: Color(0xFF1E8449), size: 20),
+                    tooltip: 'Call Customer',
+                  ),
+                  IconButton(
+                    onPressed: () => _openWhatsAppHelper(stop.customerName, stop.customerPhone),
+                    icon: const Icon(Icons.chat_outlined, color: Color(0xFF2ECC71), size: 20),
+                    tooltip: 'WhatsApp Help',
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('${stop.orderNumber} • ${stop.customerName}', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14)),
+          Text(
+            stop.homePickupAddress.isNotEmpty ? stop.homePickupAddress : stop.deliveryAddress,
+            style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary),
+          ),
+          if (stop.homePickupLandmark != null && stop.homePickupLandmark!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              '📍 Landmark: ${stop.homePickupLandmark}',
+              style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF0369A1), fontWeight: FontWeight.w600),
+            ),
+          ],
+          if (stop.homePickupInstructions != null && stop.homePickupInstructions!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFFDE68A)),
+              ),
+              child: Text(
+                '📝 Note: "${stop.homePickupInstructions}"',
+                style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF92400E)),
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+
+          // Raw Grain Bags for this customer
+          Text('Raw Grain Bags to Collect (${stopBags.length} Bags):', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
+          const SizedBox(height: 8),
+          ...stopBags.map((bag) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: bag.isPickedUp ? const Color(0xFFE8F8F5) : const Color(0xFFFAF6F0),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: bag.isPickedUp ? const Color(0xFF2ECC71) : const Color(0xFFECE4D9),
+                  width: bag.isPickedUp ? 1.5 : 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    bag.isPickedUp ? Icons.check_circle_rounded : Icons.grain_rounded,
+                    color: bag.isPickedUp ? const Color(0xFF1E8449) : const Color(0xFF6E5616),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${bag.productName} • ${bag.unitText}',
+                          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                        Text(
+                          'Tag ID: ${bag.bagId} • Customer: ${bag.customerName}',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () => _openProductBagBarcodeScanner(bag, isPickup: true),
+                    icon: Icon(bag.isPickedUp ? Icons.check : Icons.qr_code_scanner_rounded, size: 14, color: Colors.white),
+                    label: Text(bag.isPickedUp ? 'Scanned' : 'Scan Bag', style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: bag.isPickedUp ? const Color(0xFF1E8449) : const Color(0xFF6E5616),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+          const SizedBox(height: 12),
+
+          // Quality & Safety Checklist
+          Text('Grain Intake Safety Checklist:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
+          Material(
+            color: Colors.transparent,
+            child: Column(
+              children: [
+                CheckboxListTile(
+                  value: _isBagSealed,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Grain bag sealed & labelled with tag', style: GoogleFonts.plusJakartaSans(fontSize: 12)),
+                  onChanged: (val) => setState(() => _isBagSealed = val ?? true),
+                ),
+                CheckboxListTile(
+                  value: _isMoistureChecked,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Grain dry to touch (no moisture damage)', style: GoogleFonts.plusJakartaSans(fontSize: 12)),
+                  onChanged: (val) => setState(() => _isMoistureChecked = val ?? true),
+                ),
+                CheckboxListTile(
+                  value: _isWeightVerified,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Weight verified (${stop.quantityKg} kg)', style: GoogleFonts.plusJakartaSans(fontSize: 12)),
+                  onChanged: (val) => setState(() => _isWeightVerified = val ?? true),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Customer Pickup PIN
+          Text('Customer Pickup PIN:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _pinController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: '4-Digit Pickup PIN',
+              hintText: 'e.g. ${stop.pickupPin.isNotEmpty ? stop.pickupPin : "4821"}',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Confirm Grain Pickup Button
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: _isProcessing ? null : _handleConfirmLeg1CustomerPickup,
+              icon: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              label: _isProcessing
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : Text(
+                      _currentStopIndex < _tripStops.length - 1
+                          ? 'CONFIRM PICKUP & PROCEED TO STOP ${_currentStopIndex + 2}'
+                          : 'CONFIRM PICKUP & HEAD TO MILL',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white),
+                    ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E8449),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLeg1HeadingToMillSection() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppTheme.borderLight),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Mill Destination Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.storefront_rounded, color: AppTheme.primaryTerracotta),
+                  const SizedBox(width: 8),
+                  Text(
+                    'En-Route to Mill: Drop Raw Grain',
+                    style: GoogleFonts.playfairDisplay(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () => _callParty(widget.trip.millPhone, widget.trip.millName),
+                    icon: const Icon(Icons.call_outlined, color: Color(0xFF1E8449), size: 20),
+                    tooltip: 'Call Mill Owner',
+                  ),
+                  IconButton(
+                    onPressed: () => _openWhatsAppHelper(widget.trip.millName, widget.trip.millPhone),
+                    icon: const Icon(Icons.chat_outlined, color: Color(0xFF2ECC71), size: 20),
+                    tooltip: 'WhatsApp Help',
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(widget.trip.millName, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14)),
+          Text(widget.trip.millAddress, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary)),
+          const SizedBox(height: 14),
+
+          // In Transit Notice Banner
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFF86EFAC)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.two_wheeler_rounded, color: Color(0xFF16A34A), size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'All Grain Collected (${_productBags.length} Bags)',
+                        style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF166534)),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Drive to ${widget.trip.millName}. Upon arrival, hand over bags to shopkeeper for intake inspection & scanning.',
+                        style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF15803D)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Carrying Grain Bags List
+          Text('Carrying Grain Bags on Bike:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
+          const SizedBox(height: 8),
+          ..._productBags.map((bag) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFAF6F0),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFECE4D9)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.inventory_2_outlined, size: 18, color: Color(0xFF6E5616)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${bag.productName} (${bag.unitText}) • For ${bag.customerName}',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  Text('Tag: ${bag.bagId}', style: GoogleFonts.plusJakartaSans(fontSize: 10, color: AppTheme.textSecondary)),
+                ],
+              ),
+            );
+          }),
+          const SizedBox(height: 16),
+
+          // Arrive at Mill Button
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _currentStage = TripStage.atMillDelivery;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('📍 Arrived at ${widget.trip.millName}! Mill owner will inspect & scan all grain bags.'),
+                    backgroundColor: const Color(0xFF1E8449),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.storefront_rounded, color: Colors.white, size: 20),
+              label: Text(
+                'ARRIVED AT MILL — START INTAKE & SCAN',
+                style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryTerracotta,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLeg2MillPickupSection() {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -2669,7 +3455,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                   const Icon(Icons.storefront_rounded, color: AppTheme.primaryTerracotta),
                   const SizedBox(width: 8),
                   Text(
-                    isLeg1 ? 'Mill Grain Drop & Inspection' : 'Mill Handover (${_productBags.length} Bags)',
+                    'Leg 2: Mill Flour Pickup (${_productBags.length} Bags)',
                     style: GoogleFonts.playfairDisplay(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -2693,142 +3479,31 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
           Text(widget.trip.millAddress, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary)),
           const SizedBox(height: 14),
 
-          // Mill Intake & Product Scanning Banner for Leg 1
-          if (isLeg1) ...[
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFFBEB),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFFDE68A)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.verified_outlined, color: Color(0xFFD97706), size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Shopkeeper Mill Intake Inspection',
-                        style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF92400E)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'The mill owner will scan each raw grain bag to check quality (moisture, purity & weight). If accepted, milling starts. If rejected, you will return the grain bags to the customer.',
-                    style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF78350F)),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _isProcessing ? null : () => _simulateMerchantDecision(false),
-                          icon: const Icon(Icons.cancel_outlined, size: 14, color: Color(0xFFC0392B)),
-                          label: Text('Simulate Rejection', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFFC0392B))),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFFEF4444)),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _isProcessing ? null : () => _simulateMerchantDecision(true),
-                          icon: const Icon(Icons.check_circle_outline, size: 14, color: Colors.white),
-                          label: Text('Simulate Acceptance', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1E8449),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+          // Flour Pickup Notice Banner
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFBBF7D0)),
             ),
-            const SizedBox(height: 14),
-          ],
-
-          // 1. Home Grain Pickup Addresses (Origin)
-          Text('1. Customer Home Grain Pickup Origin:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
-          const SizedBox(height: 8),
-          ..._tripStops.map((stop) {
-            final stopBags = _productBags.where((b) => b.orderId == stop.orderId).toList();
-            final productDetails = stopBags.isNotEmpty
-                ? stopBags.map((b) => '${b.productName} (${b.unitText})').join(', ')
-                : '${stop.quantityKg} kg ${stop.grainTypeName}';
-
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0F9FF),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFBAE6FD)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            const Icon(Icons.home_rounded, size: 14, color: Color(0xFF0369A1)),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                '${stop.customerName} ($productDetails)',
-                                style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF0369A1)),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        onPressed: () => _callParty(stop.customerPhone, stop.customerName),
-                        icon: const Icon(Icons.call_outlined, color: Color(0xFF0369A1), size: 16),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ],
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF16A34A), size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Milling Complete! Scan and collect freshly milled flour bags for doorstep delivery.',
+                    style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF166534)),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    stop.homePickupAddress,
-                    style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A)),
-                  ),
-                  if (stop.homePickupLandmark != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      'Landmark: ${stop.homePickupLandmark}',
-                      style: GoogleFonts.plusJakartaSans(fontSize: 10, color: const Color(0xFF334155), fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                  if (stop.homePickupInstructions != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      '📝 Pickup Note: "${stop.homePickupInstructions}"',
-                      style: GoogleFonts.plusJakartaSans(fontSize: 10, color: const Color(0xFF475569), fontStyle: FontStyle.italic),
-                    ),
-                  ],
-                ],
-              ),
-            );
-          }),
-          const SizedBox(height: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
 
-          // 2. Per-Product Specific Bags to Scan & Pick Up
-          Text('2. Scan & Verify Mill Bags:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
+          // Scan & Verify Mill Bags
+          Text('Milled Flour Bags to Pick Up:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
           const SizedBox(height: 8),
           ..._productBags.map((bag) {
             return Container(
@@ -2881,7 +3556,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
           }),
           const SizedBox(height: 12),
 
-          // Bag Checklist
+          // Quality & Safety Checklist
           Text('Quality & Safety Checklist:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
           Material(
             color: Colors.transparent,
@@ -2913,22 +3588,20 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
           ),
           const SizedBox(height: 14),
 
-          // Confirm Pickup / Handover Button
+          // Confirm Pickup Button
           SizedBox(
             width: double.infinity,
             height: 48,
             child: ElevatedButton(
-              onPressed: _isProcessing ? null : (isLeg1 ? () => _handleConfirmDelivery() : _handleConfirmPickup),
+              onPressed: _isProcessing ? null : _handleConfirmPickup,
               style: ElevatedButton.styleFrom(
-                backgroundColor: (isLeg1 && !_allMillBagsScanned) ? const Color(0xFFD97706) : const Color(0xFF1E8449),
+                backgroundColor: const Color(0xFF1E8449),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
               child: _isProcessing
                   ? const CircularProgressIndicator(color: Colors.white)
                   : Text(
-                      isLeg1
-                          ? (_allMillBagsScanned ? 'CONFIRM GRAIN DROP & COMPLETE LEG 1' : 'CHECK MERCHANT VERIFICATION STATUS')
-                          : 'CONFIRM PICKUP & START MULTI-STOP ROUTE',
+                      'CONFIRM PICKUP & START MULTI-STOP ROUTE',
                       style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
             ),
@@ -2938,12 +3611,6 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
     );
   }
 
-  Widget _buildCustomerDeliverySection() {
-    if (widget.trip.isLeg1GrainPickup) {
-      return _buildLeg1MillDropSection();
-    }
-    return _buildLeg2CustomerDoorstepSection();
-  }
 
   Widget _buildLeg1MillDropSection() {
     return Container(
@@ -3038,17 +3705,34 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Please hand over all grain bags to the mill owner (${widget.trip.millName}). The shopkeeper must inspect and scan each bag on their Merchant App before this stage can proceed.',
+                  'The shopkeeper must inspect and scan each raw grain bag. If accepted, milling starts. If rejected, you must return all grain back to the customer.',
                   style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF78350F), height: 1.4),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _openShopkeeperScanAndInspectionDialog,
+                    icon: const Icon(Icons.qr_code_scanner_rounded, size: 16, color: Color(0xFF92400E)),
+                    label: Text(
+                      'Open Shopkeeper Scanner & Inspector',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF92400E)),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFF59E0B)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _isProcessing ? null : () => _simulateMerchantDecision(false),
+                        onPressed: _isProcessing ? null : _showShopkeeperRejectReasonDialog,
                         icon: const Icon(Icons.cancel_outlined, size: 14, color: Color(0xFFC0392B)),
-                        label: Text('Simulate Reject (App)', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFFC0392B))),
+                        label: Text('Shopkeeper Rejects', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFFC0392B))),
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: Color(0xFFEF4444)),
                           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -3060,7 +3744,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                       child: ElevatedButton.icon(
                         onPressed: _isProcessing ? null : () => _simulateMerchantDecision(true),
                         icon: const Icon(Icons.check_circle_outline, size: 14, color: Colors.white),
-                        label: Text('Simulate Accept (App)', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                        label: Text('Shopkeeper Accepts', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF1E8449),
                           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -3364,6 +4048,118 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
           }),
           const SizedBox(height: 14),
 
+          // Customer Flour Quality Inspection & Scan Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _allCustomerBagsScanned ? const Color(0xFFF0FDF4) : const Color(0xFFFFFBEB),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _allCustomerBagsScanned ? const Color(0xFF86EFAC) : const Color(0xFFF59E0B),
+                width: 1.5,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: (_allCustomerBagsScanned ? const Color(0xFF16A34A) : const Color(0xFFF59E0B)).withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _allCustomerBagsScanned ? Icons.verified_rounded : Icons.search_rounded,
+                        color: _allCustomerBagsScanned ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Customer Flour Quality Check & Scan',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: _allCustomerBagsScanned ? const Color(0xFF166534) : const Color(0xFF92400E),
+                            ),
+                          ),
+                          Text(
+                            '${_scannedCustomerBags.length}/${_productBags.where((b) => b.orderId == stop.orderId).length} Bags Inspected',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 10,
+                              color: _allCustomerBagsScanned ? const Color(0xFF15803D) : const Color(0xFFB45309),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'The customer must inspect flour texture, aroma, moisture, and scan each bag. If customer rejects, you must return all flour back to the mill.',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    color: _allCustomerBagsScanned ? const Color(0xFF166534) : const Color(0xFF78350F),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _openCustomerScanAndQualityDialog,
+                    icon: const Icon(Icons.qr_code_scanner_rounded, size: 16, color: Color(0xFFB45309)),
+                    label: Text(
+                      'Open Customer Quality & Bag Inspector',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFFB45309)),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFF59E0B)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _isProcessing ? null : _showCustomerRejectReasonDialog,
+                        icon: const Icon(Icons.cancel_outlined, size: 14, color: Color(0xFFC0392B)),
+                        label: Text('Customer Rejects', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFFC0392B))),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFEF4444)),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _isProcessing ? null : () => _simulateCustomerDecision(true),
+                        icon: const Icon(Icons.check_circle_outline, size: 14, color: Colors.white),
+                        label: Text('Customer Accepts', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1E8449),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
           // STEP 1: Proof of Delivery Handover
           Text('Step 1: Proof of Delivery Handover (Optional):', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
           const SizedBox(height: 8),
@@ -3635,6 +4431,951 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
         ],
       ),
     );
+  }
+
+  Widget _buildMillReturnSection() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFFCA5A5)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFEF4444).withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Return Leg Header & Reason
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFF87171)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.assignment_return_rounded, color: Color(0xFFDC2626), size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Flour Rejected by Customer at Doorstep',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF991B1B)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Reason: "${_customerRejectionReason.isNotEmpty ? _customerRejectionReason : 'Flour failed doorstep quality inspection'}"',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF7F1D1D)),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Return action required: Deliver rejected flour back to ${widget.trip.millName}.',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF991B1B)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Return Mill Contact
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.storefront_rounded, color: Color(0xFFDC2626)),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Return to Flour Mill',
+                    style: GoogleFonts.playfairDisplay(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () => _callParty(widget.trip.millPhone, widget.trip.millName),
+                    icon: const Icon(Icons.call_outlined, color: Color(0xFF1E8449), size: 20),
+                    tooltip: 'Call Mill Owner',
+                  ),
+                  IconButton(
+                    onPressed: () => _openWhatsAppHelper(widget.trip.millName, widget.trip.millPhone),
+                    icon: const Icon(Icons.chat_outlined, color: Color(0xFF2ECC71), size: 20),
+                    tooltip: 'WhatsApp Help',
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(widget.trip.millName, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14)),
+          Text(widget.trip.millAddress, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary)),
+          const SizedBox(height: 16),
+
+          // Flour Bags Being Returned
+          Text('Flour Bags Being Returned to Mill:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
+          const SizedBox(height: 8),
+          ..._productBags.where((b) => b.orderId == _activeStop.orderId).map((bag) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF1F2),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFFECDD3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.inventory_2_outlined, color: Color(0xFFE11D48), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${bag.productName} • ${bag.unitText}',
+                          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                        Text(
+                          'Tag: ${bag.bagId} • Customer: ${bag.customerName}',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE11D48).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'RETURN',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 10, fontWeight: FontWeight.bold, color: const Color(0xFFE11D48)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+          const SizedBox(height: 14),
+
+          // Return Proof Handover
+          Text('Proof of Return Handover at Mill:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _simulateDoorstepPhoto,
+                  icon: Icon(_hasDoorstepPhoto ? Icons.check_circle : Icons.camera_alt_outlined, size: 16, color: _hasDoorstepPhoto ? const Color(0xFF1E8449) : const Color(0xFFE11D48)),
+                  label: Text(_hasDoorstepPhoto ? 'Photo Added' : 'Handover Photo', style: GoogleFonts.plusJakartaSans(fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    side: BorderSide(color: _hasDoorstepPhoto ? const Color(0xFF1E8449) : AppTheme.borderLight),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _simulateCustomerSignature,
+                  icon: Icon(_hasCustomerSignature ? Icons.check_circle : Icons.draw_outlined, size: 16, color: _hasCustomerSignature ? const Color(0xFF1E8449) : const Color(0xFFE11D48)),
+                  label: Text(_hasCustomerSignature ? 'Signed' : 'Shopkeeper Sign', style: GoogleFonts.plusJakartaSans(fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    side: BorderSide(color: _hasCustomerSignature ? const Color(0xFF1E8449) : AppTheme.borderLight),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+
+          // Confirm Return Handover Button
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: _isProcessing ? null : _handleConfirmReturnToMill,
+              icon: const Icon(Icons.assignment_return_rounded, color: Colors.white, size: 20),
+              label: _isProcessing
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : Text(
+                      'CONFIRM RETURN HANDOVER AT MILL & COMPLETE',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white),
+                    ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFC0392B),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _simulateCustomerDecision(bool isAccepted, {String? reason}) async {
+    setState(() => _isProcessing = true);
+    final stopOrderId = _activeStop.orderId;
+    try {
+      if (isAccepted) {
+        final currentStopBags = _productBags.where((b) => b.orderId == stopOrderId).toList();
+        setState(() {
+          _scannedCustomerBags.addAll(currentStopBags.map((b) => b.bagId));
+        });
+        await DeliveryApiService.instance.submitCustomerVerification(
+          stopOrderId,
+          isAccepted: true,
+          notes: 'Customer scanned and approved flour quality at doorstep',
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Customer verified & approved all flour bags! Enter OTP to confirm drop.'),
+              backgroundColor: Color(0xFF1E8449),
+            ),
+          );
+        }
+      } else {
+        final rejectReason = reason ?? 'Flour texture coarse and packaging damaged';
+        await DeliveryApiService.instance.submitCustomerVerification(
+          stopOrderId,
+          isAccepted: false,
+          reason: rejectReason,
+          notes: 'Customer rejected flour at doorstep during scan/quality check',
+        );
+        _resetNavigationForReturnToMillStage(rejectReason);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Verification update failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
+    }
+  }
+
+  void _showShopkeeperRejectReasonDialog() {
+    final reasons = [
+      'Moisture > 16% / Damp Grain',
+      'Foreign Seeds & Weed Contamination',
+      'Infestation / Weevil Damage in Grain',
+      'Damaged / Non-Milling Quality Grain',
+      'Weight Significantly Below Manifest',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.cancel_rounded, color: Color(0xFFC0392B)),
+            const SizedBox(width: 8),
+            Text('Shopkeeper Rejection', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Select the inspection failure reason for rejecting raw grain:', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary)),
+            const SizedBox(height: 12),
+            ...reasons.map((r) => ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.radio_button_unchecked, color: Color(0xFFC0392B), size: 18),
+              title: Text(r, style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _simulateMerchantDecision(false, reason: r);
+              },
+            )),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: GoogleFonts.plusJakartaSans(color: AppTheme.textSecondary)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openShopkeeperScanAndInspectionDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final allScanned = _productBags.isNotEmpty && _scannedMillBags.length >= _productBags.length;
+
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.75,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Shopkeeper Intake Inspection', style: GoogleFonts.playfairDisplay(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: allScanned ? const Color(0xFFE8F8F5) : const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${_scannedMillBags.length}/${_productBags.length} Verified',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: allScanned ? const Color(0xFF1E8449) : const Color(0xFFD97706),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text('Tap each grain bag to scan barcode and verify quality criteria.', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary)),
+                const SizedBox(height: 14),
+
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: _productBags.length,
+                    itemBuilder: (context, idx) {
+                      final bag = _productBags[idx];
+                      final isScanned = _scannedMillBags.contains(bag.bagId);
+
+                      return InkWell(
+                        onTap: () {
+                          setModalState(() {
+                            if (isScanned) {
+                              _scannedMillBags.remove(bag.bagId);
+                            } else {
+                              _scannedMillBags.add(bag.bagId);
+                            }
+                          });
+                          setState(() {});
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isScanned ? const Color(0xFFE8F8F5) : const Color(0xFFFAF6F0),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isScanned ? const Color(0xFFA3E4D7) : const Color(0xFFECE4D9),
+                              width: isScanned ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isScanned ? Icons.check_circle_rounded : Icons.crop_free_rounded,
+                                color: isScanned ? const Color(0xFF1E8449) : const Color(0xFF6E5616),
+                                size: 22,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('${bag.productName} • ${bag.unitText}', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    Text('Tag: ${bag.bagId} • Customer: ${bag.customerName}', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary)),
+                                  ],
+                                ),
+                              ),
+                              Text(isScanned ? 'PASSED' : 'TAP TO SCAN', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 11, color: isScanned ? const Color(0xFF1E8449) : const Color(0xFFD97706))),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _showShopkeeperRejectReasonDialog();
+                        },
+                        icon: const Icon(Icons.cancel_outlined, color: Color(0xFFC0392B), size: 16),
+                        label: Text('Reject Grain', style: GoogleFonts.plusJakartaSans(color: const Color(0xFFC0392B), fontWeight: FontWeight.bold)),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFEF4444)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _simulateMerchantDecision(true);
+                        },
+                        icon: const Icon(Icons.check_circle_outline, color: Colors.white, size: 16),
+                        label: Text('Approve All', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1E8449),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showCustomerRejectReasonDialog() {
+    final reasons = [
+      'Flour Texture Too Coarse / Granular',
+      'Unpleasant Odor / Damp Smell in Flour',
+      'Damaged / Torn Bag Packaging',
+      'Foreign Particles / Specks in Flour',
+      'Wrong Flour / Grain Variety Delivered',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.cancel_rounded, color: Color(0xFFC0392B)),
+            const SizedBox(width: 8),
+            Text('Customer Rejection', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Select the reason customer rejected the milled flour at doorstep:', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary)),
+            const SizedBox(height: 12),
+            ...reasons.map((r) => ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.radio_button_unchecked, color: Color(0xFFC0392B), size: 18),
+              title: Text(r, style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _simulateCustomerDecision(false, reason: r);
+              },
+            )),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: GoogleFonts.plusJakartaSans(color: AppTheme.textSecondary)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openCustomerScanAndQualityDialog() {
+    final stopOrderId = _activeStop.orderId;
+    final currentBags = _productBags.where((b) => b.orderId == stopOrderId).toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final allScanned = currentBags.isNotEmpty && _scannedCustomerBags.length >= currentBags.length;
+
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.75,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Customer Quality Check', style: GoogleFonts.playfairDisplay(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: allScanned ? const Color(0xFFE8F8F5) : const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${_scannedCustomerBags.length}/${currentBags.length} Verified',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: allScanned ? const Color(0xFF1E8449) : const Color(0xFFD97706),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text('Customer verifies flour texture, packaging seals, and scans barcode tags.', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary)),
+                const SizedBox(height: 14),
+
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: currentBags.length,
+                    itemBuilder: (context, idx) {
+                      final bag = currentBags[idx];
+                      final isScanned = _scannedCustomerBags.contains(bag.bagId);
+
+                      return InkWell(
+                        onTap: () {
+                          setModalState(() {
+                            if (isScanned) {
+                              _scannedCustomerBags.remove(bag.bagId);
+                            } else {
+                              _scannedCustomerBags.add(bag.bagId);
+                            }
+                          });
+                          setState(() {});
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isScanned ? const Color(0xFFE8F8F5) : const Color(0xFFFAF6F0),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isScanned ? const Color(0xFFA3E4D7) : const Color(0xFFECE4D9),
+                              width: isScanned ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isScanned ? Icons.check_circle_rounded : Icons.crop_free_rounded,
+                                color: isScanned ? const Color(0xFF1E8449) : const Color(0xFF6E5616),
+                                size: 22,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('${bag.productName} • ${bag.unitText}', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    Text('Tag: ${bag.bagId}', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary)),
+                                  ],
+                                ),
+                              ),
+                              Text(isScanned ? 'APPROVED' : 'SCAN BAG', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 11, color: isScanned ? const Color(0xFF1E8449) : const Color(0xFFD97706))),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _showCustomerRejectReasonDialog();
+                        },
+                        icon: const Icon(Icons.cancel_outlined, color: Color(0xFFC0392B), size: 16),
+                        label: Text('Reject Flour', style: GoogleFonts.plusJakartaSans(color: const Color(0xFFC0392B), fontWeight: FontWeight.bold)),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFEF4444)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _simulateCustomerDecision(true);
+                        },
+                        icon: const Icon(Icons.check_circle_outline, color: Colors.white, size: 16),
+                        label: Text('Accept Quality', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1E8449),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _openOrderTimelineSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => FutureBuilder<List<OrderTimelineEvent>>(
+        future: DeliveryApiService.instance.getOrderTimeline(_activeStop.orderId),
+        builder: (context, snapshot) {
+          final timelineEvents = (snapshot.hasData && snapshot.data!.isNotEmpty)
+              ? snapshot.data!
+              : _buildSynthesizedTimeline();
+
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.75,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.timeline_rounded, color: AppTheme.primaryTerracotta),
+                        const SizedBox(width: 8),
+                        Text('Order Timeline', style: GoogleFonts.playfairDisplay(fontSize: 18, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryTerracotta.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _activeStop.orderNumber,
+                        style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 11, color: AppTheme.primaryTerracotta),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text('End-to-end verified milestone tracking for this order:', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary)),
+                const SizedBox(height: 16),
+
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: timelineEvents.length,
+                    itemBuilder: (context, index) {
+                      final ev = timelineEvents[index];
+                      final isLast = index == timelineEvents.length - 1;
+                      final isRejectOrReturn = ev.isReturnOrReject;
+
+                      Color iconColor = const Color(0xFF1E8449);
+                      Color dotBg = const Color(0xFFE8F8F5);
+                      IconData eventIcon = Icons.check_circle_rounded;
+
+                      if (isRejectOrReturn) {
+                        iconColor = const Color(0xFFDC2626);
+                        dotBg = const Color(0xFFFEF2F2);
+                        eventIcon = Icons.cancel_rounded;
+                      } else if (ev.status.contains('ASSIGNED') || ev.status.contains('PICKED') || ev.status.contains('EN_ROUTE')) {
+                        iconColor = const Color(0xFFD97706);
+                        dotBg = const Color(0xFFFFFBEB);
+                        eventIcon = Icons.navigation_rounded;
+                      } else if (ev.status.contains('MILLING') || ev.status.contains('INTAKE')) {
+                        iconColor = const Color(0xFF2563EB);
+                        dotBg = const Color(0xFFEFF6FF);
+                        eventIcon = Icons.storefront_rounded;
+                      }
+
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Timeline Line and Node
+                          Column(
+                            children: [
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: dotBg,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: iconColor.withValues(alpha: 0.4), width: 1.5),
+                                ),
+                                child: Icon(eventIcon, color: iconColor, size: 16),
+                              ),
+                              if (!isLast)
+                                Container(
+                                  width: 2,
+                                  height: 44,
+                                  color: Colors.grey.shade200,
+                                ),
+                            ],
+                          ),
+                          const SizedBox(width: 14),
+
+                          // Event Details
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 18),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          ev.title,
+                                          style: GoogleFonts.plusJakartaSans(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                            color: isRejectOrReturn ? const Color(0xFF991B1B) : AppTheme.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                      Text(
+                                        ev.formattedTime,
+                                        style: GoogleFonts.plusJakartaSans(fontSize: 10, color: AppTheme.textSecondary),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    ev.description,
+                                    style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
+                                  ),
+                                  if (ev.performedBy != null && ev.performedBy!.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        'By ${ev.performedBy}',
+                                        style: GoogleFonts.plusJakartaSans(fontSize: 9, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  List<OrderTimelineEvent> _buildSynthesizedTimeline() {
+    final List<OrderTimelineEvent> list = [];
+    final now = DateTime.now();
+
+    list.add(OrderTimelineEvent(
+      title: 'Order Placed',
+      description: 'Customer booked milling delivery trip',
+      status: 'BOOKED',
+      createdAt: now.subtract(const Duration(minutes: 45)),
+      performedBy: 'Customer',
+    ));
+
+    list.add(OrderTimelineEvent(
+      title: 'Rider Assigned',
+      description: 'Trip accepted by driver. Route navigation initiated.',
+      status: 'DRIVER_ASSIGNED',
+      createdAt: now.subtract(const Duration(minutes: 35)),
+      performedBy: 'Driver',
+    ));
+
+    if (widget.trip.isLeg1GrainPickup) {
+      if (_currentStage != TripStage.headingToCustomer && _currentStage != TripStage.atCustomerPickup) {
+        list.add(OrderTimelineEvent(
+          title: 'Grain Bags Collected',
+          description: 'Rider picked up grain bags from customer doorstep.',
+          status: 'GRAIN_PICKED_UP',
+          createdAt: now.subtract(const Duration(minutes: 20)),
+          performedBy: 'Driver',
+        ));
+      }
+
+      if (_currentStage == TripStage.atMillDelivery ||
+          _currentStage == TripStage.returningToCustomer ||
+          _currentStage == TripStage.atCustomerReturn ||
+          _currentStage == TripStage.completed) {
+        list.add(OrderTimelineEvent(
+          title: 'Arrived at Flour Mill',
+          description: 'Grain bags submitted to mill shopkeeper for quality inspection.',
+          status: 'MILL_ARRIVED',
+          createdAt: now.subtract(const Duration(minutes: 10)),
+          performedBy: 'Driver',
+        ));
+      }
+
+      if (_isRejectedAtMill || _currentStage == TripStage.returningToCustomer || _currentStage == TripStage.atCustomerReturn) {
+        list.add(OrderTimelineEvent(
+          title: 'Grain Quality Rejected by Mill',
+          description: 'Shopkeeper rejected grain: "${_millRejectionReason.isNotEmpty ? _millRejectionReason : 'Quality failed'}"',
+          status: 'RETURN_TO_CUSTOMER',
+          createdAt: now.subtract(const Duration(minutes: 5)),
+          performedBy: 'Merchant',
+        ));
+        if (_currentStage == TripStage.completed) {
+          list.add(OrderTimelineEvent(
+            title: 'Returned to Customer Doorstep',
+            description: 'Rejected raw grain safely returned to customer.',
+            status: 'RETURNED_TO_CUSTOMER',
+            createdAt: now,
+            performedBy: 'Driver',
+          ));
+        }
+      } else if (_allMillBagsScanned || _currentStage == TripStage.completed) {
+        list.add(OrderTimelineEvent(
+          title: 'Grain Quality Approved & Milling Started',
+          description: 'Shopkeeper scanned all bags and started milling process.',
+          status: 'MILLING_IN_PROGRESS',
+          createdAt: now.subtract(const Duration(minutes: 3)),
+          performedBy: 'Merchant',
+        ));
+      }
+    } else {
+      // Leg 2
+      list.add(OrderTimelineEvent(
+        title: 'Milling Completed by Mill',
+        description: 'Flour milled and packed into sealed bags ready for dispatch.',
+        status: 'MILLING_COMPLETED',
+        createdAt: now.subtract(const Duration(minutes: 25)),
+        performedBy: 'Merchant',
+      ));
+
+      if (_currentStage != TripStage.headingToMill && _currentStage != TripStage.atMillPickup) {
+        list.add(OrderTimelineEvent(
+          title: 'Flour Picked Up from Mill',
+          description: 'Rider verified all flour bags and started doorstep route.',
+          status: 'FLOUR_PICKED_UP',
+          createdAt: now.subtract(const Duration(minutes: 15)),
+          performedBy: 'Driver',
+        ));
+      }
+
+      if (_currentStage == TripStage.atCustomerDelivery ||
+          _currentStage == TripStage.returningToMill ||
+          _currentStage == TripStage.atMillReturn ||
+          _currentStage == TripStage.completed) {
+        list.add(OrderTimelineEvent(
+          title: 'Arrived at Customer Doorstep',
+          description: 'Rider arrived at customer address for quality handover.',
+          status: 'DOORSTEP_ARRIVED',
+          createdAt: now.subtract(const Duration(minutes: 5)),
+          performedBy: 'Driver',
+        ));
+      }
+
+      if (_isRejectedAtDoorstep || _currentStage == TripStage.returningToMill || _currentStage == TripStage.atMillReturn) {
+        list.add(OrderTimelineEvent(
+          title: 'Flour Quality Rejected by Customer',
+          description: 'Customer rejected flour: "${_customerRejectionReason.isNotEmpty ? _customerRejectionReason : 'Quality failed'}"',
+          status: 'RETURN_TO_MILL',
+          createdAt: now.subtract(const Duration(minutes: 3)),
+          performedBy: 'Customer',
+        ));
+        if (_currentStage == TripStage.completed) {
+          list.add(OrderTimelineEvent(
+            title: 'Returned to Flour Mill',
+            description: 'Rejected flour safely returned to mill shopkeeper.',
+            status: 'RETURNED_TO_MILL',
+            createdAt: now,
+            performedBy: 'Driver',
+          ));
+        }
+      } else if (_currentStage == TripStage.completed) {
+        list.add(OrderTimelineEvent(
+          title: 'Delivered & OTP Verified',
+          description: 'Customer verified flour quality and completed delivery with OTP.',
+          status: 'DELIVERED',
+          createdAt: now,
+          performedBy: 'Driver',
+        ));
+      }
+    }
+
+    return list;
   }
 }
 

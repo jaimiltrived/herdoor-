@@ -130,7 +130,7 @@ exports.getAvailableTrips = async (req, res) => {
     `);
 
     if (dbOrders && Array.isArray(dbOrders)) {
-      availableOrders = dbOrders.map((o, idx) => {
+      const rawTrips = dbOrders.map((o, idx) => {
         const isHeavy = (parseFloat(o.quantity_kg) || 5.0) >= 10;
         const surgeBonus = (idx % 2 === 0) ? 25.0 : 15.0;
         const heavyBagBonus = isHeavy ? 20.0 : 0.0;
@@ -218,6 +218,57 @@ exports.getAvailableTrips = async (req, res) => {
           ]
         };
       });
+
+      // Deduplicate and group available trips by groupCode
+      const groupedTripsMap = new Map();
+      const standaloneTrips = [];
+
+      for (const item of rawTrips) {
+        const grp = item.groupCode;
+        if (grp && grp.trim().length > 0) {
+          if (!groupedTripsMap.has(grp)) groupedTripsMap.set(grp, []);
+          groupedTripsMap.get(grp).push(item);
+        } else {
+          standaloneTrips.push(item);
+        }
+      }
+
+      for (const [grpCode, items] of groupedTripsMap.entries()) {
+        if (items.length === 1) {
+          availableOrders.push(items[0]);
+        } else {
+          const primary = items[0];
+          const allStops = items.flatMap(i => i.stops);
+          const totalPayout = items.reduce((sum, i) => sum + i.deliveryFee, 0);
+          const totalKg = items.reduce((sum, i) => sum + i.quantityKg, 0);
+          const isLeg1 = items.every(i => i.isHomeGrainPickup);
+          const legType = isLeg1 ? 'LEG_1_GRAIN_PICKUP' : 'LEG_2_FLOUR_DELIVERY';
+          const tripBadge = isLeg1
+            ? `🌾 Grouped ${items.length}x Grain Pickup (Home ➔ Mill)`
+            : `🍞 Grouped ${items.length}x Flour Delivery (Mill ➔ Home)`;
+
+          availableOrders.push({
+            ...primary,
+            orderNumber: grpCode,
+            customerName: `Grouped ${items.length}x (${items.map(i => i.customerName).join(' + ')})`,
+            deliveryAddress: items.map(i => i.deliveryAddress).join(' • '),
+            homePickupAddress: items.map(i => i.homePickupAddress).join(' • '),
+            quantityKg: totalKg,
+            grainTypeName: `Stacked Batch: ${items.length} Orders`,
+            deliveryFee: totalPayout,
+            estimatedDeliveryFee: totalPayout,
+            surgeBonus: items.reduce((sum, i) => sum + i.surgeBonus, 0),
+            heavyBagBonus: items.reduce((sum, i) => sum + i.heavyBagBonus, 0),
+            isBatch: true,
+            batchOrderCount: items.length,
+            legType,
+            tripBadge,
+            stops: allStops
+          });
+        }
+      }
+
+      availableOrders.push(...standaloneTrips);
     }
   } catch (err) {
     console.warn('MySQL getAvailableTrips query warning:', err.message);
@@ -341,8 +392,11 @@ exports.getAssignedOrders = async (req, res) => {
     }
 
     const first = delList[0];
-    const isReturn = first.status === 'RETURN_TO_CUSTOMER' || first.status === 'REJECTED_AT_MILL' || first.order_status === 'REJECTED_AT_MILL';
-    const isLeg1 = !isReturn && (first.status === 'ASSIGNED' || first.status === 'PICKED_UP_FROM_MILL');
+    const isReturn = first.status === 'RETURN_TO_CUSTOMER' || first.status === 'REJECTED_AT_MILL' || first.order_status === 'REJECTED_AT_MILL' || first.order_status === 'RETURNED_TO_CUSTOMER' || first.status === 'RETURNED_TO_CUSTOMER' || first.status === 'RETURNED_TO_MILL';
+    const orderStatusStr = (first.order_status || '').toUpperCase();
+    const isReadyOrDelivering = ['READY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'].includes(orderStatusStr) || first.status === 'OUT_FOR_DELIVERY';
+    const isCustomerGrain = (first.grain_source || 'CUSTOMER').toUpperCase() === 'CUSTOMER';
+    const isLeg1 = !isReturn && !isReadyOrDelivering && isCustomerGrain;
     const legType = isReturn ? 'RETURN_LEG_GRAIN_RETURN' : (isLeg1 ? 'LEG_1_GRAIN_PICKUP' : 'LEG_2_FLOUR_DELIVERY');
     const tripBadge = isReturn ? '⚠️ Return Grain (Rejected by Mill)' : (isLeg1 ? '🌾 Grain Pickup (Home ➔ Mill)' : '🍞 Flour Delivery (Mill ➔ Home)');
     const totalKg = parsedStops.reduce((sum, s) => sum + (parseFloat(s.quantityKg) || 5.0), 0.0);
@@ -358,10 +412,11 @@ exports.getAssignedOrders = async (req, res) => {
       millPhone: first.mill_phone || '+919876543211',
       homePickupAddress: 'Multiple Customer Homes (Satellite, Ellisbridge)',
       homePickupLandmark: 'Near Central Bank / Behind Town Hall',
-      homePickupInstructions: 'Pick up raw wheat & chana grain bags from customer homes, drop at mill for grinding',
-      deliveryAddress: first.delivery_address || 'Multiple Customer Homes',
+      homePickupInstructions: isLeg1 ? 'Pick up raw wheat & chana grain bags from customer homes, drop at mill for grinding' : 'Deliver freshly milled flour bags to customer homes',
+      deliveryAddress: isLeg1 ? (first.mill_address || '12 Market Yard, Ellisbridge, Ahmedabad') : (first.delivery_address || 'Multiple Customer Homes'),
       legType,
       tripBadge,
+      isHomeGrainPickup: isLeg1,
       isReturnLeg: isReturn,
       isRejectedByMill: isReturn,
       rejectionReason: first.rejection_reason || (isReturn ? 'Grain quality rejected by mill during intake scan' : null),
@@ -394,8 +449,11 @@ exports.getAssignedOrders = async (req, res) => {
     if (processedOrderIds.has(d.order_id)) continue;
     processedOrderIds.add(d.order_id);
 
-    const isReturn = d.status === 'RETURN_TO_CUSTOMER' || d.status === 'REJECTED_AT_MILL' || d.order_status === 'REJECTED_AT_MILL';
-    const isLeg1 = !isReturn && (d.status === 'ASSIGNED' || d.status === 'PICKED_UP_FROM_MILL');
+    const isReturn = d.status === 'RETURN_TO_CUSTOMER' || d.status === 'REJECTED_AT_MILL' || d.order_status === 'REJECTED_AT_MILL' || d.order_status === 'RETURNED_TO_CUSTOMER' || d.status === 'RETURNED_TO_CUSTOMER' || d.status === 'RETURNED_TO_MILL';
+    const orderStatusStr = (d.order_status || '').toUpperCase();
+    const isReadyOrDelivering = ['READY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'].includes(orderStatusStr) || d.status === 'OUT_FOR_DELIVERY';
+    const isCustomerGrain = (d.grain_source || 'CUSTOMER').toUpperCase() === 'CUSTOMER';
+    const isLeg1 = !isReturn && !isReadyOrDelivering && isCustomerGrain;
     const legType = isReturn ? 'RETURN_LEG_GRAIN_RETURN' : (isLeg1 ? 'LEG_1_GRAIN_PICKUP' : 'LEG_2_FLOUR_DELIVERY');
     const tripBadge = isReturn ? '⚠️ Return Grain (Rejected by Mill)' : (isLeg1 ? '🌾 Grain Pickup (Home ➔ Mill)' : '🍞 Flour Delivery (Mill ➔ Home)');
     const custAddr = d.address_line1 ? `${d.address_line1}, ${d.city || 'Ahmedabad'}` : (d.delivery_address || 'Customer Address');
@@ -439,10 +497,11 @@ exports.getAssignedOrders = async (req, res) => {
       millPhone: d.mill_phone || '+919876543211',
       homePickupAddress: d.pickup_address || custAddr,
       homePickupLandmark: 'Near Central Bank / Behind Town Hall',
-      homePickupInstructions: 'Ring bell, bag ready',
-      deliveryAddress: d.delivery_address || custAddr,
+      homePickupInstructions: isLeg1 ? 'Ring bell, grain bag ready' : 'Pick up freshly milled flour from mill',
+      deliveryAddress: isLeg1 ? (d.mill_address || '12 Market Yard, Ellisbridge') : (d.delivery_address || custAddr),
       legType,
       tripBadge,
+      isHomeGrainPickup: isLeg1,
       isReturnLeg: isReturn,
       isRejectedByMill: isReturn,
       rejectionReason: d.rejection_reason || (isReturn ? 'Grain quality rejected by mill during intake scan' : null),
@@ -799,6 +858,16 @@ exports.getDeliveryOrderById = async (req, res) => {
 
     if (rows && rows.length > 0) {
       const o = rows[0];
+      let timeline = [];
+      try {
+        const tlRows = await query(`
+          SELECT * FROM order_timeline
+          WHERE order_id = ?
+          ORDER BY id ASC
+        `, [o.id]);
+        if (tlRows && tlRows.length > 0) timeline = tlRows;
+      } catch (_) {}
+
       return res.json({
         status: 'success',
         data: {
@@ -811,7 +880,8 @@ exports.getDeliveryOrderById = async (req, res) => {
             deliveryFee: o.delivery_fee || 45.0,
             groupCode: o.group_code,
             stopsData: o.stops_data
-          }
+          },
+          timeline: timeline
         }
       });
     }
@@ -1430,6 +1500,84 @@ exports.confirmReturnToCustomer = async (req, res) => {
       updatedAt: new Date().toISOString()
     }
   });
+};
+
+/**
+ * @desc Confirm Return of Rejected Milled Flour to Mill (Leg 2 Return)
+ * @route POST /api/v1/delivery/orders/:orderId/return-to-mill
+ */
+exports.confirmReturnToMill = async (req, res) => {
+  const paramStr = (req.params.orderId || '').toString().trim();
+  const numId = parseInt(paramStr.replace(/[^0-9]/g, ''));
+  const effectiveId = !isNaN(numId) && numId > 0 ? numId : null;
+  const { notes = '', reason = 'Customer Rejected at Doorstep (Quality/Packaging discrepancy)' } = req.body;
+
+  try {
+    const targetOrderIds = new Set();
+    if (effectiveId) targetOrderIds.add(effectiveId);
+    if (paramStr) {
+      const matched = await query(`
+        SELECT id, group_code FROM orders
+        WHERE id = ? OR order_number = ? OR group_code = ?
+      `, [effectiveId || 0, paramStr, paramStr]);
+      for (const o of (matched || [])) targetOrderIds.add(o.id);
+    }
+
+    const allIds = Array.from(targetOrderIds);
+    if (allIds.length > 0) {
+      const placeholders = allIds.map(() => '?').join(',');
+      await query(`UPDATE orders SET status = ?, updated_at = NOW() WHERE id IN (${placeholders})`, ['RETURNED_TO_MILL', ...allIds]);
+      await query(`UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id IN (${placeholders})`, ['RETURNED_TO_MILL', ...allIds]);
+
+      for (const id of allIds) {
+        await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [
+          id,
+          'RETURNED_TO_MILL',
+          'Flour Returned to Mill',
+          `Customer rejected delivery at doorstep. Package safely returned to mill. Reason: ${reason}`
+        ]);
+      }
+    }
+  } catch (err) {
+    console.warn('MySQL confirmReturnToMill warning:', err.message);
+  }
+
+  res.json({
+    status: 'success',
+    message: 'Rejected order successfully returned to mill.',
+    data: {
+      orderId: effectiveId || paramStr,
+      orderStatus: 'RETURNED_TO_MILL',
+      legCompleted: 'RETURN_LEG_FLOUR_RETURN',
+      updatedAt: new Date().toISOString()
+    }
+  });
+};
+
+/**
+ * @desc Get Order Timeline for Rider
+ * @route GET /api/v1/delivery/orders/:orderId/timeline
+ */
+exports.getOrderTimeline = async (req, res) => {
+  const param = req.params.orderId;
+  const numId = parseInt(String(param).replace(/[^0-9]/g, ''));
+  try {
+    const rows = await query(`
+      SELECT * FROM order_timeline
+      WHERE order_id = ? OR order_id = (SELECT id FROM orders WHERE order_number = ? LIMIT 1)
+      ORDER BY id ASC
+    `, [numId || 0, String(param)]);
+    return res.json({
+      status: 'success',
+      count: (rows || []).length,
+      data: {
+        orderId: numId || param,
+        timeline: rows || []
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
 };
 
 /**

@@ -940,6 +940,7 @@ class DeliveryTrip {
   final bool isRejectedByMill;
   final String? rejectionReason;
   final List<DeliveryTripStop> stops;
+  final List<OrderTimelineEvent> timeline;
 
   DeliveryTrip({
     required this.orderId,
@@ -985,6 +986,7 @@ class DeliveryTrip {
     this.isRejectedByMill = false,
     this.rejectionReason,
     this.stops = const [],
+    this.timeline = const [],
   });
 
   bool get isReturnToCustomer =>
@@ -992,32 +994,57 @@ class DeliveryTrip {
       isRejectedByMill ||
       legType == 'RETURN_LEG_GRAIN_RETURN' ||
       status == 'RETURN_TO_CUSTOMER' ||
-      status == 'REJECTED_AT_MILL';
+      status == 'REJECTED_AT_MILL' ||
+      status == 'RETURNED_TO_CUSTOMER';
+
+  bool get isReturnToMill =>
+      status == 'RETURNED_TO_MILL' ||
+      status == 'RETURN_TO_MILL' ||
+      legType == 'RETURN_LEG_FLOUR_RETURN';
+
+  bool get isAnyReturn => isReturnToCustomer || isReturnToMill;
 
   bool get isLeg1GrainPickup =>
-      !isReturnToCustomer &&
+      !isAnyReturn &&
       (legType == 'LEG_1_GRAIN_PICKUP' ||
-          (isHomeGrainPickup && (status == 'PLACED' || status == 'ACCEPTED' || status == 'CONFIRMED' || status == 'PENDING' || status == 'NEW')));
+          (isHomeGrainPickup &&
+              (status == 'PLACED' ||
+                  status == 'ACCEPTED' ||
+                  status == 'CONFIRMED' ||
+                  status == 'PENDING' ||
+                  status == 'NEW' ||
+                  status == 'PROCESSING' ||
+                  status == 'ASSIGNED') &&
+              status != 'READY' &&
+              status != 'READY_FOR_PICKUP' &&
+              status != 'OUT_FOR_DELIVERY' &&
+              status != 'DELIVERED'));
 
-  bool get isLeg2FlourDelivery => !isLeg1GrainPickup && !isReturnToCustomer;
+  bool get isLeg2FlourDelivery => !isLeg1GrainPickup && !isAnyReturn;
 
   String get resolvedLegBadge =>
       tripBadge ??
       (isReturnToCustomer
           ? '⚠️ Return Grain (Rejected by Mill)'
-          : (isLeg1GrainPickup ? '🌾 Grain Pickup (Home ➔ Mill)' : '🍞 Flour Delivery (Mill ➔ Home)'));
+          : (isReturnToMill
+              ? '⚠️ Return Flour (Rejected by Customer)'
+              : (isLeg1GrainPickup ? '🌾 Grain Pickup (Home ➔ Mill)' : '🍞 Flour Delivery (Mill ➔ Home)')));
 
   String get resolvedOriginName =>
       originTitle ??
       (isReturnToCustomer
           ? '$millName (Return Rejected Grain)'
-          : (isLeg1GrainPickup ? 'Customer Home ($customerName)' : millName));
+          : (isReturnToMill
+              ? 'Customer Doorstep ($customerName)'
+              : (isLeg1GrainPickup ? 'Customer Home ($customerName)' : millName)));
 
   String get resolvedDestinationName =>
       destinationTitle ??
       (isReturnToCustomer
           ? 'Customer Doorstep ($customerName)'
-          : (isLeg1GrainPickup ? '$millName (Drop for Grinding)' : 'Customer Doorstep ($customerName)'));
+          : (isReturnToMill
+              ? '$millName (Return Rejected Flour)'
+              : (isLeg1GrainPickup ? '$millName (Drop for Grinding)' : 'Customer Doorstep ($customerName)')));
 
   String get effectivePickupLocation => isLeg1GrainPickup ? homePickupAddress : millAddress;
 
@@ -1056,6 +1083,14 @@ class DeliveryTrip {
     if (rawStops != null) {
       parsedStops = rawStops
           .map((s) => DeliveryTripStop.fromJson(Map<String, dynamic>.from(s as Map)))
+          .toList();
+    }
+
+    var rawTimeline = json['timeline'] as List?;
+    List<OrderTimelineEvent> parsedTimeline = [];
+    if (rawTimeline != null) {
+      parsedTimeline = rawTimeline
+          .map((t) => OrderTimelineEvent.fromJson(Map<String, dynamic>.from(t as Map)))
           .toList();
     }
 
@@ -1107,7 +1142,74 @@ class DeliveryTrip {
       isRejectedByMill: json['isRejectedByMill'] ?? (statusStr == 'RETURN_TO_CUSTOMER' || statusStr == 'REJECTED_AT_MILL'),
       rejectionReason: json['rejectionReason']?.toString(),
       stops: parsedStops,
+      timeline: parsedTimeline,
     );
+  }
+}
+
+class OrderTimelineEvent {
+  final int id;
+  final int orderId;
+  final String status;
+  final String title;
+  final String description;
+  final String timestamp;
+  final bool isCompleted;
+  final bool isCurrent;
+  final String? performedBy;
+  final DateTime? createdAt;
+
+  OrderTimelineEvent({
+    this.id = 0,
+    this.orderId = 0,
+    required this.status,
+    required this.title,
+    required this.description,
+    String? timestamp,
+    this.createdAt,
+    this.isCompleted = true,
+    this.isCurrent = false,
+    this.performedBy,
+  }) : timestamp = timestamp ?? (createdAt != null ? createdAt.toIso8601String() : DateTime.now().toIso8601String());
+
+  factory OrderTimelineEvent.fromJson(Map<String, dynamic> json) {
+    final rawTs = json['timestamp'] ?? json['created_at'] ?? '';
+    DateTime? parsedCreated;
+    if (rawTs is String && rawTs.isNotEmpty) {
+      parsedCreated = DateTime.tryParse(rawTs);
+    }
+    return OrderTimelineEvent(
+      id: json['id'] is int ? json['id'] : (int.tryParse(json['id']?.toString() ?? '') ?? 0),
+      orderId: json['orderId'] is int ? json['orderId'] : (json['order_id'] is int ? json['order_id'] : (int.tryParse(json['order_id']?.toString() ?? '') ?? 0)),
+      status: (json['status'] ?? '').toString(),
+      title: json['title'] ?? 'Milestone Reached',
+      description: json['description'] ?? json['note'] ?? '',
+      timestamp: rawTs.toString(),
+      createdAt: parsedCreated,
+      isCompleted: json['isCompleted'] ?? true,
+      isCurrent: json['isCurrent'] ?? false,
+      performedBy: json['performedBy'] ?? json['performed_by'],
+    );
+  }
+
+  bool get isReturnOrReject =>
+      status.contains('REJECT') ||
+      status.contains('RETURN') ||
+      title.toLowerCase().contains('reject') ||
+      title.toLowerCase().contains('return');
+
+  String get formattedTime {
+    if (timestamp.isEmpty) return '';
+    try {
+      final dt = DateTime.tryParse(timestamp);
+      if (dt != null) {
+        final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+        final m = dt.minute.toString().padLeft(2, '0');
+        final a = dt.hour >= 12 ? 'PM' : 'AM';
+        return '$h:$m $a';
+      }
+    } catch (_) {}
+    return timestamp;
   }
 }
 

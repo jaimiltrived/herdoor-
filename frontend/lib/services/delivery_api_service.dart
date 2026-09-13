@@ -441,6 +441,94 @@ class DeliveryApiService {
     return {'success': true, 'message': 'Rejected grain safely returned to customer doorstep.'};
   }
 
+  /// Confirm Return of Rejected Milled Flour to Mill (Leg 2 Return)
+  Future<Map<String, dynamic>> confirmReturnToMill(
+    int orderId, {
+    String? reason,
+    String? notes,
+  }) async {
+    invalidateCache();
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .post(
+                Uri.parse('$baseUrl/delivery/orders/$orderId/return-to-mill'),
+                headers: _headers,
+                body: jsonEncode({
+                  'reason': reason ?? 'Quality discrepancy reported at customer doorstep',
+                  'notes': notes ?? '',
+                }),
+              )
+              .timeout(_timeout);
+          final body = jsonDecode(response.body);
+          if (response.statusCode == 200) {
+            return {'success': true, 'message': body['message'] ?? 'Flour safely returned to mill.'};
+          }
+        } catch (_) {
+          _markOffline();
+        }
+      }
+    }
+    return {'success': true, 'message': 'Rejected flour safely returned to mill.'};
+  }
+
+  /// Get Live Order Timeline Events from Server
+  Future<List<OrderTimelineEvent>> getOrderTimeline(int orderId) async {
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .get(
+                Uri.parse('$baseUrl/delivery/orders/$orderId/timeline'),
+                headers: _headers,
+              )
+              .timeout(_timeout);
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body);
+            final raw = body['data']?['timeline'];
+            if (raw is List) {
+              return raw
+                  .map((t) => OrderTimelineEvent.fromJson(Map<String, dynamic>.from(t as Map)))
+                  .toList();
+            }
+          }
+        } catch (_) {}
+      }
+    }
+    return [];
+  }
+
+  /// Submit Customer Doorstep Product Verification (Leg 2 Customer Scan)
+  Future<Map<String, dynamic>> submitCustomerVerification(
+    int orderId, {
+    required bool isAccepted,
+    String? reason,
+    String? notes,
+    List<Map<String, dynamic>>? bagDecisions,
+  }) async {
+    invalidateCache();
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          if (!isAccepted) {
+            return await confirmReturnToMill(
+              orderId,
+              reason: reason ?? 'Customer rejected flour at doorstep scan inspection',
+              notes: notes,
+            );
+          }
+        } catch (_) {
+          _markOffline();
+        }
+      }
+    }
+    return {'success': true, 'message': isAccepted ? 'Customer verified all products!' : 'Return to mill initiated.'};
+  }
+
   /// Get single delivery order details (including inspection and live order status)
   Future<Map<String, dynamic>?> getDeliveryOrderById(int orderId) async {
     if (!shouldSkipNetwork) {

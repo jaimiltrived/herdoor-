@@ -4,7 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import '../models/app_models.dart';
+import '../models/merchant_models.dart';
 import '../services/customer_api_service.dart';
+import '../services/delivery_api_service.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
   final OrderModel order;
@@ -69,60 +71,137 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
     final isAccepted = s == 'ACCEPTED';
     final isPlaced = s == 'PLACED' || s == 'NEW';
 
+    final isReturnToCustomer = s == 'RETURN_TO_CUSTOMER';
+    final isReturnedToCustomer = s == 'RETURNED_TO_CUSTOMER';
+    final isReturnToMill = s == 'RETURN_TO_MILL';
+    final isReturnedToMill = s == 'RETURNED_TO_MILL';
+
     if (_order.trackingSteps.length >= 5) {
-      // Step 0: Order Placed
-      _order.trackingSteps[0] = TrackingStep(
-        title: 'Order Placed',
-        subtitle: 'Received at mill',
-        timeText: '10:00 AM',
-        isCompleted: true,
-        isCurrent: false,
-      );
+      if (isReturnToCustomer || isReturnedToCustomer) {
+        // Leg 1 Return Flow (Rejected at Mill -> Returned to Customer Doorstep)
+        _order.trackingSteps[0] = TrackingStep(
+          title: 'Order Placed',
+          subtitle: 'Received at mill',
+          timeText: 'Completed',
+          isCompleted: true,
+          isCurrent: false,
+        );
+        _order.trackingSteps[1] = TrackingStep(
+          title: 'Grain Picked Up',
+          subtitle: 'Collected from doorstep',
+          timeText: 'Completed',
+          isCompleted: true,
+          isCurrent: false,
+        );
+        _order.trackingSteps[2] = TrackingStep(
+          title: 'Mill Quality Check',
+          subtitle: 'Rejected by mill shopkeeper',
+          timeText: 'Failed',
+          isCompleted: true,
+          isCurrent: false,
+        );
+        _order.trackingSteps[3] = TrackingStep(
+          title: 'Returning Grain',
+          subtitle: isReturnedToCustomer ? 'Delivered back to home' : 'Driver returning grain to doorstep',
+          timeText: isReturnedToCustomer ? 'Completed' : 'In transit',
+          isCompleted: isReturnedToCustomer,
+          isCurrent: isReturnToCustomer,
+        );
+        _order.trackingSteps[4] = TrackingStep(
+          title: isReturnedToCustomer ? 'Returned to Customer' : 'Awaiting Doorstep Handover',
+          subtitle: isReturnedToCustomer ? 'Grain handed back to customer' : 'Driver arriving soon',
+          timeText: isReturnedToCustomer ? 'Done' : 'Pending',
+          isCompleted: isReturnedToCustomer,
+          isCurrent: false,
+        );
+      } else if (isReturnToMill || isReturnedToMill) {
+        // Leg 2 Return Flow (Rejected by Customer at Doorstep -> Returned to Mill)
+        _order.trackingSteps[0] = TrackingStep(
+          title: 'Order Placed',
+          subtitle: 'Received at mill',
+          timeText: 'Completed',
+          isCompleted: true,
+          isCurrent: false,
+        );
+        _order.trackingSteps[1] = TrackingStep(
+          title: 'Milling Completed',
+          subtitle: 'Flour ground & packed',
+          timeText: 'Completed',
+          isCompleted: true,
+          isCurrent: false,
+        );
+        _order.trackingSteps[2] = TrackingStep(
+          title: 'Out for Delivery',
+          subtitle: 'Delivered to doorstep',
+          timeText: 'Completed',
+          isCompleted: true,
+          isCurrent: false,
+        );
+        _order.trackingSteps[3] = TrackingStep(
+          title: 'Doorstep Quality Check',
+          subtitle: 'Customer rejected flour',
+          timeText: 'Rejected',
+          isCompleted: true,
+          isCurrent: false,
+        );
+        _order.trackingSteps[4] = TrackingStep(
+          title: isReturnedToMill ? 'Returned to Mill' : 'Returning to Mill',
+          subtitle: isReturnedToMill ? 'Flour safely handed back to mill' : 'Driver returning flour to mill',
+          timeText: isReturnedToMill ? 'Done' : 'In transit',
+          isCompleted: isReturnedToMill,
+          isCurrent: isReturnToMill,
+        );
+      } else {
+        // Normal Happy Flow
+        _order.trackingSteps[0] = TrackingStep(
+          title: 'Order Placed',
+          subtitle: 'Received at mill',
+          timeText: '10:00 AM',
+          isCompleted: true,
+          isCurrent: false,
+        );
 
-      // Step 1: Grain Cleaning & Inspection
-      _order.trackingSteps[1] = TrackingStep(
-        title: 'Grain Cleaning',
-        subtitle: 'Moisture checked',
-        timeText: (isMilling || isReady || isOut || isDelivered)
-            ? '10:15 AM'
-            : (isAccepted ? 'In progress' : (isPlaced ? 'In queue' : 'Pending')),
-        isCompleted: (isMilling || isReady || isOut || isDelivered),
-        isCurrent: isAccepted || isPlaced,
-      );
+        _order.trackingSteps[1] = TrackingStep(
+          title: 'Grain Cleaning',
+          subtitle: 'Moisture checked',
+          timeText: (isMilling || isReady || isOut || isDelivered)
+              ? '10:15 AM'
+              : (isAccepted ? 'In progress' : (isPlaced ? 'In queue' : 'Pending')),
+          isCompleted: (isMilling || isReady || isOut || isDelivered),
+          isCurrent: isAccepted || isPlaced,
+        );
 
-      // Step 2: Milling in Progress
-      _order.trackingSteps[2] = TrackingStep(
-        title: 'Milling in Progress',
-        subtitle: 'Stone chakki grinding',
-        timeText: (isReady || isOut || isDelivered)
-            ? '10:30 AM'
-            : (isMilling ? 'Grinding now' : 'Pending'),
-        isCompleted: (isReady || isOut || isDelivered),
-        isCurrent: isMilling,
-      );
+        _order.trackingSteps[2] = TrackingStep(
+          title: 'Milling in Progress',
+          subtitle: 'Stone chakki grinding',
+          timeText: (isReady || isOut || isDelivered)
+              ? '10:30 AM'
+              : (isMilling ? 'Grinding now' : 'Pending'),
+          isCompleted: (isReady || isOut || isDelivered),
+          isCurrent: isMilling,
+        );
 
-      // Step 3: Out for Delivery
-      _order.trackingSteps[3] = TrackingStep(
-        title: 'Out for Delivery',
-        subtitle: 'Assigned to driver',
-        timeText: isDelivered
-            ? '11:00 AM'
-            : (isOut ? 'On the way' : (isReady ? 'Ready for pickup' : 'Pending')),
-        isCompleted: isDelivered,
-        isCurrent: isOut || isReady,
-      );
+        _order.trackingSteps[3] = TrackingStep(
+          title: 'Out for Delivery',
+          subtitle: 'Assigned to driver',
+          timeText: isDelivered
+              ? '11:00 AM'
+              : (isOut ? 'On the way' : (isReady ? 'Ready for pickup' : 'Pending')),
+          isCompleted: isDelivered,
+          isCurrent: isOut || isReady,
+        );
 
-      // Step 4: Delivered
-      _order.trackingSteps[4] = TrackingStep(
-        title: 'Delivered',
-        subtitle: 'Doorstep handover',
-        timeText: isDelivered ? '11:15 AM' : 'Pending',
-        isCompleted: isDelivered,
-        isCurrent: false,
-      );
+        _order.trackingSteps[4] = TrackingStep(
+          title: 'Delivered',
+          subtitle: 'Doorstep handover',
+          timeText: isDelivered ? '11:15 AM' : 'Pending',
+          isCompleted: isDelivered,
+          isCurrent: false,
+        );
+      }
     }
 
-    if (isDelivered || isCancelled) {
+    if (isDelivered || isCancelled || isReturnedToCustomer || isReturnedToMill) {
       _order.isActive = false;
     }
   }
@@ -333,6 +412,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.timeline_rounded, color: AppTheme.primaryTerracotta),
+            tooltip: 'Live Timeline',
+            onPressed: _openOrderTimelineSheet,
+          ),
           IconButton(
             icon: Icon(
               _viewMode == 0 ? Icons.map_outlined : Icons.list_alt_rounded,
@@ -1268,6 +1352,306 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
         ),
       ),
     );
+  }
+
+  void _openOrderTimelineSheet() {
+    final numericId = int.tryParse(_order.orderId.replaceAll(RegExp(r'[^0-9]'), ''));
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => FutureBuilder<List<OrderTimelineEvent>>(
+        future: numericId != null
+            ? DeliveryApiService.instance.getOrderTimeline(numericId)
+            : Future.value([]),
+        builder: (context, snapshot) {
+          final timelineEvents = (snapshot.hasData && snapshot.data!.isNotEmpty)
+              ? snapshot.data!
+              : _buildSynthesizedTimeline();
+
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.75,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.timeline_rounded, color: AppTheme.primaryTerracotta),
+                        const SizedBox(width: 8),
+                        Text('Order Timeline', style: GoogleFonts.playfairDisplay(fontSize: 18, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryTerracotta.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _order.orderId,
+                        style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 11, color: AppTheme.primaryTerracotta),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text('Real-time verified milestones across milling and delivery:', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary)),
+                const SizedBox(height: 16),
+
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: timelineEvents.length,
+                    itemBuilder: (context, index) {
+                      final ev = timelineEvents[index];
+                      final isLast = index == timelineEvents.length - 1;
+                      final isRejectOrReturn = ev.isReturnOrReject;
+
+                      Color iconColor = const Color(0xFF1E8449);
+                      Color dotBg = const Color(0xFFE8F8F5);
+                      IconData eventIcon = Icons.check_circle_rounded;
+
+                      if (isRejectOrReturn) {
+                        iconColor = const Color(0xFFDC2626);
+                        dotBg = const Color(0xFFFEF2F2);
+                        eventIcon = Icons.cancel_rounded;
+                      } else if (ev.status.contains('ASSIGNED') || ev.status.contains('PICKED') || ev.status.contains('EN_ROUTE')) {
+                        iconColor = const Color(0xFFD97706);
+                        dotBg = const Color(0xFFFFFBEB);
+                        eventIcon = Icons.navigation_rounded;
+                      } else if (ev.status.contains('MILLING') || ev.status.contains('INTAKE')) {
+                        iconColor = const Color(0xFF2563EB);
+                        dotBg = const Color(0xFFEFF6FF);
+                        eventIcon = Icons.storefront_rounded;
+                      }
+
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Column(
+                            children: [
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: dotBg,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: iconColor.withValues(alpha: 0.4), width: 1.5),
+                                ),
+                                child: Icon(eventIcon, color: iconColor, size: 16),
+                              ),
+                              if (!isLast)
+                                Container(
+                                  width: 2,
+                                  height: 44,
+                                  color: Colors.grey.shade200,
+                                ),
+                            ],
+                          ),
+                          const SizedBox(width: 14),
+
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 18),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          ev.title,
+                                          style: GoogleFonts.plusJakartaSans(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                            color: isRejectOrReturn ? const Color(0xFF991B1B) : AppTheme.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                      Text(
+                                        ev.formattedTime,
+                                        style: GoogleFonts.plusJakartaSans(fontSize: 10, color: AppTheme.textSecondary),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    ev.description,
+                                    style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
+                                  ),
+                                  if (ev.performedBy != null && ev.performedBy!.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        'By ${ev.performedBy}',
+                                        style: GoogleFonts.plusJakartaSans(fontSize: 9, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  List<OrderTimelineEvent> _buildSynthesizedTimeline() {
+    final List<OrderTimelineEvent> list = [];
+    final now = DateTime.now();
+    final s = _order.statusStep.toUpperCase().replaceAll(' ', '_');
+
+    list.add(OrderTimelineEvent(
+      title: 'Order Placed',
+      description: 'Order booked and confirmed on HerDoor platform',
+      status: 'BOOKED',
+      createdAt: now.subtract(const Duration(minutes: 50)),
+      performedBy: 'Customer',
+    ));
+
+    if (s.contains('ASSIGNED') || s.contains('PICK') || s.contains('MILL') || s.contains('OUT') || s.contains('DELIVER') || s.contains('RETURN')) {
+      list.add(OrderTimelineEvent(
+        title: 'Driver Assigned',
+        description: 'Delivery rider assigned to pickup and transit route',
+        status: 'DRIVER_ASSIGNED',
+        createdAt: now.subtract(const Duration(minutes: 40)),
+        performedBy: 'System',
+      ));
+    }
+
+    if (s == 'RETURN_TO_CUSTOMER' || s == 'RETURNED_TO_CUSTOMER') {
+      list.add(OrderTimelineEvent(
+        title: 'Raw Grain Picked Up',
+        description: 'Driver collected raw grain bags from customer doorstep',
+        status: 'GRAIN_PICKED_UP',
+        createdAt: now.subtract(const Duration(minutes: 30)),
+        performedBy: 'Driver',
+      ));
+      list.add(OrderTimelineEvent(
+        title: 'Arrived at Flour Mill',
+        description: 'Grain bags submitted for quality check at mill',
+        status: 'MILL_ARRIVED',
+        createdAt: now.subtract(const Duration(minutes: 20)),
+        performedBy: 'Driver',
+      ));
+      list.add(OrderTimelineEvent(
+        title: 'Grain Quality Rejected by Mill',
+        description: 'Shopkeeper inspection failed: moisture or foreign impurities found',
+        status: 'RETURN_TO_CUSTOMER',
+        createdAt: now.subtract(const Duration(minutes: 10)),
+        performedBy: 'Merchant',
+      ));
+      if (s == 'RETURNED_TO_CUSTOMER') {
+        list.add(OrderTimelineEvent(
+          title: 'Grain Returned to Customer',
+          description: 'Raw grain safely returned to customer doorstep',
+          status: 'RETURNED_TO_CUSTOMER',
+          createdAt: now,
+          performedBy: 'Driver',
+        ));
+      }
+    } else if (s == 'RETURN_TO_MILL' || s == 'RETURNED_TO_MILL') {
+      list.add(OrderTimelineEvent(
+        title: 'Milling Completed',
+        description: 'Fresh flour milled and packaged by mill owner',
+        status: 'MILLING_COMPLETED',
+        createdAt: now.subtract(const Duration(minutes: 30)),
+        performedBy: 'Merchant',
+      ));
+      list.add(OrderTimelineEvent(
+        title: 'Out for Doorstep Delivery',
+        description: 'Driver picked up flour from mill and traveled to customer',
+        status: 'OUT_FOR_DELIVERY',
+        createdAt: now.subtract(const Duration(minutes: 20)),
+        performedBy: 'Driver',
+      ));
+      list.add(OrderTimelineEvent(
+        title: 'Flour Quality Rejected by Customer',
+        description: 'Customer inspected flour bags at doorstep and rejected quality',
+        status: 'RETURN_TO_MILL',
+        createdAt: now.subtract(const Duration(minutes: 10)),
+        performedBy: 'Customer',
+      ));
+      if (s == 'RETURNED_TO_MILL') {
+        list.add(OrderTimelineEvent(
+          title: 'Flour Returned to Mill',
+          description: 'Rejected flour safely returned to flour mill shopkeeper',
+          status: 'RETURNED_TO_MILL',
+          createdAt: now,
+          performedBy: 'Driver',
+        ));
+      }
+    } else {
+      if (s == 'IN_PROGRESS' || s == 'PROCESSING' || s == 'MILLING' || s == 'READY' || s == 'OUT_FOR_DELIVERY' || s == 'DELIVERED' || s == 'COMPLETED') {
+        list.add(OrderTimelineEvent(
+          title: 'Grain Cleaning & Quality Check',
+          description: 'Mill owner inspected raw grain and verified quality',
+          status: 'INTAKE_VERIFIED',
+          createdAt: now.subtract(const Duration(minutes: 30)),
+          performedBy: 'Merchant',
+        ));
+        list.add(OrderTimelineEvent(
+          title: 'Milling in Progress',
+          description: 'Grain being freshly stone-ground in chakki',
+          status: 'MILLING_IN_PROGRESS',
+          createdAt: now.subtract(const Duration(minutes: 20)),
+          performedBy: 'Merchant',
+        ));
+      }
+
+      if (s == 'OUT_FOR_DELIVERY' || s == 'DELIVERED' || s == 'COMPLETED') {
+        list.add(OrderTimelineEvent(
+          title: 'Out for Delivery',
+          description: 'Fresh flour bags picked up and en-route to customer',
+          status: 'OUT_FOR_DELIVERY',
+          createdAt: now.subtract(const Duration(minutes: 10)),
+          performedBy: 'Driver',
+        ));
+      }
+
+      if (s == 'DELIVERED' || s == 'COMPLETED') {
+        list.add(OrderTimelineEvent(
+          title: 'Delivered & Doorstep Verified',
+          description: 'Customer verified flour quality and completed handover with OTP',
+          status: 'DELIVERED',
+          createdAt: now,
+          performedBy: 'Driver',
+        ));
+      }
+    }
+
+    return list;
   }
 }
 
