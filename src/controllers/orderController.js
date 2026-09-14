@@ -1,6 +1,8 @@
 const store = require('../store/dataStore');
 const { query } = require('../config/database');
 const { ORDER_STATUS, FULFILLMENT_TYPES } = require('../constants/enums');
+const { generatePackageQrToken } = require('../utils/qr');
+
 
 exports.createOrder = async (req, res) => {
   const {
@@ -28,10 +30,22 @@ exports.createOrder = async (req, res) => {
   let computedTotal = passedTotal;
 
   if (items && Array.isArray(items) && items.length > 0) {
-    resolvedGrainName = items.map(i => i.name).join(', ');
-    resolvedQuantity = items.reduce((sum, i) => sum + (parseFloat(i.quantity) || 1), 0);
+    resolvedQuantity = items.reduce((sum, i) => sum + (parseFloat(i.quantity || i.quantityKg || 1)), 0);
+    if (grainTypeName && /^\d+(\.\d+)?\s*(kg|g|unit)/i.test(grainTypeName)) {
+      resolvedGrainName = grainTypeName;
+    } else {
+      resolvedGrainName = items.map(i => {
+        const name = (i.name || i.grainTypeName || 'Product').toString().trim();
+        const qty = parseFloat(i.quantity || i.quantityKg || 1);
+        const qtyStr = Number.isInteger(qty) ? qty.toString() : qty.toFixed(1);
+        if (/^\d+(\.\d+)?\s*(kg|g|unit|pack|bag)/i.test(name)) {
+          return name;
+        }
+        return `${qtyStr}kg ${name}`;
+      }).join(', ');
+    }
     if (!computedTotal) {
-      const subtotal = items.reduce((sum, i) => sum + ((parseFloat(i.price) || 0) * (parseFloat(i.quantity) || 1)), 0);
+      const subtotal = items.reduce((sum, i) => sum + ((parseFloat(i.price) || 0) * (parseFloat(i.quantity || i.quantityKg) || 1)), 0);
       computedTotal = subtotal + parseFloat(pickupFee) + parseFloat(deliveryFee);
     }
   } else if (!computedTotal) {
@@ -132,10 +146,44 @@ exports.createOrder = async (req, res) => {
       } catch (tlErr) {
         console.warn('MySQL Timeline Insert Warning:', tlErr.message);
       }
+
+      // Generate package QR records for each item or single item
+      try {
+        const orderItemsList = (items && Array.isArray(items) && items.length > 0)
+          ? items
+          : [{ name: resolvedGrainName, quantity: resolvedQuantity }];
+
+        newOrder.packages = [];
+        for (let idx = 0; idx < orderItemsList.length; idx++) {
+          const item = orderItemsList[idx];
+          const pkgNum = String(idx + 1).padStart(2, '0');
+          const pkgCode = `PKG-${newOrder.orderNumber.replace('#', '')}-${pkgNum}`;
+          const qrToken = generatePackageQrToken(newOrder.orderNumber.replace('#', ''), idx + 1);
+          const expectedW = parseFloat(item.quantity) || parseFloat(resolvedQuantity) || 5.0;
+          const prodName = item.name || resolvedGrainName;
+
+          await query(
+            `INSERT INTO packages (order_id, package_code, qr_token, product_name, expected_weight, unit, status, current_leg)
+             VALUES (?, ?, ?, ?, ?, 'KG', 'CREATED', 'LEG_1')`,
+            [newOrder.id, pkgCode, qrToken, prodName, expectedW]
+          );
+
+          newOrder.packages.push({
+            packageCode: pkgCode,
+            qrToken,
+            productName: prodName,
+            expectedWeight: expectedW,
+            status: 'CREATED'
+          });
+        }
+      } catch (pkgErr) {
+        console.warn('MySQL Package Insert Warning:', pkgErr.message);
+      }
     }
   } catch (dbErr) {
     console.warn('MySQL Orders Insert Warning:', dbErr.message);
   }
+
 
   // If newOrder.id was not generated from DB, assign sequential memory ID
   if (!newOrder.id) {
@@ -248,8 +296,9 @@ exports.getActiveOrders = async (req, res) => {
 
   try {
     const userId = req.user.id;
+    // Task 3: Exclude PROCESSING, PACKING, READY, RECEIVED_AT_MILL from Customer Active List
     const dbOrders = await query(
-      `SELECT o.*, m.name as mill_name FROM orders o LEFT JOIN mills m ON o.mill_id = m.id WHERE o.user_id = ? AND o.status IN ('PLACED', 'ACCEPTED', 'PROCESSING', 'PACKING', 'READY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY') ORDER BY o.id DESC`,
+      `SELECT o.*, m.name as mill_name FROM orders o LEFT JOIN mills m ON o.mill_id = m.id WHERE o.user_id = ? AND o.status IN ('PLACED', 'ACCEPTED', 'CONFIRMED', 'ASSIGNED', 'OUT_FOR_DELIVERY', 'RETURN_TO_CUSTOMER', 'REJECTED_AT_MILL') ORDER BY o.id DESC`,
       [userId]
     );
     if (dbOrders && Array.isArray(dbOrders)) {
@@ -529,25 +578,66 @@ exports.cancelOrder = (req, res) => {
   });
 };
 
-exports.confirmReceipt = (req, res) => {
-  const orderId = parseInt(req.params.orderId);
-  const order = store.orders.find(o => o.id === orderId);
-
-  if (!order) {
-    return res.status(404).json({ status: 'error', message: 'Order not found' });
+exports.confirmReceipt = async (req, res) => {
+  if (!req.user || (req.user.role !== ROLES.CUSTOMER && req.user.role !== 'CUSTOMER')) {
+    return res.status(403).json({ status: 'error', message: 'Only customers can confirm receipt of their order.' });
   }
 
-  order.status = ORDER_STATUS.COMPLETED;
-  order.timeline.push({
-    status: ORDER_STATUS.COMPLETED,
-    timestamp: new Date().toISOString(),
-    note: 'Customer confirmed order receipt'
-  });
+  const rawParam = (req.params.orderId || '').toString().trim();
+  const orderId = parseInt(rawParam.replace(/[^0-9]/g, '')) || parseInt(rawParam);
+  const { deliveryOtp } = req.body;
+
+  try {
+    const orders = await query('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
+    if (!orders || orders.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Order not found' });
+    }
+
+    const dbOrder = orders[0];
+    if (dbOrder.user_id !== req.user.id) {
+      return res.status(403).json({ status: 'error', message: 'This is not your order.' });
+    }
+
+    if (deliveryOtp && dbOrder.delivery_otp && String(deliveryOtp).trim() !== String(dbOrder.delivery_otp).trim()) {
+      return res.status(400).json({ status: 'error', code: 'INVALID_PIN', message: 'Invalid delivery PIN.' });
+    }
+
+    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.COMPLETED, orderId]);
+    await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', ['DELIVERED', orderId]);
+    await query(`UPDATE packages SET status = 'DELIVERED', current_leg = 'COMPLETED', updated_at = NOW() WHERE order_id = ?`, [orderId]);
+    await query(`UPDATE delivery_tasks SET status = 'COMPLETED', completed_at = NOW(), updated_at = NOW() WHERE order_id = ? AND leg = 'LEG_2_MILL_TO_CUSTOMER'`, [orderId]);
+    await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [
+      orderId,
+      ORDER_STATUS.COMPLETED,
+      'Doorstep Delivery Verified',
+      'Customer verified flour quality and confirmed handover'
+    ]);
+
+    // Increment delivery rider total trips if driver assigned
+    const delRes = await query('SELECT delivery_person_id FROM deliveries WHERE order_id = ? LIMIT 1', [orderId]);
+    if (delRes && delRes[0] && delRes[0].delivery_person_id) {
+      await query('UPDATE users SET total_trips = COALESCE(total_trips, 0) + 1 WHERE id = ?', [delRes[0].delivery_person_id]);
+    }
+  } catch (err) {
+    console.warn('MySQL confirmReceipt warning:', err.message);
+  }
+
+  const order = store.orders.find(o => o.id === orderId);
+  if (order) {
+    order.status = ORDER_STATUS.COMPLETED;
+    if (order.timeline) {
+      order.timeline.push({
+        status: ORDER_STATUS.COMPLETED,
+        timestamp: new Date().toISOString(),
+        note: 'Customer confirmed order receipt'
+      });
+    }
+  }
 
   res.json({
     status: 'success',
-    message: 'Order receipt confirmed',
-    data: { order }
+    message: 'Order receipt confirmed! Delivery completed.',
+    data: { orderId, status: ORDER_STATUS.COMPLETED }
   });
 };
 

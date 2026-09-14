@@ -202,7 +202,7 @@ exports.getNewOrders = (req, res) => {
 exports.getActiveOrders = async (req, res) => {
   const millId = getShopkeeperMillId(req);
   const allOrders = await getLiveOrders(millId);
-  const activeStatuses = [ORDER_STATUS.ACCEPTED, ORDER_STATUS.PROCESSING, ORDER_STATUS.PACKING, 'MILLING', 'IN PROGRESS', 'GRAIN_DROPPED', 'PENDING'];
+  const activeStatuses = [ORDER_STATUS.ACCEPTED, ORDER_STATUS.PROCESSING, ORDER_STATUS.PACKING, 'MILLING', 'IN PROGRESS', 'IN_PROGRESS', 'GRAIN_DROPPED', 'GRAIN DROPPED', 'RECEIVED_AT_MILL', 'CONFIRMED', 'PENDING'];
   const active = allOrders.filter(o => activeStatuses.includes(o.status)).map(enrichOrder);
   res.json({ status: 'success', count: active.length, data: { orders: active } });
 };
@@ -258,6 +258,22 @@ exports.acceptOrder = async (req, res) => {
   try {
     await query('UPDATE orders SET status = ?, estimated_minutes = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.ACCEPTED, estimatedCompletionMinutes, targetId]);
     await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [targetId, ORDER_STATUS.ACCEPTED, 'Order Accepted', `Accepted by mill owner (ETA: ${estimatedCompletionMinutes} mins)`]);
+
+    // Create/Activate Leg 1 Delivery Task
+    await query(
+      `INSERT INTO delivery_tasks (order_id, leg, status, pickup_location, drop_location)
+       SELECT ?, 'LEG_1_CUSTOMER_TO_MILL', 'AVAILABLE',
+              COALESCE(o.customer_name, 'Customer Home'),
+              COALESCE(m.name, 'Mill')
+       FROM orders o
+       LEFT JOIN mills m ON o.mill_id = m.id
+       WHERE o.id = ?
+       ON DUPLICATE KEY UPDATE status = 'AVAILABLE', updated_at = NOW()`,
+      [targetId, targetId]
+    );
+
+    // Update package statuses to READY_FOR_PICKUP
+    await query(`UPDATE packages SET status = 'READY_FOR_PICKUP', current_leg = 'LEG_1' WHERE order_id = ?`, [targetId]);
   } catch (err) {
     console.warn('MySQL acceptOrder update warning:', err.message);
   }
@@ -344,16 +360,34 @@ exports.intakeGrainInspection = async (req, res) => {
   }
 
   const targetId = order ? order.id : orderId;
-  const newStatus = isAccepted ? ORDER_STATUS.READY : ORDER_STATUS.REJECTED_AT_MILL;
+  const newStatus = isAccepted ? ORDER_STATUS.PROCESSING : ORDER_STATUS.REJECTED_AT_MILL;
   const deliveryStatus = isAccepted ? 'GRAIN_DROPPED' : 'RETURN_TO_CUSTOMER';
 
   try {
     await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [newStatus, targetId]);
     await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [deliveryStatus, targetId]);
 
-    const title = isAccepted ? 'Grain Intake & Milling Completed' : 'Grain Intake Rejected at Mill';
+    if (isAccepted) {
+      // Update packages status to RECEIVED_AT_MILL
+      await query(`UPDATE packages SET status = 'RECEIVED_AT_MILL', updated_at = NOW() WHERE order_id = ?`, [targetId]);
+
+      // Complete Leg 1 Task
+      await query(`UPDATE delivery_tasks SET status = 'COMPLETED', completed_at = NOW(), updated_at = NOW() WHERE order_id = ? AND leg = 'LEG_1_CUSTOMER_TO_MILL'`, [targetId]);
+
+      // Create or update Leg 2 Task as PENDING_DURING_MILLING (hidden from rider pool until markReady)
+      await query(`
+        INSERT INTO delivery_tasks (order_id, leg, status, pickup_location, drop_location, created_at, updated_at)
+        SELECT ?, 'LEG_2_MILL_TO_CUSTOMER', 'PENDING_DURING_MILLING', COALESCE(m.name, 'Flour Mill'), COALESCE(o.customer_name, 'Customer Home'), NOW(), NOW()
+        FROM orders o LEFT JOIN mills m ON o.mill_id = m.id WHERE o.id = ?
+        ON DUPLICATE KEY UPDATE status = 'PENDING_DURING_MILLING', updated_at = NOW()
+      `, [targetId, targetId]);
+    } else {
+      await query(`UPDATE packages SET status = 'REJECTED', updated_at = NOW() WHERE order_id = ?`, [targetId]);
+    }
+
+    const title = isAccepted ? 'Grain Intake Verified at Mill' : 'Grain Intake Rejected at Mill';
     const desc = isAccepted
-      ? 'Shopkeeper inspected & scanned all bags. Quality verified and order is ready for dispatch.'
+      ? 'Shopkeeper inspected & scanned all bags. Grain received & grinding commenced.'
       : `Shopkeeper rejected grain intake: ${reason}. Driver instructed to return bags to customer.`;
 
     await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [
@@ -464,6 +498,16 @@ exports.startProcessing = async (req, res) => {
 
   const targetId = order ? order.id : orderId;
 
+  // Task 6 Guard: Validate order is in valid state before starting processing
+  const currentStatus = (order ? order.status : (await query('SELECT status FROM orders WHERE id = ?', [targetId]))?.[0]?.status || '').toUpperCase();
+  if (!['RECEIVED_AT_MILL', 'CONFIRMED', 'ACCEPTED', 'PROCESSING', 'GRAIN_DROPPED'].includes(currentStatus)) {
+    return res.status(400).json({
+      status: 'error',
+      code: 'BAD_TRANSITION',
+      message: 'Cannot start processing until intake scan confirms grain has been received at mill.'
+    });
+  }
+
   try {
     await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.PROCESSING, targetId]);
     await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [targetId, ORDER_STATUS.PROCESSING, 'Milling Started', 'Chakki grinding started']);
@@ -550,8 +594,49 @@ exports.markReady = async (req, res) => {
   try {
     await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [nextStatus, targetId]);
     await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [targetId, nextStatus, 'Order Ready', `Order packed and ready for fulfillment`]);
+
+    // Update package statuses to READY_FOR_DELIVERY & current_leg to LEG_2
+    await query(
+      `UPDATE packages SET status = 'READY_FOR_DELIVERY', current_leg = 'LEG_2' WHERE order_id = ?`,
+      [targetId]
+    );
+
+    // AUTOMATIC LEG 2 ORCHESTRATION: Create Leg 2 task for delivery rider
+    await query(
+      `INSERT INTO delivery_tasks (order_id, leg, status, pickup_location, drop_location)
+       SELECT ?, 'LEG_2_MILL_TO_CUSTOMER', 'AVAILABLE',
+              COALESCE(m.name, 'Mill'),
+              COALESCE(o.customer_name, 'Customer Home')
+       FROM orders o
+       LEFT JOIN mills m ON o.mill_id = m.id
+       WHERE o.id = ?
+       ON DUPLICATE KEY UPDATE status = 'AVAILABLE', updated_at = NOW()`,
+      [targetId, targetId]
+    );
+
+    // Mark Leg 1 task as completed if existing
+    await query(
+      `UPDATE delivery_tasks SET status = 'COMPLETED', completed_at = NOW() WHERE order_id = ? AND leg = 'LEG_1_CUSTOMER_TO_MILL'`,
+      [targetId]
+    );
+
+    // Reset deliveries record for Leg 2 so any rider can claim it
+    await query(
+      `UPDATE deliveries SET delivery_person_id = NULL, delivery_person_name = NULL, delivery_person_phone = NULL, status = 'AVAILABLE', updated_at = NOW() WHERE order_id = ?`,
+      [targetId]
+    );
   } catch (err) {
     console.warn('MySQL markReady update warning:', err.message);
+  }
+
+  if (store.deliveries) {
+    const del = store.deliveries.find(d => d.orderId === targetId);
+    if (del) {
+      del.deliveryPersonId = null;
+      del.deliveryPersonName = null;
+      del.deliveryPersonPhone = null;
+      del.status = 'AVAILABLE';
+    }
   }
 
   if (order) {

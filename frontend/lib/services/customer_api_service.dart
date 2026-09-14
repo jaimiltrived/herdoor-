@@ -494,6 +494,26 @@ class CustomerApiService {
     }
     return false;
   }
+
+  /// Confirm Order Receipt (Customer Handover Confirmation)
+  Future<bool> confirmReceipt(int orderId, {String? deliveryOtp}) async {
+    await ensureAuthenticated();
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/orders/$orderId/confirm-receipt'),
+        headers: _headers,
+        body: jsonEncode({
+          'deliveryOtp': deliveryOtp,
+        }),
+      );
+      if (response.statusCode == 200) {
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Confirm Receipt Error: $e');
+    }
+    return false;
+  }
 }
 
 

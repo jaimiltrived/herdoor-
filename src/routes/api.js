@@ -46,12 +46,15 @@ router.get('/', (req, res) => {
   });
 });
 
+const packageRoutes = require('./packageRoutes');
+
 // Domain Modules for All 3 Users & Admin
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/mills', millRoutes);
 router.use('/', grainRoutes); // grain-sources & grain-types
 router.use('/orders', orderRoutes);
+router.use('/packages', packageRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/delivery', deliveryRoutes);
 router.use('/reviews', reviewRoutes);
@@ -65,3 +68,4 @@ router.use('/customer/mills', millRoutes);
 router.use('/customer/notifications', notificationRoutes);
 
 module.exports = router;
+

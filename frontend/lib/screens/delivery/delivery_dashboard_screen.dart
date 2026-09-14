@@ -30,6 +30,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
   RiderProfile? _profile;
   RiderEarnings? _earnings;
   List<DeliveryTrip> _allTrips = [];
+  List<DeliveryTrip> _assignedTrips = [];
   final Set<int> _selectedTripOrderIds = <int>{};
   DeliveryTrip? _incomingAlertTrip;
   int _alertCountdown = 30;
@@ -155,6 +156,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           if (newTrips.isNotEmpty || filteredTrips.length != _allTrips.length) {
             setState(() {
               _allTrips = filteredTrips;
+              _assignedTrips = assigned;
               _earnings = earnings;
               _selectedTripOrderIds.retainAll(filteredTrips.map((t) => t.orderId));
             });
@@ -237,6 +239,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           _isOnline = _profile?.isOnline ?? true;
           _earnings = results[1] as RiderEarnings;
           _allTrips = filteredTrips;
+          _assignedTrips = assigned;
           _selectedTripOrderIds.retainAll(filteredTrips.map((t) => t.orderId));
           _isLoading = false;
         });
@@ -707,6 +710,12 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                       _buildInteractive5KmRadarMap(),
                       const SizedBox(height: 16),
 
+                      // Active Assigned Trip Banner (if any trip is currently assigned to rider)
+                      if (_assignedTrips.isNotEmpty) ...[
+                        _buildActiveTripHeaderBanner(_assignedTrips.first),
+                        const SizedBox(height: 18),
+                      ],
+
                       // Incoming Order Broadcast Alert Modal (if active)
                       if (_incomingAlertTrip != null) ...[
                         _buildIncomingOrderModal(_incomingAlertTrip!),
@@ -728,6 +737,150 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                   ),
                 ),
               ),
+      ),
+    );
+  }
+
+  Widget _buildActiveTripHeaderBanner(DeliveryTrip trip) {
+    final isGrouped = trip.stops.length > 1;
+    final String titleText = isGrouped
+        ? '⚡ ${trip.stops.length}-ITEM GROUPED BATCH IN PROGRESS'
+        : '🚨 ACTIVE TRIP IN PROGRESS';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFF5F2), Color(0xFFFDECE9)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFC0392B), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFC0392B).withValues(alpha: 0.16),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFC0392B),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.navigation_rounded, size: 14, color: Colors.white),
+                    const SizedBox(width: 4),
+                    Text(
+                      titleText,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                '₹${trip.deliveryFee.toStringAsFixed(0)}',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF1E8449),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            trip.resolvedLegBadge,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Icon(Icons.storefront_rounded, size: 15, color: Color(0xFFC0392B)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Pickup: ${trip.originTitle}',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Icon(Icons.location_on_rounded, size: 15, color: Color(0xFF1E8449)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Drop: ${trip.destinationTitle} (${trip.customerName})',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ActiveTripScreen(
+                      trip: trip,
+                    ),
+                  ),
+                ).then((_) => _loadDashboardData());
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFC0392B),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 2,
+              ),
+              icon: const Icon(Icons.navigation_rounded, color: Colors.white, size: 18),
+              label: Text(
+                '🚀 Resume Active Navigation & Delivery',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1167,11 +1320,12 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
   }
 
   Widget _buildFilterChips() {
-    final homeToMillCount = _allTrips.where((t) => t.isLeg1GrainPickup).length;
-    final millToHomeCount = _allTrips.where((t) => t.isLeg2FlourDelivery).length;
+    final homeToMillCount = _allTrips.where((t) => t.isLeg1GrainPickup).length + _assignedTrips.where((t) => t.isLeg1GrainPickup).length;
+    final millToHomeCount = _allTrips.where((t) => t.isLeg2FlourDelivery).length + _assignedTrips.where((t) => t.isLeg2FlourDelivery).length;
+    final totalCount = _allTrips.length + _assignedTrips.length;
 
     final filters = [
-      {'key': 'All', 'label': 'All Orders (${_allTrips.length})'},
+      {'key': 'All', 'label': 'All Orders ($totalCount)'},
       {'key': 'HomeToMill', 'label': '🌾 Home ➔ Mill ($homeToMillCount)'},
       {'key': 'MillToHome', 'label': '🍞 Mill ➔ Home ($millToHomeCount)'},
     ];
@@ -2609,8 +2763,20 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '${stop.customerName} (${stop.productBags.length > 1 ? "${stop.productBags.length} Products (${stop.productBags.length} Units)" : (stop.productBags.isNotEmpty ? stop.productBags.first.unitText : "${stop.quantityKg} kg")}) • ${stop.deliveryAddress}',
-                                  style: GoogleFonts.plusJakartaSans(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                                  'Stop $stopIdx: ${stop.customerName} (${stop.productBags.length > 1 ? "${stop.productBags.length} Products (${stop.productBags.length} Units)" : (stop.productBags.isNotEmpty ? stop.productBags.first.unitText : "${stop.quantityKg} kg")})',
+                                  style: GoogleFonts.plusJakartaSans(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  '📍 Pickup: ${trip.isLeg1GrainPickup ? stop.homePickupAddress : trip.millAddress}',
+                                  style: GoogleFonts.plusJakartaSans(fontSize: 9.5, color: const Color(0xFF0284C7)),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  '🏡 Drop: ${trip.isLeg1GrainPickup ? trip.millAddress : stop.deliveryAddress}',
+                                  style: GoogleFonts.plusJakartaSans(fontSize: 9.5, color: const Color(0xFF16A34A)),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),

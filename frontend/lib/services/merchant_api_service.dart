@@ -19,8 +19,7 @@ class MerchantApiService {
   }
 
   String? _authToken;
-  bool _isOfflineMode = false;
-  DateTime? _lastOfflineCheck;
+
   static const Duration _timeout = Duration(seconds: 4);
 
   Map<String, String> get _headers => {
@@ -28,22 +27,10 @@ class MerchantApiService {
         if (_authToken != null) 'Authorization': 'Bearer $_authToken',
       };
 
-  bool get shouldSkipNetwork {
-    if (_isOfflineMode) {
-      // Re-test network after 60 seconds
-      if (_lastOfflineCheck != null &&
-          DateTime.now().difference(_lastOfflineCheck!).inSeconds > 60) {
-        _isOfflineMode = false;
-        return false;
-      }
-      return true;
-    }
-    return false;
-  }
+  bool get shouldSkipNetwork => false;
 
   void _markOffline() {
-    _isOfflineMode = true;
-    _lastOfflineCheck = DateTime.now();
+    // No-op to preserve live backend communication
   }
 
   /// Ensure shopkeeper authentication token is acquired

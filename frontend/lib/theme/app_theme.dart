@@ -16,6 +16,8 @@ class AppTheme {
   static const Color softPink = Color(0xFFFFC0BD);
   static const Color oliveGreen = Color(0xFF6B701D); // Completed step check color
   static const Color oliveLight = Color(0xFFEFF3DB);
+  static const Color primaryEmerald = Color(0xFF10B981); // Emerald green for verified QRs
+
 
   static const Color textPrimary = Color(0xFF2A2421);
   static const Color textSecondary = Color(0xFF756D69);

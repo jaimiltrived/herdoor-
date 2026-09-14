@@ -377,6 +377,47 @@ const swaggerDefinition = {
         summary: 'Platform security logs & access audits',
         responses: { 200: { description: 'Security audit logs' } }
       }
+    },
+
+    // ---------------- 6. SMART PACKAGE QR & 2-LEG DELIVERY ----------------
+    '/api/v1/packages/scan': {
+      post: {
+        tags: ['4. Delivery Partner App', '3. Merchant App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Idempotent Package QR scan verification endpoint',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  qrToken: { type: 'string', example: 'QR-HD1024-01-A1B2C3D4' },
+                  packageCode: { type: 'string', example: 'PKG-HD1024-01' },
+                  scanType: { type: 'string', enum: ['PICKUP', 'MILL_INTAKE', 'MILL_DISPATCH', 'DELIVERY'], example: 'PICKUP' },
+                  actualWeight: { type: 'number', example: 5.2 }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          200: { description: 'Package verified successfully' },
+          400: { description: 'Wrong QR code, invalid state transition, or missing data' },
+          403: { description: 'Unauthorized actor or wrong mill' }
+        }
+      }
+    },
+    '/api/v1/packages/order/{orderId}': {
+      get: {
+        tags: ['2. Customer App', '3. Merchant App', '4. Delivery Partner App'],
+        security: [{ BearerAuth: [] }],
+        summary: 'Get all package QR details for an order',
+        parameters: [
+          { name: 'orderId', in: 'path', required: true, schema: { type: 'integer', example: 501 } }
+        ],
+        responses: { 200: { description: 'List of order packages with QR tokens' } }
+      }
     }
   }
 };

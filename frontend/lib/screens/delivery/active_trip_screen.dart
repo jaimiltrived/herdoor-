@@ -274,12 +274,22 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('✅ Merchant scanned & verified all ${_productBags.length} grain bags! Tap Confirm Drop to complete Leg 1.'),
+              content: Text('✅ Merchant scanned & verified all ${_productBags.length} grain bags! Leg 1 Grain Drop Completed.'),
               backgroundColor: const Color(0xFF1E8449),
-              duration: const Duration(seconds: 3),
+              duration: const Duration(seconds: 2),
             ),
           );
         }
+
+        // Leg 1 Grain Drop is Complete! Show completion dialog & pop back to trip sheet
+        setState(() {
+          _currentStage = TripStage.completed;
+          _isProcessing = false;
+        });
+        _navSimulationTimer?.cancel();
+        _inspectionPollTimer?.cancel();
+        _showGrainDropCompletionDialog();
+        return;
       } else {
         final rejectReason = reason ?? 'Grain moisture > 16% & foreign impurities found';
         await MerchantApiService.instance.submitGrainIntakeInspection(

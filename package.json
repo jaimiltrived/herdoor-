@@ -1,6 +1,7 @@
 {
   "name": "herdoor-backend",
   "version": "1.0.0",
+  "type": "commonjs",
   "description": "HerDoor API - Flour Mill & Grain Processing REST Services with MySQL Database & Swagger UI",
   "main": "src/server.js",
   "scripts": {

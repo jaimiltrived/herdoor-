@@ -117,10 +117,10 @@ exports.getAvailableTrips = async (req, res) => {
       LEFT JOIN addresses a ON o.address_id = a.id
       WHERE (
         -- Leg 1: When shopkeeper accepts order -> Driver picks up raw grain from Customer Home and drops at Flour Mill
-        (o.grain_source = 'CUSTOMER' AND o.status IN ('ACCEPTED', 'CONFIRMED', 'PROCESSING'))
+        (o.grain_source = 'CUSTOMER' AND o.status IN ('ACCEPTED', 'CONFIRMED'))
         OR
-        -- Leg 2: When shopkeeper marks ready -> Driver picks up freshly milled flour from Flour Mill and delivers to Customer Home
-        (o.status IN ('READY', 'READY_FOR_PICKUP'))
+        -- Leg 2: ONLY when shopkeeper completes processing -> Driver picks up freshly milled flour from Flour Mill and delivers to Customer Home
+        (o.status IN ('READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY'))
       )
       AND o.status NOT IN ('DELIVERED', 'COMPLETED', 'CANCELLED', 'ASSIGNED', 'OUT_FOR_DELIVERY')
       AND o.id NOT IN (
@@ -310,8 +310,8 @@ exports.getAssignedOrders = async (req, res) => {
       LEFT JOIN orders o ON d.order_id = o.id
       LEFT JOIN mills m ON o.mill_id = m.id
       LEFT JOIN addresses a ON o.address_id = a.id
-      WHERE d.status IN ('ASSIGNED', 'PICKED_UP_FROM_MILL', 'OUT_FOR_DELIVERY', 'RETURN_TO_CUSTOMER', 'REJECTED_AT_MILL', 'GRAIN_DROPPED', 'PENDING_INSPECTION')
-        AND (o.status IS NULL OR o.status NOT IN ('DELIVERED', 'COMPLETED', 'CANCELLED', 'RETURNED', 'RETURNED_TO_CUSTOMER'))
+      WHERE d.status IN ('ASSIGNED', 'PICKED_UP_FROM_MILL', 'OUT_FOR_DELIVERY', 'RETURN_TO_CUSTOMER', 'REJECTED_AT_MILL', 'PENDING_INSPECTION')
+        AND (o.status IS NULL OR o.status NOT IN ('DELIVERED', 'COMPLETED', 'CANCELLED', 'RETURNED', 'RETURNED_TO_CUSTOMER', 'PROCESSING', 'READY', 'READY_FOR_DELIVERY'))
       ORDER BY d.updated_at DESC
     `);
   } catch (err) {
@@ -571,7 +571,7 @@ exports.getCompletedTrips = async (req, res) => {
       LEFT JOIN mills m ON o.mill_id = m.id
       LEFT JOIN addresses a ON o.address_id = a.id
       LEFT JOIN deliveries d ON d.order_id = o.id
-      WHERE o.status IN ('DELIVERED', 'COMPLETED') OR d.status = 'DELIVERED'
+      WHERE o.status IN ('DELIVERED', 'COMPLETED') OR d.status IN ('DELIVERED', 'GRAIN_DROPPED')
       ORDER BY COALESCE(d.updated_at, o.updated_at, o.created_at) DESC, o.id DESC
     `);
   } catch (err) {
@@ -585,7 +585,7 @@ exports.getCompletedTrips = async (req, res) => {
       FROM deliveries d
       LEFT JOIN orders o ON d.order_id = o.id
       LEFT JOIN mills m ON o.mill_id = m.id
-      WHERE d.status = 'DELIVERED' AND (d.is_batch = 1 OR d.stops_data IS NOT NULL)
+      WHERE d.status IN ('DELIVERED', 'GRAIN_DROPPED') AND (d.is_batch = 1 OR d.stops_data IS NOT NULL)
       ORDER BY d.updated_at DESC
     `);
   } catch (err) {
@@ -902,6 +902,14 @@ exports.acceptDelivery = async (req, res) => {
   const driverPhone = req.user?.phone || '+919876543212';
   const driverId = req.user?.id || 3;
 
+  // Task 12: Rider isOnline guard
+  if (req.user && req.user.role === ROLES.DELIVERY) {
+    const isOnlineVal = req.user.isOnline ?? req.user.is_online;
+    if (isOnlineVal === false || isOnlineVal === 0) {
+      return res.status(400).json({ status: 'error', code: 'RIDER_OFFLINE', message: 'Please go online first in your profile to accept trips.' });
+    }
+  }
+
   try {
     const orders = await query(`
       SELECT o.*, m.name as mill_name, m.address as mill_address,
@@ -922,10 +930,23 @@ exports.acceptDelivery = async (req, res) => {
     const millAddr = order.mill_address || 'Shree Ganesh Flour Mill, 12 Market Yard, Ellisbridge';
     const custAddr = order.address_line1 ? `${order.address_line1}, ${order.city || 'Ahmedabad'}` : 'Flat 402, Shivalik Towers, Satellite Road';
 
+    // Task 1 Atomic Claim Lock: Check if already assigned to a different rider
+    const existingDels = await query('SELECT delivery_person_id, status FROM deliveries WHERE order_id = ? LIMIT 1', [orderId]);
+    if (existingDels && existingDels.length > 0) {
+      const currentDriver = existingDels[0].delivery_person_id;
+      const currentStatus = existingDels[0].status;
+      if (currentDriver && currentDriver !== driverId && ['ASSIGNED', 'OUT_FOR_DELIVERY', 'PICKED_UP_FROM_MILL', 'PICKED_UP_FROM_HOME'].includes(currentStatus)) {
+        return res.status(409).json({
+          status: 'error',
+          code: 'ALREADY_CLAIMED',
+          message: 'Another rider has already claimed this trip.'
+        });
+      }
+    }
+
     await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.ASSIGNED, orderId]);
 
-    const existingDel = await query('SELECT id FROM deliveries WHERE order_id = ? LIMIT 1', [orderId]);
-    if (existingDel && existingDel.length > 0) {
+    if (existingDels && existingDels.length > 0) {
       await query(`
         UPDATE deliveries SET
           delivery_person_id = ?,
@@ -933,8 +954,8 @@ exports.acceptDelivery = async (req, res) => {
           delivery_person_phone = ?,
           status = 'ASSIGNED',
           updated_at = NOW()
-        WHERE order_id = ?
-      `, [driverId, driverName, driverPhone, orderId]);
+        WHERE order_id = ? AND (delivery_person_id IS NULL OR delivery_person_id = 0 OR delivery_person_id = ? OR status IN ('CREATED','AVAILABLE'))
+      `, [driverId, driverName, driverPhone, orderId, driverId]);
     } else {
       await query(`
         INSERT INTO deliveries
@@ -944,9 +965,16 @@ exports.acceptDelivery = async (req, res) => {
       `, [orderId, driverId, driverName, driverPhone, millAddr, custAddr, order.pickup_pin || '4821', order.delivery_otp || '7391']);
     }
 
+    // Update active delivery task status
+    await query(`
+      UPDATE delivery_tasks
+      SET status = 'ASSIGNED', delivery_person_id = ?, updated_at = NOW()
+      WHERE order_id = ? AND status = 'AVAILABLE'
+    `, [driverId, orderId]);
+
     return res.json({
       status: 'success',
-      message: 'Delivery task accepted and saved to database',
+      message: 'Delivery task accepted and locked to rider',
       data: {
         orderId,
         delivery: {
@@ -1407,6 +1435,12 @@ exports.markGrainDroppedAtMill = async (req, res) => {
       const placeholders = allOrderIds.map(() => '?').join(',');
       await query(`UPDATE orders SET status = ?, updated_at = NOW() WHERE id IN (${placeholders})`, [ORDER_STATUS.PROCESSING, ...allOrderIds]);
       await query(`UPDATE deliveries SET status = ?, updated_at = NOW() WHERE (order_id IN (${placeholders}) OR id IN (${placeholders})) AND status IN ('ASSIGNED', 'OUT_FOR_DELIVERY', 'PICKED_UP_FROM_MILL')`, ['GRAIN_DROPPED', ...allOrderIds, ...allOrderIds]);
+
+      // Update package statuses to RECEIVED_AT_MILL
+      await query(`UPDATE packages SET status = 'RECEIVED_AT_MILL', updated_at = NOW() WHERE order_id IN (${placeholders})`, allOrderIds);
+
+      // Mark Leg 1 delivery task as COMPLETED
+      await query(`UPDATE delivery_tasks SET status = 'COMPLETED', completed_at = NOW(), updated_at = NOW() WHERE order_id IN (${placeholders}) AND leg = 'LEG_1_CUSTOMER_TO_MILL'`, allOrderIds);
     }
     if (allGroupCodes.length > 0) {
       const gPlaceholders = allGroupCodes.map(() => '?').join(',');
@@ -1668,6 +1702,20 @@ exports.markDelivered = async (req, res) => {
         SET status = ?, updated_at = NOW() 
         WHERE order_id IN (${idPlaceholders}) OR id IN (${idPlaceholders})
       `, [DELIVERY_STATUS.DELIVERED, ...allOrderIdsArray, ...allOrderIdsArray]);
+
+      // Update package statuses to DELIVERED & current_leg to COMPLETED
+      await query(`
+        UPDATE packages
+        SET status = 'DELIVERED', current_leg = 'COMPLETED', updated_at = NOW()
+        WHERE order_id IN (${idPlaceholders})
+      `, allOrderIdsArray);
+
+      // Update delivery_tasks status to COMPLETED
+      await query(`
+        UPDATE delivery_tasks
+        SET status = 'COMPLETED', completed_at = NOW(), updated_at = NOW()
+        WHERE order_id IN (${idPlaceholders})
+      `, allOrderIdsArray);
     }
 
     if (allGroupCodesArray.length > 0) {
@@ -1993,6 +2041,32 @@ exports.getLeaderboard = (req, res) => {
       myRank: 2,
       cityName: 'Ahmedabad Central Zone'
     }
+  });
+};
+
+/**
+ * @desc Rider Arrived at Mill for Leg 1 Drop-off
+ * @route POST /api/v1/delivery/orders/:orderId/arrive-mill
+ */
+exports.arriveAtMill = async (req, res) => {
+  const paramStr = (req.params.orderId || '').toString().trim();
+  const numId = parseInt(paramStr.replace(/[^0-9]/g, ''));
+  const targetId = !isNaN(numId) && numId > 0 ? numId : null;
+
+  try {
+    if (targetId) {
+      await query(`UPDATE orders SET status = 'RECEIVED_AT_MILL', updated_at = NOW() WHERE id = ?`, [targetId]);
+      await query(`UPDATE delivery_tasks SET status = 'AT_MILL', updated_at = NOW() WHERE order_id = ? AND leg = 'LEG_1_CUSTOMER_TO_MILL'`, [targetId]);
+      await query(`INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, 'RECEIVED_AT_MILL', 'Rider Arrived at Mill', 'Rider arrived with grain bags for mill intake scan')`, [targetId]);
+    }
+  } catch (err) {
+    console.warn('arriveAtMill warning:', err.message);
+  }
+
+  res.json({
+    status: 'success',
+    message: 'Rider arrival at mill recorded. Mill owner can scan packages for intake inspection.',
+    data: { orderId: targetId || paramStr, status: 'RECEIVED_AT_MILL' }
   });
 };
 

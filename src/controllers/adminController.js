@@ -351,29 +351,51 @@ exports.getOrders = async (req, res) => {
 
     const dbOrders = await query(sql, params);
     if (dbOrders && Array.isArray(dbOrders)) {
-      const mapped = dbOrders.map(row => ({
-        id: row.id,
-        orderNumber: row.order_number || `#HD-${row.id}`,
-        userId: row.user_id,
-        customerName: row.customer_name || 'Customer',
-        customerPhone: row.customer_phone || '+919876543210',
-        millId: row.mill_id,
-        grainSource: row.grain_source,
-        grainTypeId: row.grain_type_id,
-        grainTypeName: row.grain_type_name,
-        quantityKg: parseFloat(row.quantity_kg),
-        serviceType: row.service_type,
-        fulfillmentType: row.fulfillment_type,
-        addressId: row.address_id,
-        paymentMethod: row.payment_method,
-        paymentStatus: row.payment_status,
-        status: row.status,
-        groupId: row.group_id,
-        groupCode: row.group_code,
-        estimatedMinutes: row.estimated_minutes,
-        estimatedCompletionTime: row.estimated_completion_time,
-        totalAmount: parseFloat(row.total_amount),
-        createdAt: row.created_at
+      const mapped = await Promise.all(dbOrders.map(async row => {
+        const pkgs = await query('SELECT * FROM packages WHERE order_id = ?', [row.id]).catch(() => []);
+        const tasks = await query('SELECT * FROM delivery_tasks WHERE order_id = ?', [row.id]).catch(() => []);
+
+        return {
+          id: row.id,
+          orderNumber: row.order_number || `#HD-${row.id}`,
+          userId: row.user_id,
+          customerName: row.customer_name || 'Customer',
+          customerPhone: row.customer_phone || '+919876543210',
+          millId: row.mill_id,
+          grainSource: row.grain_source,
+          grainTypeId: row.grain_type_id,
+          grainTypeName: row.grain_type_name,
+          quantityKg: parseFloat(row.quantity_kg),
+          serviceType: row.service_type,
+          fulfillmentType: row.fulfillment_type,
+          addressId: row.address_id,
+          paymentMethod: row.payment_method,
+          paymentStatus: row.payment_status,
+          status: row.status,
+          groupId: row.group_id,
+          groupCode: row.group_code,
+          estimatedMinutes: row.estimated_minutes,
+          estimatedCompletionTime: row.estimated_completion_time,
+          totalAmount: parseFloat(row.total_amount),
+          createdAt: row.created_at,
+          packages: (pkgs || []).map(p => ({
+            id: p.id,
+            packageCode: p.package_code,
+            qrToken: p.qr_token,
+            productName: p.product_name,
+            expectedWeight: parseFloat(p.expected_weight),
+            actualWeight: p.actual_weight ? parseFloat(p.actual_weight) : null,
+            status: p.status,
+            currentLeg: p.current_leg
+          })),
+          deliveryTasks: (tasks || []).map(t => ({
+            id: t.id,
+            leg: t.leg,
+            deliveryPersonId: t.delivery_person_id,
+            status: t.status,
+            createdAt: t.created_at
+          }))
+        };
       }));
       return res.json({ status: 'success', count: mapped.length, data: { orders: mapped } });
     }

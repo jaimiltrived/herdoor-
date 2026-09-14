@@ -152,7 +152,7 @@ class MerchantOrder {
   final List<MerchantProcessStep> timelineSteps;
   final double totalPrice;
   final String millName;
-  final String? intakeStatus; // 'ACCEPTED' | 'REJECTED' | 'PENDING'
+  String? intakeStatus; // 'ACCEPTED' | 'REJECTED' | 'PENDING'
   final String? rejectionReason;
   final String? rejectionNotes;
 
@@ -274,7 +274,7 @@ class MerchantOrder {
       timelineSteps: steps,
       totalPrice: price,
       millName: resolvedMill,
-      intakeStatus: json['intakeStatus'],
+      intakeStatus: json['intakeStatus'] ?? (rawStatus == 'PROCESSING' ? 'ACCEPTED' : null),
       rejectionReason: json['rejectionReason'],
       rejectionNotes: json['rejectionNotes'],
     );
@@ -612,13 +612,30 @@ class DeliveryTripStop {
   });
 
   factory DeliveryTripStop.fromJson(Map<String, dynamic> json) {
+    final String rawHomePickup = (json['homePickupAddress'] ?? json['home_pickup_address'] ?? json['customerAddress'] ?? json['customer_address'] ?? '').toString();
+    final String rawDelivery = (json['deliveryAddress'] ?? json['delivery_address'] ?? '').toString();
+
+    String resolvedHomePickup = rawHomePickup;
+    if (resolvedHomePickup.isEmpty || resolvedHomePickup.contains('Market Yard') || resolvedHomePickup.contains('Flour Mill')) {
+      if (rawDelivery.isNotEmpty && !rawDelivery.contains('Market Yard') && !rawDelivery.contains('Flour Mill')) {
+        resolvedHomePickup = rawDelivery;
+      } else {
+        resolvedHomePickup = 'Flat 402, Shivalik Towers, Satellite Road, Ahmedabad';
+      }
+    }
+
+    String resolvedDelivery = rawDelivery;
+    if (resolvedDelivery.isEmpty || resolvedDelivery.contains('Market Yard')) {
+      resolvedDelivery = 'Flat 402, Shivalik Towers, Satellite Road, Ahmedabad';
+    }
+
     return DeliveryTripStop(
       orderId: json['orderId'] ?? json['id'] ?? 0,
       orderNumber: json['orderNumber'] ?? '#HD-${json['orderId'] ?? json['id'] ?? '101'}',
       customerName: json['customerName'] ?? 'Customer',
       customerPhone: json['customerPhone'] ?? '+919876543210',
-      deliveryAddress: json['deliveryAddress'] ?? 'Ahmedabad',
-      homePickupAddress: json['homePickupAddress'] ?? json['pickupAddress'] ?? 'Flat 402, Shivalik Towers, Ellisbridge, Ahmedabad',
+      deliveryAddress: resolvedDelivery,
+      homePickupAddress: resolvedHomePickup,
       homePickupLandmark: json['homePickupLandmark'] ?? json['landmark'] ?? 'Near Central Bank / Behind Town Hall',
       homePickupInstructions: json['homePickupInstructions'] ?? json['pickupInstructions'] ?? 'Ring bell, grain bag ready',
       isHomeGrainPickup: json['isHomeGrainPickup'] ?? true,
@@ -795,6 +812,19 @@ class ParsedProductUnitInfo {
         cleanName: name.isNotEmpty ? name : trimmed,
         quantityKg: unit.startsWith('kg') ? val : 1.0,
         unitText: formattedUnit,
+      );
+    }
+
+    // Pattern 3: Embedded weight anywhere in item string (e.g. "Wheat 6kg", "Rice (Chawal) 11kg")
+    final regexAnywhere = RegExp(r'(\d+(?:\.\d+)?)\s*(kg|kgs|g|gm)', caseSensitive: false);
+    final matchAnywhere = regexAnywhere.firstMatch(trimmed);
+    if (matchAnywhere != null) {
+      final val = double.tryParse(matchAnywhere.group(1) ?? '1') ?? 1.0;
+      final clean = trimmed.replaceAll(regexAnywhere, '').replaceAll(RegExp(r'\s+'), ' ').trim();
+      return ParsedProductUnitInfo(
+        cleanName: clean.isNotEmpty ? clean : trimmed,
+        quantityKg: val,
+        unitText: '${val.toStringAsFixed(val.truncateToDouble() == val ? 0 : 1)} kg',
       );
     }
 
@@ -1098,16 +1128,34 @@ class DeliveryTrip {
     final bool homeGrain = json['isHomeGrainPickup'] ?? true;
     final String parsedLeg = json['legType'] ?? (homeGrain && ['PLACED', 'ACCEPTED', 'CONFIRMED', 'PENDING', 'NEW'].contains(statusStr) ? 'LEG_1_GRAIN_PICKUP' : 'LEG_2_FLOUR_DELIVERY');
 
+    final String rawHome = (json['homePickupAddress'] ?? json['home_pickup_address'] ?? json['customerAddress'] ?? json['customer_address'] ?? '').toString();
+    final String rawDeliv = (json['deliveryAddress'] ?? json['delivery_address'] ?? '').toString();
+    final String rawMill = (json['millAddress'] ?? '12 Market Yard, Ellisbridge, Ahmedabad').toString();
+
+    String resolvedHome = rawHome;
+    if (resolvedHome.isEmpty || resolvedHome.contains('Market Yard') || resolvedHome.contains('Flour Mill')) {
+      if (rawDeliv.isNotEmpty && !rawDeliv.contains('Market Yard') && !rawDeliv.contains('Flour Mill')) {
+        resolvedHome = rawDeliv;
+      } else {
+        resolvedHome = 'Flat 402, Shivalik Towers, Satellite Road, Ahmedabad';
+      }
+    }
+
+    String resolvedDelivery = rawDeliv;
+    if (resolvedDelivery.isEmpty || resolvedDelivery.contains('Market Yard')) {
+      resolvedDelivery = 'Flat 402, Shivalik Towers, Satellite Road, Ahmedabad';
+    }
+
     return DeliveryTrip(
       orderId: json['orderId'] ?? json['id'] ?? 0,
       orderNumber: json['orderNumber'] ?? '#HD-${json['orderId'] ?? json['id'] ?? '101'}',
       customerName: json['customerName'] ?? 'Customer',
       customerPhone: json['customerPhone'] ?? '+919876543210',
-      millName: json['millName'] ?? json['pickupAddress'] ?? 'Shree Ganesh Flour Mill',
-      millAddress: json['millAddress'] ?? json['pickupAddress'] ?? '12 Market Yard, Ellisbridge',
+      millName: json['millName'] ?? 'Shree Ganesh Flour Mill',
+      millAddress: rawMill,
       millPhone: json['millPhone'] ?? '+919876543211',
-      deliveryAddress: json['deliveryAddress'] ?? 'Sunrise Arcade, Ahmedabad',
-      homePickupAddress: json['homePickupAddress'] ?? 'Flat 402, Shivalik Towers, Ellisbridge',
+      deliveryAddress: resolvedDelivery,
+      homePickupAddress: resolvedHome,
       homePickupLandmark: json['homePickupLandmark'] ?? 'Near Central Bank',
       homePickupInstructions: json['homePickupInstructions'] ?? 'Pick up raw grain bag from doorstep',
       isHomeGrainPickup: homeGrain,

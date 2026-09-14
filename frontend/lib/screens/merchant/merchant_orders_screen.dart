@@ -24,6 +24,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
   final List<MerchantOrder> _pendingOrders = [];
   final List<MerchantOrder> _completedMillingOrders = [];
   final List<MerchantOrder> _deliveredOrders = [];
+  final Set<int> _completedIntakeOrderIds = {};
 
   @override
   void initState() {
@@ -67,7 +68,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
 
           _pendingOrders.clear();
           if (fetchedActive != null) {
-            _pendingOrders.addAll(fetchedActive.where((o) => o.statusTag == 'IN PROGRESS' || o.statusTag == 'PROCESSING' || o.statusTag == 'ACCEPTED' || o.statusTag == 'MILLING' || o.statusTag == 'PACKING' || o.statusTag == 'GRAIN_DROPPED' || o.statusTag == 'GRAIN DROPPED' || o.statusTag == 'PENDING'));
+            _pendingOrders.addAll(fetchedActive.where((o) => o.statusTag == 'IN PROGRESS' || o.statusTag == 'IN_PROGRESS' || o.statusTag == 'PROCESSING' || o.statusTag == 'ACCEPTED' || o.statusTag == 'CONFIRMED' || o.statusTag == 'MILLING' || o.statusTag == 'PACKING' || o.statusTag == 'GRAIN_DROPPED' || o.statusTag == 'GRAIN DROPPED' || o.statusTag == 'RECEIVED_AT_MILL' || o.statusTag == 'PENDING'));
           }
 
           _completedMillingOrders.clear();
@@ -1025,13 +1026,18 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
             height: 40,
             child: OutlinedButton.icon(
               onPressed: () async {
-                await Navigator.push(
+                final res = await Navigator.push<bool>(
                   context,
                   MaterialPageRoute(
                     builder: (context) => MillOwnerQrScannerScreen(order: order),
                   ),
                 );
                 if (mounted) {
+                  if (res == true && order.numericId != null) {
+                    setState(() {
+                      _completedIntakeOrderIds.add(order.numericId!);
+                    });
+                  }
                   _fetchOrdersData();
                 }
               },
@@ -1055,6 +1061,54 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
         ],
       );
     } else if (_selectedFilterTab == 1) {
+      final bool isIntakeScanned = order.intakeStatus == 'ACCEPTED' ||
+          (order.numericId != null && _completedIntakeOrderIds.contains(order.numericId)) ||
+          order.statusTag == 'PROCESSING' ||
+          order.statusTag == 'MILLING';
+
+      if (isIntakeScanned) {
+        return SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: ElevatedButton.icon(
+            onPressed: () async {
+              final orderId = order.numericId ?? 501;
+              final messenger = ScaffoldMessenger.of(context);
+
+              await MerchantApiService.instance.transitionOrderStatus(orderId, 'ready');
+
+              if (mounted) {
+                messenger.showSnackBar(
+                  SnackBar(
+                    backgroundColor: const Color(0xFF1E8449),
+                    content: Text('🎉 Milling Completed! Order ${order.orderId} is now ready for Leg 2 Pickup.'),
+                  ),
+                );
+                setState(() {
+                  _completedIntakeOrderIds.remove(orderId);
+                  order.statusTag = 'READY FOR PICKUP';
+                });
+                _fetchOrdersData();
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1E8449),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 1,
+            ),
+            icon: const Icon(Icons.check_circle_rounded, size: 20, color: Colors.white),
+            label: Text(
+              '⚙️ Complete Milling & Ready for Delivery',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        );
+      }
+
       return SizedBox(
         width: double.infinity,
         height: 48,
@@ -1067,9 +1121,9 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
               ),
             );
             if (mounted) {
-              if (res == true) {
+              if (res == true && order.numericId != null) {
                 setState(() {
-                  _selectedFilterTab = 2;
+                  _completedIntakeOrderIds.add(order.numericId!);
                 });
               }
               _fetchOrdersData();

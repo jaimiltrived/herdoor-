@@ -250,13 +250,14 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
     if (!mounted) return;
     setState(() => _isProcessing = false);
 
-    widget.order.statusTag = 'READY FOR PICKUP';
-    widget.order.statusColor = const Color(0xFFFF8A80);
+    widget.order.statusTag = 'IN PROGRESS';
+    widget.order.statusColor = const Color(0xFFCBA034);
+    widget.order.intakeStatus = 'ACCEPTED';
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: const Color(0xFF1E8449),
-        content: Text(res['message'] ?? '✅ All grain bags scanned & verified! Order moved to Completed.'),
+        content: Text(res['message'] ?? '✅ Grain intake scanned & accepted! Ready for Milling.'),
       ),
     );
 

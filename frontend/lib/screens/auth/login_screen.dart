@@ -24,12 +24,39 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _rememberMe = true;
   bool _obscurePassword = true;
   bool _isLoading = false;
-  UserRole _selectedRole = UserRole.customer; // Default to Citizen / Customer
+  UserRole _selectedRole = UserRole.customer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Default initial credentials for quick testing
+    _phoneController.text = 'ramesh@example.com';
+    _passwordController.text = 'Password123!';
+  }
 
   void _onRoleChanged(UserRole role) {
     setState(() {
       _selectedRole = role;
+      if (role == UserRole.customer) {
+        _phoneController.text = 'ramesh@example.com';
+        _passwordController.text = 'Password123!';
+      } else if (role == UserRole.merchant) {
+        _phoneController.text = 'shop@shreeganesh.com';
+        _passwordController.text = 'Password123!';
+      } else if (role == UserRole.delivery) {
+        _phoneController.text = 'delivery@herdoor.com';
+        _passwordController.text = 'Password123!';
+      }
     });
+  }
+
+  void _quickFillAndLogin(UserRole role, String email, String password) {
+    setState(() {
+      _selectedRole = role;
+      _phoneController.text = email;
+      _passwordController.text = password;
+    });
+    _handleLogin();
   }
 
   Future<void> _handleLogin() async {
@@ -282,7 +309,113 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+
+              // ⚡ 1-Click Quick Demo Login Shortcuts
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8E1),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFFFE082)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.flash_on_rounded, color: Color(0xFFD97706), size: 18),
+                        const SizedBox(width: 6),
+                        Text(
+                          '⚡ 1-Click Quick Demo Login',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF92400E),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _quickFillAndLogin(UserRole.customer, 'ramesh@example.com', 'Password123!'),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppTheme.primaryTerracotta.withValues(alpha: 0.3)),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '👤 Customer',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.primaryTerracotta,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _quickFillAndLogin(UserRole.merchant, 'shop@shreeganesh.com', 'Password123!'),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFF6E5616).withValues(alpha: 0.3)),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '🏬 Merchant',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF6E5616),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _quickFillAndLogin(UserRole.delivery, 'delivery@herdoor.com', 'Password123!'),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFF1E8449).withValues(alpha: 0.3)),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '🏍️ Rider',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF1E8449),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
 
               Text(
                 'Phone Number or Email',

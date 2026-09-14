@@ -35,6 +35,7 @@ router.post('/location', deliveryController.updateLocation);
 router.post('/orders/:orderId/deliver', deliveryController.markDelivered);
 router.post('/orders/:orderId/delivered', deliveryController.markDelivered);
 router.post('/orders/:orderId/grain-drop', deliveryController.markGrainDroppedAtMill);
+router.post('/orders/:orderId/arrive-mill', deliveryController.arriveAtMill);
 router.post('/orders/:orderId/return-to-customer', deliveryController.confirmReturnToCustomer);
 router.post('/orders/:orderId/return-to-mill', deliveryController.confirmReturnToMill);
 router.get('/orders/:orderId/timeline', deliveryController.getOrderTimeline);

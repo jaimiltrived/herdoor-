@@ -233,8 +233,9 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
     );
 
     // Call backend API to persist assignment in MySQL database
+    bool success = false;
     if (trip.isBatch && trip.stops.isNotEmpty) {
-      await DeliveryApiService.instance.acceptGroupTrip(
+      success = await DeliveryApiService.instance.acceptGroupTrip(
         groupCode: trip.orderNumber,
         orderIds: trip.stops.map((s) => s.orderId).toList(),
         stops: trip.stops.map((s) => {
@@ -255,7 +256,19 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
         totalFee: trip.deliveryFee,
       );
     } else {
-      await DeliveryApiService.instance.acceptTrip(trip.orderId);
+      success = await DeliveryApiService.instance.acceptTrip(trip.orderId);
+    }
+
+    if (!mounted) return;
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Oops, another rider claimed this trip first. Refreshing queue...'),
+          backgroundColor: Color(0xFFD32F2F),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      _loadTripSheetData();
     }
   }
 
@@ -860,7 +873,10 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
             ...trip.stops.asMap().entries.map((e) {
               final idx = e.key;
               final stop = e.value;
-              final pickupAddr = trip.isLeg1GrainPickup ? stop.homePickupAddress : trip.millAddress;
+              final stopHomeAddr = (stop.homePickupAddress.isNotEmpty && !stop.homePickupAddress.contains('Market Yard') && !stop.homePickupAddress.contains('Flour Mill'))
+                  ? stop.homePickupAddress
+                  : (stop.deliveryAddress.isNotEmpty && !stop.deliveryAddress.contains('Market Yard') && !stop.deliveryAddress.contains('Flour Mill') ? stop.deliveryAddress : trip.homePickupAddress);
+              final pickupAddr = trip.isLeg1GrainPickup ? stopHomeAddr : trip.millAddress;
               final dropAddr = trip.isLeg1GrainPickup ? trip.millAddress : stop.deliveryAddress;
               final stopBags = stop.productBags;
               final stopUnitStr = stopBags.length > 1

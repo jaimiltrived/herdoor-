@@ -134,17 +134,22 @@ export default function OrdersPage({ onOpenAcceptModal, onSelectOrderDetails }) 
     setActiveFilterTab(0);
   };
 
-  const newRequests = allOrders.filter(o =>
-    o.status === 'PLACED' || o.status === 'NEW' || o.status === 'PENDING'
-  );
+  const normalizeStatus = (st) => (st || '').toUpperCase().replace(/\s+/g, '_');
 
-  const inMillingOrders = allOrders.filter(o =>
-    o.status === 'ACCEPTED' || o.status === 'PROCESSING' || o.status === 'MILLING' || o.status === 'PACKING' || o.status === 'IN PROGRESS'
-  );
+  const newRequests = allOrders.filter(o => {
+    const st = normalizeStatus(o.status);
+    return st === 'PLACED' || st === 'NEW' || st === 'PENDING';
+  });
 
-  const completedHistoryOrders = allOrders.filter(o =>
-    o.status === 'READY' || o.status === 'READY_FOR_PICKUP' || o.status === 'OUT_FOR_DELIVERY' || o.status === 'DELIVERED' || o.status === 'COMPLETED' || o.status === 'PICKED_UP'
-  );
+  const inMillingOrders = allOrders.filter(o => {
+    const st = normalizeStatus(o.status);
+    return ['ACCEPTED', 'CONFIRMED', 'PROCESSING', 'MILLING', 'PACKING', 'IN_PROGRESS', 'GRAIN_DROPPED', 'RECEIVED_AT_MILL'].includes(st);
+  });
+
+  const completedHistoryOrders = allOrders.filter(o => {
+    const st = normalizeStatus(o.status);
+    return ['READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY', 'DELIVERED', 'COMPLETED', 'PICKED_UP'].includes(st);
+  });
 
   const groupedBatchOrders = allOrders.filter(o => o.isGrouped);
 

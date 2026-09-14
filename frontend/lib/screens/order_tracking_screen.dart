@@ -152,49 +152,49 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
           isCurrent: isReturnToMill,
         );
       } else {
-        // Normal Happy Flow
+        // Normal 2-Leg Delivery Happy Flow
         _order.trackingSteps[0] = TrackingStep(
-          title: 'Order Placed',
-          subtitle: 'Received at mill',
-          timeText: '10:00 AM',
+          title: '1. Order Placed',
+          subtitle: 'Order accepted by mill',
+          timeText: 'Completed',
           isCompleted: true,
           isCurrent: false,
         );
 
         _order.trackingSteps[1] = TrackingStep(
-          title: 'Grain Cleaning',
-          subtitle: 'Moisture checked',
+          title: '2. 🌾 Leg 1: Grain Pickup',
+          subtitle: 'Rider collects raw grain from home ➔ Mill',
           timeText: (isMilling || isReady || isOut || isDelivered)
-              ? '10:15 AM'
-              : (isAccepted ? 'In progress' : (isPlaced ? 'In queue' : 'Pending')),
+              ? 'At Mill'
+              : (isAccepted ? 'Rider assigned' : 'In queue'),
           isCompleted: (isMilling || isReady || isOut || isDelivered),
           isCurrent: isAccepted || isPlaced,
         );
 
         _order.trackingSteps[2] = TrackingStep(
-          title: 'Milling in Progress',
-          subtitle: 'Stone chakki grinding',
+          title: '3. 🏭 Mill Processing',
+          subtitle: 'Quality check & stone chakki grinding',
           timeText: (isReady || isOut || isDelivered)
-              ? '10:30 AM'
+              ? 'Finished'
               : (isMilling ? 'Grinding now' : 'Pending'),
           isCompleted: (isReady || isOut || isDelivered),
           isCurrent: isMilling,
         );
 
         _order.trackingSteps[3] = TrackingStep(
-          title: 'Out for Delivery',
-          subtitle: 'Assigned to driver',
+          title: '4. 🍞 Leg 2: Flour Delivery',
+          subtitle: 'Rider collects flour from Mill ➔ Home',
           timeText: isDelivered
-              ? '11:00 AM'
-              : (isOut ? 'On the way' : (isReady ? 'Ready for pickup' : 'Pending')),
+              ? 'Completed'
+              : (isOut ? 'On the way' : (isReady ? 'Ready for rider' : 'Pending')),
           isCompleted: isDelivered,
           isCurrent: isOut || isReady,
         );
 
         _order.trackingSteps[4] = TrackingStep(
-          title: 'Delivered',
-          subtitle: 'Doorstep handover',
-          timeText: isDelivered ? '11:15 AM' : 'Pending',
+          title: '5. 🏁 Delivered',
+          subtitle: 'Doorstep handover & OTP verified',
+          timeText: isDelivered ? 'Delivered' : 'Pending',
           isCompleted: isDelivered,
           isCurrent: false,
         );
@@ -210,36 +210,36 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
     if (_order.trackingSteps.isEmpty) {
       _order.trackingSteps.addAll([
         TrackingStep(
-          title: 'Order Placed',
-          subtitle: 'Received at mill',
-          timeText: '10:00 AM',
+          title: '1. Order Placed',
+          subtitle: 'Order accepted by mill',
+          timeText: 'Completed',
           isCompleted: true,
           isCurrent: false,
         ),
         TrackingStep(
-          title: 'Grain Cleaning',
-          subtitle: 'Moisture checked',
-          timeText: '10:15 AM',
-          isCompleted: true,
-          isCurrent: false,
-        ),
-        TrackingStep(
-          title: 'Milling in Progress',
-          subtitle: 'Stone chakki grinding',
-          timeText: '10:30 AM',
-          isCompleted: true,
-          isCurrent: false,
-        ),
-        TrackingStep(
-          title: 'Out for Delivery',
-          subtitle: 'Assigned to driver',
-          timeText: 'Pending',
+          title: '2. 🌾 Leg 1: Grain Pickup',
+          subtitle: 'Rider collects raw grain from home ➔ Mill',
+          timeText: 'In progress',
           isCompleted: false,
           isCurrent: true,
         ),
         TrackingStep(
-          title: 'Delivered',
-          subtitle: 'Doorstep handover',
+          title: '3. 🏭 Mill Processing',
+          subtitle: 'Quality check & stone chakki grinding',
+          timeText: 'Pending',
+          isCompleted: false,
+          isCurrent: false,
+        ),
+        TrackingStep(
+          title: '4. 🍞 Leg 2: Flour Delivery',
+          subtitle: 'Rider collects flour from Mill ➔ Home',
+          timeText: 'Pending',
+          isCompleted: false,
+          isCurrent: false,
+        ),
+        TrackingStep(
+          title: '5. 🏁 Delivered',
+          subtitle: 'Doorstep handover & OTP verified',
           timeText: 'Pending',
           isCompleted: false,
           isCurrent: false,
@@ -635,6 +635,73 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
                   ],
                 ),
               ),
+              if (_order.statusStep.toUpperCase() == 'DELIVERED' || _order.statusStep.toUpperCase() == 'COMPLETED')
+                Container(
+                  margin: const EdgeInsets.only(top: 14),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F8F5),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2ECC71)),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.check_circle_rounded, color: Color(0xFF1E8449), size: 24),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Fresh Flour Handover Complete!',
+                                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14, color: const Color(0xFF1E8449)),
+                                ),
+                                Text(
+                                  'Your freshly stone-ground flour bag has been verified & delivered to your doorstep.',
+                                  style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            final numId = int.tryParse(_order.orderId.replaceAll(RegExp(r'[^0-9]'), '')) ?? 101;
+                            final ok = await CustomerApiService.instance.confirmReceipt(numId);
+                            if (!mounted) return;
+                            if (ok) {
+                              setState(() {
+                                _order.statusStep = 'COMPLETED';
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('🎉 Handover confirmed! Order completed successfully.'),
+                                  backgroundColor: Color(0xFF1E8449),
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.verified_rounded, color: Colors.white, size: 18),
+                          label: Text(
+                            'I Received My Flour Safely',
+                            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1E8449),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         ),

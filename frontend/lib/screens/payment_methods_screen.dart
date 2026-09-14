@@ -220,10 +220,14 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                         : _methods[_selectedMethod]['title'];
                     final combinedGrainNames = widget.cartItems.isNotEmpty
                         ? widget.cartItems.map((i) {
-                            final q = i['quantity'] ?? 1;
-                            final name = (i['name'] ?? 'Product').toString();
+                            final qNum = double.tryParse((i['quantity'] ?? 1).toString()) ?? 1.0;
+                            final qStr = qNum % 1 == 0 ? qNum.toInt().toString() : qNum.toStringAsFixed(1);
+                            final name = (i['name'] ?? 'Product').toString().trim();
+                            if (RegExp(r'^\d+(\.\d+)?\s*(kg|g|unit|pack|bag)', caseSensitive: false).hasMatch(name)) {
+                              return name;
+                            }
                             final isMilling = name.toLowerCase().contains('milling') || name.toLowerCase().contains('grain') || i['unit'] == 'kg';
-                            final unitPrefix = isMilling ? '${q}kg' : '$q Unit';
+                            final unitPrefix = isMilling ? '${qStr}kg' : '$qStr Unit';
                             return '$unitPrefix $name';
                           }).join(', ')
                         : 'Wheat';
