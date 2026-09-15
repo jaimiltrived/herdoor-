@@ -222,16 +222,23 @@ class DeliveryApiService {
   }
 
   /// Accept Trip Task
-  Future<bool> acceptTrip(int orderId) async {
+  Future<bool> acceptTrip(int orderId, {double? deliveryFee, double? surgeBonus, double? heavyBagBonus, String? legType}) async {
     invalidateCache();
     if (!shouldSkipNetwork) {
       final authOk = await ensureAuthenticated();
       if (authOk) {
         try {
+          final body = <String, dynamic>{};
+          if (deliveryFee != null) body['deliveryFee'] = deliveryFee;
+          if (surgeBonus != null) body['surgeBonus'] = surgeBonus;
+          if (heavyBagBonus != null) body['heavyBagBonus'] = heavyBagBonus;
+          if (legType != null) body['legType'] = legType;
+
           final response = await http
               .post(
                 Uri.parse('$baseUrl/delivery/orders/$orderId/accept'),
                 headers: _headers,
+                body: body.isNotEmpty ? jsonEncode(body) : null,
               )
               .timeout(_timeout);
 

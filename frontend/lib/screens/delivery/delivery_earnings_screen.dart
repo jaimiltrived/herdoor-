@@ -5,7 +5,8 @@ import '../../models/merchant_models.dart';
 import '../../services/delivery_api_service.dart';
 
 class DeliveryEarningsScreen extends StatefulWidget {
-  const DeliveryEarningsScreen({super.key});
+  final VoidCallback? onOpenDrawer;
+  const DeliveryEarningsScreen({super.key, this.onOpenDrawer});
 
   @override
   State<DeliveryEarningsScreen> createState() => _DeliveryEarningsScreenState();
@@ -352,6 +353,12 @@ class _DeliveryEarningsScreenState extends State<DeliveryEarningsScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
+        leading: widget.onOpenDrawer != null
+            ? IconButton(
+                icon: const Icon(Icons.menu_rounded, color: AppTheme.textPrimary, size: 24),
+                onPressed: widget.onOpenDrawer,
+              )
+            : null,
         title: Text(
           'Earnings & Wallet',
           style: GoogleFonts.playfairDisplay(

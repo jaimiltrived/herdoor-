@@ -6,6 +6,7 @@ import 'delivery_dashboard_screen.dart';
 import 'delivery_trip_sheet_screen.dart';
 import 'delivery_earnings_screen.dart';
 import 'delivery_profile_screen.dart';
+import 'delivery_drawer.dart';
 
 class DeliveryMainNavigationScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -24,13 +25,23 @@ class DeliveryMainNavigationScreen extends StatefulWidget {
 }
 
 class _DeliveryMainNavigationScreenState extends State<DeliveryMainNavigationScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int _currentIndex = 0;
   DeliveryTrip? _currentActiveTrip;
+
+  void _openDrawer() {
+    _scaffoldKey.currentState?.openDrawer();
+  }
+
+  void _onSelectTab(int index) {
+    setState(() => _currentIndex = index);
+  }
 
   @override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
       DeliveryDashboardScreen(
+        onOpenDrawer: _openDrawer,
         onTripAccepted: (trip) {
           setState(() {
             _currentActiveTrip = trip;
@@ -40,6 +51,7 @@ class _DeliveryMainNavigationScreenState extends State<DeliveryMainNavigationScr
       ),
       DeliveryTripSheetScreen(
         activeTrip: _currentActiveTrip,
+        onOpenDrawer: _openDrawer,
         onTripSelected: (trip) {
           setState(() => _currentActiveTrip = trip);
         },
@@ -50,8 +62,11 @@ class _DeliveryMainNavigationScreenState extends State<DeliveryMainNavigationScr
           setState(() => _currentActiveTrip = null);
         },
       ),
-      const DeliveryEarningsScreen(),
+      DeliveryEarningsScreen(
+        onOpenDrawer: _openDrawer,
+      ),
       DeliveryProfileScreen(
+        onOpenDrawer: _openDrawer,
         onLogout: widget.onLogout,
         onSwitchToCustomer: widget.onSwitchToCustomer,
         onSwitchToMerchant: widget.onSwitchToMerchant,
@@ -59,6 +74,13 @@ class _DeliveryMainNavigationScreenState extends State<DeliveryMainNavigationScr
     ];
 
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: DeliveryDrawer(
+        onSelectTab: _onSelectTab,
+        onLogout: widget.onLogout,
+        onSwitchToCustomer: widget.onSwitchToCustomer,
+        onSwitchToMerchant: widget.onSwitchToMerchant,
+      ),
       body: IndexedStack(
         index: _currentIndex,
         children: pages,

@@ -556,7 +556,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
             const SizedBox(height: 14),
             _buildQuickTemplateTile('🛵 I have reached your society gate. Please allow entry.', name),
             _buildQuickTemplateTile('🌾 Namaste! Your freshly milled flour from ${widget.trip.millName} is arriving in 5 mins.', name),
-            _buildQuickTemplateTile('🔑 Main gate par khada hoon, kripya OTP share karein.', name),
+            _buildQuickTemplateTile('📦 Main gate par khada hoon, kripya order receive karein.', name),
           ],
         ),
       ),
@@ -2028,7 +2028,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
       case TripStage.atMillDelivery:
         return 'Leg 1: At Mill (${widget.trip.millName}) - Shopkeeper Intake & Scan';
       case TripStage.atCustomerDelivery:
-        return 'Leg 2: At Stop ${_currentStopIndex + 1} Doorstep - Customer Scan & Delivery';
+        return 'Leg 2: At Stop ${_currentStopIndex + 1} Doorstep - Drop at Home';
       case TripStage.returningToCustomer:
         return 'Leg 1 Return: Returning Rejected Grain to ${_activeStop.customerName}';
       case TripStage.atCustomerReturn:
@@ -2200,23 +2200,23 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
         {
           'title': 'Mill Pick',
           'done': pickDone,
-          'isHold': _currentStage == TripStage.headingToMill || _currentStage == TripStage.atMillPickup,
+          'isHold': false,
           'isCurrent': _currentStage == TripStage.headingToMill || _currentStage == TripStage.atMillPickup,
           'description': 'Heading to flour mill to pick up milled flour bags.',
         },
         {
           'title': 'To Home',
           'done': transitDone,
-          'isHold': _currentStage == TripStage.headingToCustomer,
+          'isHold': false,
           'isCurrent': _currentStage == TripStage.headingToCustomer,
           'description': 'Delivering flour bags to customer doorstep.',
         },
         {
           'title': 'Doorstep',
           'done': deliveryDone,
-          'isHold': _currentStage == TripStage.atCustomerDelivery,
+          'isHold': false,
           'isCurrent': _currentStage == TripStage.atCustomerDelivery,
-          'description': 'Customer scanning & inspecting flour bags, verifying OTP.',
+          'description': 'Drop off flour bags at customer doorstep.',
         },
         {
           'title': 'Done',
@@ -4004,26 +4004,23 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
           ],
           const SizedBox(height: 16),
 
-          // Customer Specific Product Bags to Verify & Drop
-          Text('Customer Bags to Verify & Handover:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
+          // Order Items to Deliver
+          Text('Order Items to Deliver:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13)),
           const SizedBox(height: 8),
           ..._productBags.where((b) => b.orderId == stop.orderId).map((bag) {
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: bag.isDelivered ? const Color(0xFFE8F8F5) : const Color(0xFFFAF6F0),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: bag.isDelivered ? const Color(0xFF2ECC71) : const Color(0xFFECE4D9),
-                  width: bag.isDelivered ? 1.5 : 1,
-                ),
+                color: const Color(0xFFFAF6F0),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFECE4D9)),
               ),
               child: Row(
                 children: [
-                  Icon(
-                    bag.isDelivered ? Icons.check_circle_rounded : Icons.qr_code_2_rounded,
-                    color: bag.isDelivered ? const Color(0xFF1E8449) : const Color(0xFF6E5616),
+                  const Icon(
+                    Icons.inventory_2_outlined,
+                    color: Color(0xFF6E5616),
                     size: 20,
                   ),
                   const SizedBox(width: 10),
@@ -4033,7 +4030,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                       children: [
                         Text(
                           '${bag.productName} • ${bag.unitText}',
-                          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12),
+                          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12.5),
                         ),
                         Text(
                           'Tag: ${bag.bagId}',
@@ -4042,199 +4039,39 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                       ],
                     ),
                   ),
-                  ElevatedButton.icon(
-                    onPressed: () => _openProductBagBarcodeScanner(bag, isPickup: false),
-                    icon: Icon(bag.isDelivered ? Icons.check : Icons.qr_code_scanner_rounded, size: 14, color: Colors.white),
-                    label: Text(bag.isDelivered ? 'Verified' : 'Scan Bag', style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: bag.isDelivered ? const Color(0xFF1E8449) : const Color(0xFF6E5616),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
                 ],
               ),
             );
           }),
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
 
-          // Customer Flour Quality Inspection & Scan Card
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: _allCustomerBagsScanned ? const Color(0xFFF0FDF4) : const Color(0xFFFFFBEB),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: _allCustomerBagsScanned ? const Color(0xFF86EFAC) : const Color(0xFFF59E0B),
-                width: 1.5,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: (_allCustomerBagsScanned ? const Color(0xFF16A34A) : const Color(0xFFF59E0B)).withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        _allCustomerBagsScanned ? Icons.verified_rounded : Icons.search_rounded,
-                        color: _allCustomerBagsScanned ? const Color(0xFF16A34A) : const Color(0xFFD97706),
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Customer Flour Quality Check & Scan',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: _allCustomerBagsScanned ? const Color(0xFF166534) : const Color(0xFF92400E),
-                            ),
-                          ),
-                          Text(
-                            '${_scannedCustomerBags.length}/${_productBags.where((b) => b.orderId == stop.orderId).length} Bags Inspected',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 10,
-                              color: _allCustomerBagsScanned ? const Color(0xFF15803D) : const Color(0xFFB45309),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'The customer must inspect flour texture, aroma, moisture, and scan each bag. If customer rejects, you must return all flour back to the mill.',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    color: _allCustomerBagsScanned ? const Color(0xFF166534) : const Color(0xFF78350F),
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _openCustomerScanAndQualityDialog,
-                    icon: const Icon(Icons.qr_code_scanner_rounded, size: 16, color: Color(0xFFB45309)),
-                    label: Text(
-                      'Open Customer Quality & Bag Inspector',
-                      style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFFB45309)),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFF59E0B)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _isProcessing ? null : _showCustomerRejectReasonDialog,
-                        icon: const Icon(Icons.cancel_outlined, size: 14, color: Color(0xFFC0392B)),
-                        label: Text('Customer Rejects', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFFC0392B))),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFFEF4444)),
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _isProcessing ? null : () => _simulateCustomerDecision(true),
-                        icon: const Icon(Icons.check_circle_outline, size: 14, color: Colors.white),
-                        label: Text('Customer Accepts', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1E8449),
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // STEP 1: Proof of Delivery Handover
-          Text('Step 1: Proof of Delivery Handover (Optional):', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _simulateDoorstepPhoto,
-                  icon: Icon(_hasDoorstepPhoto ? Icons.check_circle : Icons.camera_alt_outlined, size: 16, color: _hasDoorstepPhoto ? const Color(0xFF1E8449) : AppTheme.primaryTerracotta),
-                  label: Text(_hasDoorstepPhoto ? 'Photo Added' : 'Take Photo', style: GoogleFonts.plusJakartaSans(fontSize: 12)),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    side: BorderSide(color: _hasDoorstepPhoto ? const Color(0xFF1E8449) : AppTheme.borderLight),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _simulateCustomerSignature,
-                  icon: Icon(_hasCustomerSignature ? Icons.check_circle : Icons.draw_outlined, size: 16, color: _hasCustomerSignature ? const Color(0xFF1E8449) : const Color(0xFF6E5616)),
-                  label: Text(_hasCustomerSignature ? 'Signed' : 'Get Sign', style: GoogleFonts.plusJakartaSans(fontSize: 12)),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    side: BorderSide(color: _hasCustomerSignature ? const Color(0xFF1E8449) : AppTheme.borderLight),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // STEP 2: 4-Digit Customer Delivery OTP
-          Text('Step 2: Customer Delivery OTP:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
-          const SizedBox(height: 6),
-          TextField(
-            controller: _otpController,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: '4-Digit Delivery OTP',
-              hintText: 'e.g. ${stop.deliveryOtp} (Master: 7391)',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Primary Confirm Drop Button
+          // Primary DROP AT HOME Button
           SizedBox(
             width: double.infinity,
-            height: 50,
+            height: 54,
             child: ElevatedButton.icon(
               onPressed: _isProcessing ? null : () => _handleConfirmDelivery(),
-              icon: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              icon: const Icon(Icons.home_rounded, color: Colors.white, size: 22),
               label: _isProcessing
-                  ? const CircularProgressIndicator(color: Colors.white)
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                    )
                   : Text(
                       _currentStopIndex < _tripStops.length - 1
-                          ? 'CONFIRM DROP & PROCEED TO STOP ${_currentStopIndex + 2}'
-                          : 'CONFIRM DROP & COMPLETE TRIP',
-                      style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white),
+                          ? 'DROP AT HOME & PROCEED TO NEXT STOP'
+                          : 'DROP AT HOME',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
                     ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1E8449),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 elevation: 3,
               ),
             ),
@@ -4654,7 +4491,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('✅ Customer verified & approved all flour bags! Enter OTP to confirm drop.'),
+              content: Text('✅ Customer verified & approved all flour bags! Tap Confirm Drop to complete.'),
               backgroundColor: Color(0xFF1E8449),
             ),
           );

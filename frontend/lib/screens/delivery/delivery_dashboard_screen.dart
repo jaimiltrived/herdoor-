@@ -8,10 +8,12 @@ import 'active_trip_screen.dart';
 
 class DeliveryDashboardScreen extends StatefulWidget {
   final Function(DeliveryTrip trip)? onTripAccepted;
+  final VoidCallback? onOpenDrawer;
 
   const DeliveryDashboardScreen({
     super.key,
     this.onTripAccepted,
+    this.onOpenDrawer,
   });
 
   @override
@@ -331,7 +333,13 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
             }).toList(),
             totalFee: trip.deliveryFee,
           )
-        : await DeliveryApiService.instance.acceptTrip(trip.orderId);
+        : await DeliveryApiService.instance.acceptTrip(
+            trip.orderId,
+            deliveryFee: trip.deliveryFee,
+            surgeBonus: trip.surgeBonus,
+            heavyBagBonus: trip.heavyBagBonus,
+            legType: trip.legType,
+          );
     if (!mounted) return;
 
     if (success) {
@@ -710,11 +718,6 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                       _buildInteractive5KmRadarMap(),
                       const SizedBox(height: 16),
 
-                      // Active Assigned Trip Banner (if any trip is currently assigned to rider)
-                      if (_assignedTrips.isNotEmpty) ...[
-                        _buildActiveTripHeaderBanner(_assignedTrips.first),
-                        const SizedBox(height: 18),
-                      ],
 
                       // Incoming Order Broadcast Alert Modal (if active)
                       if (_incomingAlertTrip != null) ...[
@@ -741,174 +744,57 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
     );
   }
 
-  Widget _buildActiveTripHeaderBanner(DeliveryTrip trip) {
-    final isGrouped = trip.stops.length > 1;
-    final String titleText = isGrouped
-        ? '⚡ ${trip.stops.length}-ITEM GROUPED BATCH IN PROGRESS'
-        : '🚨 ACTIVE TRIP IN PROGRESS';
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFF5F2), Color(0xFFFDECE9)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFC0392B), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFC0392B).withValues(alpha: 0.16),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFC0392B),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.navigation_rounded, size: 14, color: Colors.white),
-                    const SizedBox(width: 4),
-                    Text(
-                      titleText,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                '₹${trip.deliveryFee.toStringAsFixed(0)}',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF1E8449),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            trip.resolvedLegBadge,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              const Icon(Icons.storefront_rounded, size: 15, color: Color(0xFFC0392B)),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Pickup: ${trip.originTitle}',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textSecondary,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              const Icon(Icons.location_on_rounded, size: 15, color: Color(0xFF1E8449)),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Drop: ${trip.destinationTitle} (${trip.customerName})',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textSecondary,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ActiveTripScreen(
-                      trip: trip,
-                    ),
-                  ),
-                ).then((_) => _loadDashboardData());
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFC0392B),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 2,
-              ),
-              icon: const Icon(Icons.navigation_rounded, color: Colors.white, size: 18),
-              label: Text(
-                '🚀 Resume Active Navigation & Delivery',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildHeader() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Row(
           children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF8C4A3E), Color(0xFF5A2E25)],
-                ),
-                border: Border.all(color: Colors.white, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
+            if (widget.onOpenDrawer != null) ...[
+              InkWell(
+                onTap: widget.onOpenDrawer,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.borderLight),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                ],
+                  child: const Icon(Icons.menu_rounded, color: AppTheme.textPrimary, size: 22),
+                ),
               ),
-              child: const Icon(Icons.two_wheeler_rounded, color: Colors.white, size: 26),
+              const SizedBox(width: 10),
+            ],
+            InkWell(
+              onTap: widget.onOpenDrawer,
+              borderRadius: BorderRadius.circular(25),
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF8C4A3E), Color(0xFF5A2E25)],
+                  ),
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.two_wheeler_rounded, color: Colors.white, size: 26),
+              ),
             ),
             const SizedBox(width: 12),
             Column(
@@ -1497,7 +1383,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                       style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
                     ),
                     Text(
-                      '${trip.effectivePickupLocation} (${trip.productBags.length > 1 ? "${trip.productBags.length} Products (${trip.productBags.length} Units)" : (trip.productBags.isNotEmpty ? trip.productBags.first.unitText : "${trip.quantityKg} kg")})',
+                      '${trip.effectivePickupLocation} (${trip.productBags.length > 1 ? "${trip.productBags.length} Products" : (trip.productBags.isNotEmpty ? trip.productBags.first.unitText : "${trip.quantityKg} kg")})',
                       style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -2508,9 +2394,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  trip.productBags.length > 1
-                      ? '${trip.productBags.length} Products (${trip.productBags.length} Units • ${trip.quantityKg.toStringAsFixed(trip.quantityKg.truncateToDouble() == trip.quantityKg ? 0 : 1)} kg) • ${trip.grainTypeName}'
-                      : '${trip.productBags.isNotEmpty ? trip.productBags.first.unitText : "${trip.quantityKg} kg"} • ${trip.grainTypeName} (${trip.isLeg1GrainPickup ? "Raw Grain for Grinding" : "Fresh Packed Flour"})',
+                  trip.productSummaryHeader,
                   style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -2763,7 +2647,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Stop $stopIdx: ${stop.customerName} (${stop.productBags.length > 1 ? "${stop.productBags.length} Products (${stop.productBags.length} Units)" : (stop.productBags.isNotEmpty ? stop.productBags.first.unitText : "${stop.quantityKg} kg")})',
+                                  'Stop $stopIdx: ${stop.customerName} (${stop.productBags.length > 1 ? "${stop.productBags.length} Products" : (stop.productBags.isNotEmpty ? stop.productBags.first.unitText : "${stop.quantityKg} kg")})',
                                   style: GoogleFonts.plusJakartaSans(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,

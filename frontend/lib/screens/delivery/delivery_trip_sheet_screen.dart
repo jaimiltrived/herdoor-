@@ -13,12 +13,15 @@ class DeliveryTripSheetScreen extends StatefulWidget {
   final VoidCallback onExploreRadar;
   final VoidCallback onTripCompleted;
 
+  final VoidCallback? onOpenDrawer;
+
   const DeliveryTripSheetScreen({
     super.key,
     this.activeTrip,
     required this.onTripSelected,
     required this.onExploreRadar,
     required this.onTripCompleted,
+    this.onOpenDrawer,
   });
 
   @override
@@ -579,6 +582,12 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        leading: widget.onOpenDrawer != null
+            ? IconButton(
+                icon: const Icon(Icons.menu_rounded, color: AppTheme.textPrimary, size: 24),
+                onPressed: widget.onOpenDrawer,
+              )
+            : null,
         title: Row(
           children: [
             Container(
@@ -710,9 +719,8 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
   }
 
   Widget _buildActiveTripCard(DeliveryTrip trip) {
-    final isGrouped = trip.isBatch ||
+    final isGrouped = (trip.isBatch && trip.stops.length > 1) ||
         trip.stops.length > 1 ||
-        trip.productBags.length > 1 ||
         (trip.groupCode != null && trip.groupCode!.isNotEmpty) ||
         trip.orderNumber.toUpperCase().contains('POOL') ||
         trip.orderNumber.toUpperCase().contains('GRP') ||
@@ -720,9 +728,7 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
 
     final badgeLabel = trip.stops.length > 1
         ? '${trip.stops.length}-STOP GROUPED BATCH'
-        : (trip.productBags.length > 1
-            ? '${trip.productBags.length}-ITEM GROUPED BATCH'
-            : (trip.isBatch ? 'GROUPED BATCH RUN' : 'SINGLE ACTIVE RUN'));
+        : (trip.isBatch ? 'GROUPED BATCH RUN' : 'SINGLE ACTIVE RUN');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -866,7 +872,7 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
               ],
             ),
           ),
-          if (isGrouped) ...[
+          if (isGrouped && trip.stops.length > 1) ...[
             const SizedBox(height: 10),
             Text('Grouped Multi-Stop Breakdown (${trip.stops.length} Stops):', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textPrimary)),
             const SizedBox(height: 6),

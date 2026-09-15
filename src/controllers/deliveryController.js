@@ -393,14 +393,23 @@ exports.getAssignedOrders = async (req, res) => {
 
     const first = delList[0];
     const isReturn = first.status === 'RETURN_TO_CUSTOMER' || first.status === 'REJECTED_AT_MILL' || first.order_status === 'REJECTED_AT_MILL' || first.order_status === 'RETURNED_TO_CUSTOMER' || first.status === 'RETURNED_TO_CUSTOMER' || first.status === 'RETURNED_TO_MILL';
-    const orderStatusStr = (first.order_status || '').toUpperCase();
-    const isReadyOrDelivering = ['READY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'].includes(orderStatusStr) || first.status === 'OUT_FOR_DELIVERY';
-    const isCustomerGrain = (first.grain_source || 'CUSTOMER').toUpperCase() === 'CUSTOMER';
-    const isLeg1 = !isReturn && !isReadyOrDelivering && isCustomerGrain;
+    // Use persisted leg_type from DB if available; fallback to heuristic
+    const dbLegType = first.leg_type;
+    let isLeg1;
+    if (dbLegType) {
+      isLeg1 = !isReturn && dbLegType === 'LEG_1_GRAIN_PICKUP';
+    } else {
+      const orderStatusStr = (first.order_status || '').toUpperCase();
+      const isReadyOrDelivering = ['READY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'].includes(orderStatusStr) || first.status === 'OUT_FOR_DELIVERY';
+      const isCustomerGrain = (first.grain_source || 'CUSTOMER').toUpperCase() === 'CUSTOMER';
+      isLeg1 = !isReturn && !isReadyOrDelivering && isCustomerGrain;
+    }
     const legType = isReturn ? 'RETURN_LEG_GRAIN_RETURN' : (isLeg1 ? 'LEG_1_GRAIN_PICKUP' : 'LEG_2_FLOUR_DELIVERY');
     const tripBadge = isReturn ? '⚠️ Return Grain (Rejected by Mill)' : (isLeg1 ? '🌾 Grain Pickup (Home ➔ Mill)' : '🍞 Flour Delivery (Mill ➔ Home)');
     const totalKg = parsedStops.reduce((sum, s) => sum + (parseFloat(s.quantityKg) || 5.0), 0.0);
     const totalFee = parseFloat(first.delivery_fee) || 200.0;
+    const groupSurge = delList.reduce((sum, d) => sum + (parseFloat(d.surge_bonus) || 0), 0) || 35.0;
+    const groupHeavy = delList.reduce((sum, d) => sum + (parseFloat(d.heavy_bag_bonus) || 0), 0) || (totalKg >= 15 ? 30.0 : 0.0);
 
     trips.push({
       orderId: first.order_id,
@@ -427,8 +436,8 @@ exports.getAssignedOrders = async (req, res) => {
       grainTypeName: `Stacked Batch: ${parsedStops.length} Orders`,
       deliveryFee: totalFee,
       estimatedDeliveryFee: totalFee,
-      surgeBonus: 35.0,
-      heavyBagBonus: 30.0,
+      surgeBonus: groupSurge,
+      heavyBagBonus: groupHeavy,
       distanceKm: 2.8,
       estimatedMins: first.estimated_minutes || 22,
       pickupZone: 'Ellisbridge Central Hub 🔥 High Pool',
@@ -450,10 +459,17 @@ exports.getAssignedOrders = async (req, res) => {
     processedOrderIds.add(d.order_id);
 
     const isReturn = d.status === 'RETURN_TO_CUSTOMER' || d.status === 'REJECTED_AT_MILL' || d.order_status === 'REJECTED_AT_MILL' || d.order_status === 'RETURNED_TO_CUSTOMER' || d.status === 'RETURNED_TO_CUSTOMER' || d.status === 'RETURNED_TO_MILL';
-    const orderStatusStr = (d.order_status || '').toUpperCase();
-    const isReadyOrDelivering = ['READY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'].includes(orderStatusStr) || d.status === 'OUT_FOR_DELIVERY';
-    const isCustomerGrain = (d.grain_source || 'CUSTOMER').toUpperCase() === 'CUSTOMER';
-    const isLeg1 = !isReturn && !isReadyOrDelivering && isCustomerGrain;
+    // Use persisted leg_type from DB if available; fallback to heuristic
+    const dbLegType = d.leg_type;
+    let isLeg1;
+    if (dbLegType) {
+      isLeg1 = !isReturn && dbLegType === 'LEG_1_GRAIN_PICKUP';
+    } else {
+      const orderStatusStr = (d.order_status || '').toUpperCase();
+      const isReadyOrDelivering = ['READY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'].includes(orderStatusStr) || d.status === 'OUT_FOR_DELIVERY';
+      const isCustomerGrain = (d.grain_source || 'CUSTOMER').toUpperCase() === 'CUSTOMER';
+      isLeg1 = !isReturn && !isReadyOrDelivering && isCustomerGrain;
+    }
     const legType = isReturn ? 'RETURN_LEG_GRAIN_RETURN' : (isLeg1 ? 'LEG_1_GRAIN_PICKUP' : 'LEG_2_FLOUR_DELIVERY');
     const tripBadge = isReturn ? '⚠️ Return Grain (Rejected by Mill)' : (isLeg1 ? '🌾 Grain Pickup (Home ➔ Mill)' : '🍞 Flour Delivery (Mill ➔ Home)');
     const custAddr = d.address_line1 ? `${d.address_line1}, ${d.city || 'Ahmedabad'}` : (d.delivery_address || 'Customer Address');
@@ -512,8 +528,8 @@ exports.getAssignedOrders = async (req, res) => {
       grainTypeName: d.grain_type_name || 'Fresh Stone Ground Flour',
       deliveryFee: parseFloat(d.delivery_fee) || 65.0,
       estimatedDeliveryFee: parseFloat(d.delivery_fee) || 65.0,
-      surgeBonus: 20.0,
-      heavyBagBonus: 0.0,
+      surgeBonus: parseFloat(d.surge_bonus) || 0.0,
+      heavyBagBonus: parseFloat(d.heavy_bag_bonus) || 0.0,
       distanceKm: 2.1,
       estimatedMins: d.estimated_minutes || 18,
       pickupZone: 'Ellisbridge Central Hub',
@@ -542,7 +558,8 @@ exports.getAssignedOrders = async (req, res) => {
           pickupPin: d.pickup_pin || '4821',
           barcodeNumber: `HD-BAG-${d.order_id}-01`,
           distanceKm: 2.1,
-          orderPayout: parseFloat(d.delivery_fee) || 65.0
+          orderPayout: parseFloat(d.delivery_fee) || 65.0,
+          productBags: []
         }
       ]
     });
@@ -910,6 +927,12 @@ exports.acceptDelivery = async (req, res) => {
     }
   }
 
+  // Accept fee/bonus/leg from request body (sent by Flutter client)
+  const bodyFee = req.body?.deliveryFee;
+  const bodySurge = req.body?.surgeBonus;
+  const bodyHeavy = req.body?.heavyBagBonus;
+  const bodyLegType = req.body?.legType;
+
   try {
     const orders = await query(`
       SELECT o.*, m.name as mill_name, m.address as mill_address,
@@ -944,6 +967,42 @@ exports.acceptDelivery = async (req, res) => {
       }
     }
 
+    // Determine correct leg type by checking delivery_tasks completion state
+    let resolvedLegType = bodyLegType || null;
+    if (!resolvedLegType) {
+      try {
+        const leg1Tasks = await query(
+          `SELECT status FROM delivery_tasks WHERE order_id = ? AND leg = 'LEG_1_CUSTOMER_TO_MILL' ORDER BY id DESC LIMIT 1`,
+          [orderId]
+        );
+        const leg1Completed = leg1Tasks && leg1Tasks.length > 0 && leg1Tasks[0].status === 'COMPLETED';
+        const isReadyStatus = ['READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY'].includes(order.status);
+
+        if (leg1Completed || isReadyStatus) {
+          resolvedLegType = 'LEG_2_FLOUR_DELIVERY';
+        } else {
+          const isCustomerGrain = (order.grain_source || 'CUSTOMER').toUpperCase() === 'CUSTOMER';
+          resolvedLegType = isCustomerGrain ? 'LEG_1_GRAIN_PICKUP' : 'LEG_2_FLOUR_DELIVERY';
+        }
+      } catch (_) {
+        resolvedLegType = 'LEG_2_FLOUR_DELIVERY';
+      }
+    }
+
+    const isLeg1 = resolvedLegType === 'LEG_1_GRAIN_PICKUP';
+
+    // Compute payout: use client values if provided, else calculate from order data
+    const quantityKg = parseFloat(order.quantity_kg) || 5.0;
+    const isHeavy = quantityKg >= 10;
+    const surgeBonus = (bodySurge != null) ? parseFloat(bodySurge) : 25.0;
+    const heavyBagBonus = (bodyHeavy != null) ? parseFloat(bodyHeavy) : (isHeavy ? 20.0 : 0.0);
+    const baseFee = 45.0;
+    const deliveryFee = (bodyFee != null) ? parseFloat(bodyFee) : (baseFee + surgeBonus + heavyBagBonus);
+
+    // Correct pickup/delivery addresses based on leg
+    const pickupAddr = isLeg1 ? custAddr : millAddr;
+    const deliveryAddr = isLeg1 ? millAddr : custAddr;
+
     await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.ASSIGNED, orderId]);
 
     if (existingDels && existingDels.length > 0) {
@@ -953,24 +1012,31 @@ exports.acceptDelivery = async (req, res) => {
           delivery_person_name = ?,
           delivery_person_phone = ?,
           status = 'ASSIGNED',
+          delivery_fee = ?,
+          surge_bonus = ?,
+          heavy_bag_bonus = ?,
+          leg_type = ?,
+          pickup_address = ?,
+          delivery_address = ?,
           updated_at = NOW()
         WHERE order_id = ? AND (delivery_person_id IS NULL OR delivery_person_id = 0 OR delivery_person_id = ? OR status IN ('CREATED','AVAILABLE'))
-      `, [driverId, driverName, driverPhone, orderId, driverId]);
+      `, [driverId, driverName, driverPhone, deliveryFee, surgeBonus, heavyBagBonus, resolvedLegType, pickupAddr, deliveryAddr, orderId, driverId]);
     } else {
       await query(`
         INSERT INTO deliveries
-          (order_id, delivery_person_id, delivery_person_name, delivery_person_phone, status, pickup_address, delivery_address, current_latitude, current_longitude, pickup_pin, delivery_otp, delivery_fee, estimated_minutes, created_at, updated_at)
+          (order_id, delivery_person_id, delivery_person_name, delivery_person_phone, status, pickup_address, delivery_address, current_latitude, current_longitude, pickup_pin, delivery_otp, delivery_fee, surge_bonus, heavy_bag_bonus, leg_type, estimated_minutes, created_at, updated_at)
         VALUES
-          (?, ?, ?, ?, 'ASSIGNED', ?, ?, 23.0225, 72.5714, ?, ?, 45.0, 20, NOW(), NOW())
-      `, [orderId, driverId, driverName, driverPhone, millAddr, custAddr, order.pickup_pin || '4821', order.delivery_otp || '7391']);
+          (?, ?, ?, ?, 'ASSIGNED', ?, ?, 23.0225, 72.5714, ?, ?, ?, ?, ?, ?, 20, NOW(), NOW())
+      `, [orderId, driverId, driverName, driverPhone, pickupAddr, deliveryAddr, order.pickup_pin || '4821', order.delivery_otp || '7391', deliveryFee, surgeBonus, heavyBagBonus, resolvedLegType]);
     }
 
-    // Update active delivery task status
+    // Update active delivery task status for the correct leg
+    const taskLeg = isLeg1 ? 'LEG_1_CUSTOMER_TO_MILL' : 'LEG_2_MILL_TO_CUSTOMER';
     await query(`
       UPDATE delivery_tasks
       SET status = 'ASSIGNED', delivery_person_id = ?, updated_at = NOW()
-      WHERE order_id = ? AND status = 'AVAILABLE'
-    `, [driverId, orderId]);
+      WHERE order_id = ? AND (status = 'AVAILABLE' OR (leg = ? AND status IN ('AVAILABLE', 'ASSIGNED')))
+    `, [driverId, orderId, taskLeg]);
 
     return res.json({
       status: 'success',
@@ -981,7 +1047,11 @@ exports.acceptDelivery = async (req, res) => {
           orderId,
           deliveryPersonId: driverId,
           deliveryPersonName: driverName,
-          status: 'ASSIGNED'
+          status: 'ASSIGNED',
+          deliveryFee,
+          surgeBonus,
+          heavyBagBonus,
+          legType: resolvedLegType
         }
       }
     });

@@ -685,10 +685,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return _buildNoActiveOrderCard();
     }
 
+    // Adapt slider height dynamically: multi-item orders (3+ items) get comfortable vertical headroom
+    final hasMultiItemOrder = orders.any((o) => o.productItemsWithKg.length > 2);
+    final sliderHeight = hasMultiItemOrder ? 268.0 : 234.0;
+
     return Column(
       children: [
         SizedBox(
-          height: 228,
+          height: sliderHeight,
           child: PageView.builder(
             controller: _activeOrderPageController,
             physics: const PageScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
@@ -736,6 +740,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildActiveOrderCard(OrderModel order) {
     final productItems = order.productItemsWithKg;
+    const maxChips = 4;
+    final displayedItems = productItems.length > maxChips
+        ? productItems.take(maxChips - 1).toList()
+        : productItems;
+    final extraCount = productItems.length - displayedItems.length;
 
     return GestureDetector(
       onTap: () {
@@ -749,7 +758,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Container(
         width: double.infinity,
         margin: const EdgeInsets.symmetric(horizontal: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
@@ -766,6 +775,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+            // Top Header: ACTIVE ORDER pill + Order ID
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -795,164 +805,198 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ],
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Product-wise kg breakdown
-                if (productItems.length > 1)
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 5,
-                    children: productItems.map((item) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF9F5EF),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFE2D8C9)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+
+            // Middle Content: Tags + Summary Box + Mill & Status
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    // Product-wise kg breakdown
+                    if (productItems.length > 1)
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          ...displayedItems.map((item) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                               decoration: BoxDecoration(
-                                color: AppTheme.primaryTerracotta.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(4),
+                                color: const Color(0xFFF9F5EF),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFFE2D8C9)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryTerracotta.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      item['kg'] ?? '',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w900,
+                                        color: AppTheme.primaryTerracotta,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Flexible(
+                                    child: Text(
+                                      item['name'] ?? '',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppTheme.textPrimary,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                          if (extraCount > 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryTerracotta.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppTheme.primaryTerracotta.withValues(alpha: 0.3)),
                               ),
                               child: Text(
-                                item['kg'] ?? '',
+                                '+$extraCount more',
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 11,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w800,
                                   color: AppTheme.primaryTerracotta,
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 5),
-                            Flexible(
-                              child: Text(
-                                item['name'] ?? '',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppTheme.textPrimary,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                        ],
+                      )
+                    else
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryTerracotta.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              productItems.isNotEmpty ? productItems.first['kg']! : order.quantityKg,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                                color: AppTheme.primaryTerracotta,
                               ),
                             ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  )
-                else
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryTerracotta.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          productItems.isNotEmpty ? productItems.first['kg']! : order.quantityKg,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w900,
-                            color: AppTheme.primaryTerracotta,
                           ),
-                        ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              productItems.isNotEmpty ? productItems.first['name']! : order.itemSummary,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          productItems.isNotEmpty ? productItems.first['name']! : order.itemSummary,
+
+                    // Total Summary Row: Total Weight & Total Price
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFDF8F3),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFF3E8DB)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.scale_outlined, size: 14, color: Color(0xFF92400E)),
+                              const SizedBox(width: 5),
+                              Text(
+                                'Total Weight: ',
+                                style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
+                              ),
+                              Text(
+                                order.quantityKg.toLowerCase().endsWith('kg') ? order.quantityKg : '${order.quantityKg} kg',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF92400E),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Text(
+                                'Total: ',
+                                style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
+                              ),
+                              Text(
+                                '₹${order.totalPrice.toStringAsFixed(2)}',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w900,
+                                  color: const Color(0xFF1E8449),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Mill & Status Row
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${order.millName} — ${order.statusStep}',
                           style: GoogleFonts.plusJakartaSans(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.textPrimary,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.mustardDark,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
-                  ),
-
-                const SizedBox(height: 8),
-
-                // Total Summary Row: Total Weight & Total Price
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFDF8F3),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFF3E8DB)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.scale_outlined, size: 15, color: Color(0xFF92400E)),
-                          const SizedBox(width: 5),
-                          Text(
-                            'Total Weight: ',
-                            style: GoogleFonts.plusJakartaSans(fontSize: 11.5, color: AppTheme.textSecondary),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Delivery: ${order.estimatedDelivery}',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            color: AppTheme.textSecondary,
                           ),
-                          Text(
-                            order.quantityKg.toLowerCase().endsWith('kg') ? order.quantityKg : '${order.quantityKg} kg',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF92400E),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          Text(
-                            'Total: ',
-                            style: GoogleFonts.plusJakartaSans(fontSize: 11.5, color: AppTheme.textSecondary),
-                          ),
-                          Text(
-                            '₹${order.totalPrice.toStringAsFixed(2)}',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w900,
-                              color: const Color(0xFF1E8449),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-
-                const SizedBox(height: 6),
-                Text(
-                  '${order.millName} — ${order.statusStep}',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.mustardDark,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Delivery: ${order.estimatedDelivery}',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11.5,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-              ],
+              ),
             ),
+
+            // Bottom Footer Row
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [

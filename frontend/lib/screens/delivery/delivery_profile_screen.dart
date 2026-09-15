@@ -8,12 +8,14 @@ class DeliveryProfileScreen extends StatefulWidget {
   final VoidCallback onLogout;
   final VoidCallback onSwitchToCustomer;
   final VoidCallback onSwitchToMerchant;
+  final VoidCallback? onOpenDrawer;
 
   const DeliveryProfileScreen({
     super.key,
     required this.onLogout,
     required this.onSwitchToCustomer,
     required this.onSwitchToMerchant,
+    this.onOpenDrawer,
   });
 
   @override
@@ -65,6 +67,12 @@ class _DeliveryProfileScreenState extends State<DeliveryProfileScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
+        leading: widget.onOpenDrawer != null
+            ? IconButton(
+                icon: const Icon(Icons.menu_rounded, color: AppTheme.textPrimary, size: 24),
+                onPressed: widget.onOpenDrawer,
+              )
+            : null,
         title: Text(
           'Rider Hub & Profile',
           style: GoogleFonts.playfairDisplay(

@@ -193,7 +193,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
 
         _order.trackingSteps[4] = TrackingStep(
           title: '5. 🏁 Delivered',
-          subtitle: 'Doorstep handover & OTP verified',
+          subtitle: 'Doorstep handover & verified',
           timeText: isDelivered ? 'Delivered' : 'Pending',
           isCompleted: isDelivered,
           isCurrent: false,
@@ -239,7 +239,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
         ),
         TrackingStep(
           title: '5. 🏁 Delivered',
-          subtitle: 'Doorstep handover & OTP verified',
+          subtitle: 'Doorstep handover & verified',
           timeText: 'Pending',
           isCompleted: false,
           isCurrent: false,
@@ -780,109 +780,105 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
     final isDone = step.isCompleted;
     final isCurrent = step.isCurrent;
 
-    return IntrinsicHeight(
+    return CustomPaint(
+      painter: _TimelinePainter(isDone: isDone, isLast: isLast),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Timeline Node & Connecting Line Column
-          Column(
-            children: [
-              if (isDone)
-                // COMPLETED: Solid Olive Green with Checkmark
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF556B2F),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.check, color: Colors.white, size: 20),
-                )
-              else if (isCurrent)
-                // CURRENT / ACTIVE: Terracotta Active Ring
-                AnimatedBuilder(
-                  animation: _pulseController,
-                  builder: (context, child) {
-                    return Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFECEB),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: AppTheme.primaryTerracotta,
-                          width: 2.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryTerracotta.withValues(alpha: 0.2 * _pulseController.value),
-                            blurRadius: 8,
-                            spreadRadius: 2,
+          // Timeline Node
+          SizedBox(
+            width: 36,
+            height: 36,
+            child: isDone
+                ? Container(
+                    width: 36,
+                    height: 36,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF556B2F),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.check, color: Colors.white, size: 20),
+                  )
+                : isCurrent
+                    ? AnimatedBuilder(
+                        animation: _pulseController,
+                        builder: (context, child) {
+                          return Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFECEB),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppTheme.primaryTerracotta,
+                                width: 2.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppTheme.primaryTerracotta.withValues(alpha: 0.2 * _pulseController.value),
+                                  blurRadius: 8,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.sync_rounded,
+                              color: AppTheme.primaryTerracotta,
+                              size: 20,
+                            ),
+                          );
+                        },
+                      )
+                    : Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(0xFFDCD6CE),
+                            width: 2,
                           ),
-                        ],
+                        ),
+                        child: Center(
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFB5ADA3),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.sync_rounded,
-                        color: AppTheme.primaryTerracotta,
-                        size: 20,
-                      ),
-                    );
-                  },
-                )
-              else
-                // PENDING: Crisp white background with muted outline and subtle inner dot
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFFDCD6CE),
-                      width: 2,
-                    ),
-                  ),
-                  child: Center(
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFB5ADA3),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-                ),
-              if (!isLast)
-                Expanded(
-                  child: Container(
-                    width: 2,
-                    color: isDone ? const Color(0xFF556B2F) : const Color(0xFFE5DFD7),
-                  ),
-                ),
-            ],
           ),
           const SizedBox(width: 16),
           // Content Details Column
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(bottom: 24.0),
+              padding: EdgeInsets.only(bottom: isLast ? 6.0 : 24.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        step.title,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                          color: isCurrent
-                              ? AppTheme.primaryTerracotta
-                              : (isDone ? AppTheme.textPrimary : const Color(0xFF8A847C)),
+                      Expanded(
+                        child: Text(
+                          step.title,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 16.5,
+                            fontWeight: FontWeight.bold,
+                            color: isCurrent
+                                ? AppTheme.primaryTerracotta
+                                : (isDone ? AppTheme.textPrimary : const Color(0xFF8A847C)),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Text(
                         step.timeText.isNotEmpty ? step.timeText : 'Pending',
                         style: GoogleFonts.plusJakartaSans(
@@ -899,7 +895,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
                   Text(
                     step.subtitle,
                     style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
+                      fontSize: 13.5,
                       color: isCurrent
                           ? AppTheme.softCoral
                           : (isDone ? AppTheme.textSecondary : const Color(0xFFA09990)),
@@ -1722,3 +1718,34 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
   }
 }
 
+/// CustomPainter that cleanly draws the timeline connecting line behind nodes without IntrinsicHeight layout issues.
+class _TimelinePainter extends CustomPainter {
+  final bool isDone;
+  final bool isLast;
+
+  const _TimelinePainter({
+    required this.isDone,
+    required this.isLast,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (!isLast) {
+      final paint = Paint()
+        ..color = isDone ? const Color(0xFF556B2F) : const Color(0xFFE5DFD7)
+        ..strokeWidth = 2.0
+        ..style = PaintingStyle.stroke;
+
+      // Draw line from bottom center of 36x36 node to the bottom edge of this item
+      canvas.drawLine(
+        const Offset(18.0, 36.0),
+        Offset(18.0, size.height),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TimelinePainter oldDelegate) =>
+      oldDelegate.isDone != isDone || oldDelegate.isLast != isLast;
+}

@@ -747,6 +747,32 @@ class DeliveryTripStop {
       );
     }).toList();
   }
+
+  int get totalProductUnits {
+    int total = 0;
+    for (var bag in productBags) {
+      final match = RegExp(r'^(\d+(?:\.\d+)?)\s*(?:units?|packs?|bags?|each|pcs?|items?)', caseSensitive: false).firstMatch(bag.unitText);
+      if (match != null) {
+        total += (double.tryParse(match.group(1) ?? '1') ?? 1.0).toInt();
+      } else {
+        total += 1;
+      }
+    }
+    return total > 0 ? total : productBags.length;
+  }
+
+  String get productSummaryHeader {
+    final kgStr = '${quantityKg.toStringAsFixed(quantityKg.truncateToDouble() == quantityKg ? 0 : 1)} kg';
+    if (productBags.length > 1) {
+      final u = totalProductUnits;
+      if (u > productBags.length) {
+        return '${productBags.length} Products ($u Units • $kgStr)';
+      }
+      return '${productBags.length} Products • $kgStr';
+    }
+    final unit = productBags.isNotEmpty ? productBags.first.unitText : kgStr;
+    return '$unit • $grainTypeName';
+  }
 }
 
 class ParsedProductUnitInfo {
@@ -1036,6 +1062,7 @@ class DeliveryTrip {
 
   bool get isLeg1GrainPickup =>
       !isAnyReturn &&
+      legType != 'LEG_2_FLOUR_DELIVERY' &&
       (legType == 'LEG_1_GRAIN_PICKUP' ||
           (isHomeGrainPickup &&
               (status == 'PLACED' ||
@@ -1043,8 +1070,7 @@ class DeliveryTrip {
                   status == 'CONFIRMED' ||
                   status == 'PENDING' ||
                   status == 'NEW' ||
-                  status == 'PROCESSING' ||
-                  status == 'ASSIGNED') &&
+                  status == 'PROCESSING') &&
               status != 'READY' &&
               status != 'READY_FOR_PICKUP' &&
               status != 'OUT_FOR_DELIVERY' &&
@@ -1081,6 +1107,32 @@ class DeliveryTrip {
   String get effectiveDeliveryLocation => isLeg1GrainPickup ? millAddress : deliveryAddress;
 
   List<ProductBagItem> get productBags => resolvedStops.expand((s) => s.productBags).toList();
+
+  int get totalProductUnits {
+    int total = 0;
+    for (var bag in productBags) {
+      final match = RegExp(r'^(\d+(?:\.\d+)?)\s*(?:units?|packs?|bags?|each|pcs?|items?)', caseSensitive: false).firstMatch(bag.unitText);
+      if (match != null) {
+        total += (double.tryParse(match.group(1) ?? '1') ?? 1.0).toInt();
+      } else {
+        total += 1;
+      }
+    }
+    return total > 0 ? total : productBags.length;
+  }
+
+  String get productSummaryHeader {
+    final kgStr = '${quantityKg.toStringAsFixed(quantityKg.truncateToDouble() == quantityKg ? 0 : 1)} kg';
+    if (productBags.length > 1) {
+      final u = totalProductUnits;
+      if (u > productBags.length) {
+        return '${productBags.length} Products ($u Units • $kgStr)';
+      }
+      return '${productBags.length} Products • $kgStr';
+    }
+    final unit = productBags.isNotEmpty ? productBags.first.unitText : kgStr;
+    return '$unit • $grainTypeName';
+  }
 
   List<DeliveryTripStop> get resolvedStops {
     if (stops.isNotEmpty) return stops;
