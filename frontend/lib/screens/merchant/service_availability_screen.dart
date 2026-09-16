@@ -102,7 +102,7 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
         ),
         title: Text(
           'Service Availability',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 20,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
@@ -130,7 +130,7 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
                     children: [
                       Text(
                         'Store & Service Configuration',
-                        style: GoogleFonts.playfairDisplay(
+              style: GoogleFonts.plusJakartaSans(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
                           color: AppTheme.textPrimary,

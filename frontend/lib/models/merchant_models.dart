@@ -206,7 +206,7 @@ class MerchantOrder {
       mappedTag = 'OUT FOR DELIVERY';
       mappedColor = const Color(0xFF3498DB);
     } else if (rawStatus == 'COMPLETED' || rawStatus == 'DELIVERED' || rawStatus == 'PICKED_UP') {
-      mappedTag = 'COMPLETED';
+      mappedTag = 'DELIVERED';
       mappedColor = const Color(0xFF2ECC71);
     } else if (rawStatus == 'REJECTED' || rawStatus == 'REJECTED_AT_MILL' || rawStatus == 'RETURN_TO_CUSTOMER') {
       mappedTag = 'REJECTED';
@@ -764,10 +764,6 @@ class DeliveryTripStop {
   String get productSummaryHeader {
     final kgStr = '${quantityKg.toStringAsFixed(quantityKg.truncateToDouble() == quantityKg ? 0 : 1)} kg';
     if (productBags.length > 1) {
-      final u = totalProductUnits;
-      if (u > productBags.length) {
-        return '${productBags.length} Products ($u Units • $kgStr)';
-      }
       return '${productBags.length} Products • $kgStr';
     }
     final unit = productBags.isNotEmpty ? productBags.first.unitText : kgStr;
@@ -812,7 +808,7 @@ class ParsedProductUnitInfo {
       } else if (unit.startsWith('bag')) {
         formattedUnit = '${val.toInt()} ${val.toInt() == 1 ? 'Bag' : 'Bags'}';
       } else {
-        formattedUnit = '${val.toInt()} ${val.toInt() == 1 ? 'Unit' : 'Units'}';
+        formattedUnit = '${val.toInt()} ${val.toInt() == 1 ? 'Product' : 'Products'}';
       }
       return ParsedProductUnitInfo(
         cleanName: name.isNotEmpty ? name : trimmed,
@@ -832,7 +828,7 @@ class ParsedProductUnitInfo {
       if (unit.startsWith('kg')) {
         formattedUnit = '${val.toStringAsFixed(val.truncateToDouble() == val ? 0 : 1)} kg';
       } else {
-        formattedUnit = '${val.toInt()} ${val.toInt() == 1 ? 'Unit' : 'Units'}';
+        formattedUnit = '${val.toInt()} ${val.toInt() == 1 ? 'Product' : 'Products'}';
       }
       return ParsedProductUnitInfo(
         cleanName: name.isNotEmpty ? name : trimmed,
@@ -1124,10 +1120,6 @@ class DeliveryTrip {
   String get productSummaryHeader {
     final kgStr = '${quantityKg.toStringAsFixed(quantityKg.truncateToDouble() == quantityKg ? 0 : 1)} kg';
     if (productBags.length > 1) {
-      final u = totalProductUnits;
-      if (u > productBags.length) {
-        return '${productBags.length} Products ($u Units • $kgStr)';
-      }
       return '${productBags.length} Products • $kgStr';
     }
     final unit = productBags.isNotEmpty ? productBags.first.unitText : kgStr;
@@ -1244,6 +1236,37 @@ class DeliveryTrip {
       stops: parsedStops,
       timeline: parsedTimeline,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'order_id': orderId,
+      'order_number': orderNumber,
+      'customer_name': customerName,
+      'customer_phone': customerPhone,
+      'mill_name': millName,
+      'mill_phone': millPhone,
+      'mill_address': millAddress,
+      'home_pickup_address': homePickupAddress,
+      'delivery_address': deliveryAddress,
+      'quantity_kg': quantityKg,
+      'grain_type_name': grainTypeName,
+      'status': status,
+      'pickup_pin': pickupPin,
+      'delivery_otp': deliveryOtp,
+      'customer_notes': customerNotes,
+      'surge_bonus': surgeBonus,
+      'heavy_bag_bonus': heavyBagBonus,
+      'estimated_mins': estimatedMins,
+      'pickup_zone': pickupZone,
+      'payment_mode': paymentMode,
+      'vehicle_type_allowed': vehicleTypeAllowed,
+      'group_code': groupCode,
+      'group_id': groupId,
+      'leg_type': legType,
+      'delivery_fee': deliveryFee,
+      'distance_km': distanceKm,
+    };
   }
 }
 

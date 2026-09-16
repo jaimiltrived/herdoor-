@@ -40,7 +40,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
         ),
         title: Text(
           'Help & Support',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
@@ -65,7 +65,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                   children: [
                     Text(
                       'Need Urgent Assistance?',
-                      style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.plusJakartaSans(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,

@@ -42,7 +42,7 @@ class _CartScreenState extends State<CartScreen> {
         elevation: 0,
         title: Text(
           'Your Cart',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             color: AppTheme.primaryTerracotta,
             fontSize: 22,
             fontWeight: FontWeight.bold,
@@ -190,7 +190,7 @@ class _CartScreenState extends State<CartScreen> {
                               const SizedBox(height: 4),
                               if (item['type'] == 'milling')
                                 Text(
-                                  'Source: ${item['source']} • \$${(item['price'] as num).toStringAsFixed(2)}/kg',
+                                  'Source: ${item['source']} • ₹${(item['price'] as num).toStringAsFixed(2)}/kg',
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 12,
                                     color: AppTheme.textSecondary,
@@ -198,7 +198,7 @@ class _CartScreenState extends State<CartScreen> {
                                 )
                               else
                                 Text(
-                                  '\$${(item['price'] as num).toStringAsFixed(2)} each',
+                                  '₹${(item['price'] as num).toStringAsFixed(2)} each',
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 12,
                                     color: AppTheme.textSecondary,
@@ -206,7 +206,7 @@ class _CartScreenState extends State<CartScreen> {
                                 ),
                               const SizedBox(height: 6),
                               Text(
-                                '\$${((item['price'] as num) * (item['quantity'] as num)).toStringAsFixed(2)}',
+                                '₹${((item['price'] as num) * (item['quantity'] as num)).toStringAsFixed(2)}',
                                 style: GoogleFonts.plusJakartaSans(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -343,7 +343,7 @@ class _CartScreenState extends State<CartScreen> {
                           ),
                         ),
                         Text(
-                          '\$${cartTotal.toStringAsFixed(2)}',
+                          '₹${cartTotal.toStringAsFixed(2)}',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,

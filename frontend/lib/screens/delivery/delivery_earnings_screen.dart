@@ -143,7 +143,7 @@ class _DeliveryEarningsScreenState extends State<DeliveryEarningsScreen> {
                 children: [
                   Text(
                     'Instant Bank & UPI Payout',
-                    style: GoogleFonts.playfairDisplay(fontSize: 18, fontWeight: FontWeight.bold),
+          style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -361,7 +361,7 @@ class _DeliveryEarningsScreenState extends State<DeliveryEarningsScreen> {
             : null,
         title: Text(
           'Earnings & Wallet',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
@@ -599,7 +599,7 @@ class _DeliveryEarningsScreenState extends State<DeliveryEarningsScreen> {
                   const SizedBox(width: 6),
                   Text(
                     'Silver Rider Milestone',
-                    style: GoogleFonts.playfairDisplay(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF6E5616)),
+          style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF6E5616)),
                   ),
                 ],
               ),

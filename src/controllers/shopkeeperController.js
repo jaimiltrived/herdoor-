@@ -58,7 +58,7 @@ async function getLiveOrders(millId) {
     console.warn('MySQL getLiveOrders Error:', err.message);
   }
 
-  return [];
+  return (store.orders || []).filter(o => !millId || o.millId === millId);
 }
 
 // Robust order finder that handles numeric IDs and prefixed strings (#HD-..., ORD-...) without arbitrary fallback
@@ -202,7 +202,7 @@ exports.getNewOrders = (req, res) => {
 exports.getActiveOrders = async (req, res) => {
   const millId = getShopkeeperMillId(req);
   const allOrders = await getLiveOrders(millId);
-  const activeStatuses = [ORDER_STATUS.ACCEPTED, ORDER_STATUS.PROCESSING, ORDER_STATUS.PACKING, 'MILLING', 'IN PROGRESS', 'IN_PROGRESS', 'GRAIN_DROPPED', 'GRAIN DROPPED', 'RECEIVED_AT_MILL', 'CONFIRMED', 'PENDING'];
+  const activeStatuses = [ORDER_STATUS.ACCEPTED, ORDER_STATUS.PROCESSING, ORDER_STATUS.PACKING, 'MILLING', 'IN PROGRESS', 'IN_PROGRESS', 'GRAIN_DROPPED', 'GRAIN DROPPED', 'RECEIVED_AT_MILL', 'CONFIRMED', 'PENDING', ORDER_STATUS.ASSIGNED, 'ASSIGNED', 'PICKED_UP_FROM_HOME', 'PLACED', 'NEW'];
   const active = allOrders.filter(o => activeStatuses.includes(o.status)).map(enrichOrder);
   res.json({ status: 'success', count: active.length, data: { orders: active } });
 };
@@ -726,31 +726,107 @@ exports.completeOrder = async (req, res) => {
   }
 
   const targetId = order ? order.id : orderId;
-  const statusVal = (order && order.fulfillmentType === FULFILLMENT_TYPES.PICKUP) ? ORDER_STATUS.PICKED_UP : ORDER_STATUS.COMPLETED;
 
-  try {
-    await query('UPDATE orders SET status = ?, payment_status = ?, updated_at = NOW() WHERE id = ?', [statusVal, 'PAID', targetId]);
-    await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [targetId, statusVal, 'Order Completed', 'Order marked as completed / picked up']);
-    await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.DELIVERED, targetId]);
-  } catch (err) {
-    console.warn('MySQL completeOrder update warning:', err.message);
+  // Check if this is a PICKUP-type order (customer picks up from mill)
+  let isPickupOrder = false;
+  if (order && order.fulfillmentType === FULFILLMENT_TYPES.PICKUP) {
+    isPickupOrder = true;
+  } else {
+    // Also check DB for fulfillment_type
+    try {
+      const dbRows = await query('SELECT fulfillment_type FROM orders WHERE id = ? LIMIT 1', [targetId]);
+      if (dbRows && dbRows[0] && (dbRows[0].fulfillment_type || '').toUpperCase() === 'PICKUP') {
+        isPickupOrder = true;
+      }
+    } catch (_) {}
   }
 
-  if (order) {
-    order.status = statusVal;
-    order.paymentStatus = 'PAID';
-    if (!order.timeline) order.timeline = [];
-    order.timeline.push({
-      status: statusVal,
-      timestamp: new Date().toISOString(),
-      note: 'Order successfully completed'
-    });
+  if (isPickupOrder) {
+    // PICKUP orders: Finalize as completed (customer already picked up)
+    const statusVal = ORDER_STATUS.PICKED_UP;
+    try {
+      await query('UPDATE orders SET status = ?, payment_status = ?, updated_at = NOW() WHERE id = ?', [statusVal, 'PAID', targetId]);
+      await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [targetId, statusVal, 'Order Completed', 'Order picked up by customer']);
+      await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.DELIVERED, targetId]);
+    } catch (err) {
+      console.warn('MySQL completeOrder (pickup) warning:', err.message);
+    }
+    if (order) {
+      order.status = statusVal;
+      order.paymentStatus = 'PAID';
+    }
+  } else {
+    // DELIVERY orders: Milling is complete → make order available for Leg 2 (Mill → Home delivery)
+    // Set order to READY status so it appears on delivery rider's radar
+    const statusVal = ORDER_STATUS.READY || 'READY';
+    try {
+      await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [statusVal, targetId]);
+      await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)',
+        [targetId, statusVal, 'Milling Complete', 'Flour milled, packed & ready for Leg 2 delivery to customer home']);
+
+      // Update packages to READY_FOR_DELIVERY & current_leg to LEG_2
+      await query(`UPDATE packages SET status = 'READY_FOR_DELIVERY', current_leg = 'LEG_2' WHERE order_id = ?`, [targetId]);
+
+      // Create Leg 2 delivery task so riders can see it on the radar
+      await query(
+        `INSERT INTO delivery_tasks (order_id, leg, status, pickup_location, drop_location)
+         SELECT ?, 'LEG_2_MILL_TO_CUSTOMER', 'AVAILABLE',
+                COALESCE(m.name, 'Mill'),
+                COALESCE(o.customer_name, 'Customer Home')
+         FROM orders o
+         LEFT JOIN mills m ON o.mill_id = m.id
+         WHERE o.id = ?
+         ON DUPLICATE KEY UPDATE status = 'AVAILABLE', updated_at = NOW()`,
+        [targetId, targetId]
+      );
+
+      // Mark Leg 1 task as completed if existing
+      await query(
+        `UPDATE delivery_tasks SET status = 'COMPLETED', completed_at = NOW() WHERE order_id = ? AND leg = 'LEG_1_CUSTOMER_TO_MILL'`,
+        [targetId]
+      );
+
+      // Reset deliveries record for Leg 2 so any rider can claim it on the radar
+      await query(
+        `UPDATE deliveries SET delivery_person_id = NULL, delivery_person_name = NULL, delivery_person_phone = NULL, status = 'AVAILABLE', leg_type = 'LEG_2_FLOUR_DELIVERY', updated_at = NOW() WHERE order_id = ?`,
+        [targetId]
+      );
+    } catch (err) {
+      console.warn('MySQL completeOrder (delivery-ready) warning:', err.message);
+    }
+
+    // Update in-memory store for delivery record
+    if (store.deliveries) {
+      const del = store.deliveries.find(d => d.orderId === targetId);
+      if (del) {
+        del.deliveryPersonId = null;
+        del.deliveryPersonName = null;
+        del.deliveryPersonPhone = null;
+        del.status = 'AVAILABLE';
+        del.legType = 'LEG_2_FLOUR_DELIVERY';
+      }
+    }
+
+    if (order) {
+      order.status = statusVal;
+      if (!order.timeline) order.timeline = [];
+      order.timeline.push({
+        status: statusVal,
+        timestamp: new Date().toISOString(),
+        note: 'Milling complete — flour ready for Leg 2 delivery to customer'
+      });
+    }
   }
 
   const liveOrders = await getLiveOrders(millId);
   const updatedOrder = liveOrders.find(o => o.id === targetId) || order;
+  const responseStatus = isPickupOrder ? ORDER_STATUS.PICKED_UP : (ORDER_STATUS.READY || 'READY');
 
-  res.json({ status: 'success', message: 'Order completed', data: { order: enrichOrder(updatedOrder || { id: targetId, status: statusVal }) } });
+  res.json({
+    status: 'success',
+    message: isPickupOrder ? 'Order completed (picked up)' : 'Milling complete — order is now available for delivery rider pickup (Mill → Home)',
+    data: { order: enrichOrder(updatedOrder || { id: targetId, status: responseStatus }) }
+  });
 };
 
 /**

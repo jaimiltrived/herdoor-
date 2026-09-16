@@ -70,7 +70,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   const SizedBox(height: 24),
                   Text(
                     'HerDoor',
-                    style: GoogleFonts.playfairDisplay(
+          style: GoogleFonts.plusJakartaSans(
                       fontSize: 42,
                       fontWeight: FontWeight.bold,
                       color: AppTheme.primaryTerracotta,

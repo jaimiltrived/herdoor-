@@ -458,7 +458,7 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
                   children: [
                     Text(
                       'Delivery Receipt & Proof',
-                      style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.plusJakartaSans(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: AppTheme.textPrimary,
@@ -504,9 +504,9 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
             // Item Details
             _buildReceiptRow('Customer', pastOrder['customerName'] ?? 'Customer'),
             _buildReceiptRow(
-              'Total Items / Units',
+              'Total Products',
               parsedBags.length > 1
-                  ? '${parsedBags.length} Products (${parsedBags.length} Units)'
+                  ? '${parsedBags.length} Products'
                   : (parsedBags.isNotEmpty ? parsedBags.first.unitText : '${pastOrder['quantityKg']} kg'),
             ),
             _buildReceiptRow('Flour / Products', pastOrder['grainTypeName'] ?? 'Fresh Atta'),
@@ -601,7 +601,7 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
             const SizedBox(width: 10),
             Text(
               'Trip Sheet & Orders',
-              style: GoogleFonts.playfairDisplay(
+    style: GoogleFonts.plusJakartaSans(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.textPrimary,
@@ -652,68 +652,18 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
     );
   }
 
-  // TAB 1: Current Active / Grouped Orders
   Widget _buildActiveTripsTab() {
-    return RefreshIndicator(
-      color: AppTheme.primaryTerracotta,
-      onRefresh: _loadTripSheetData,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_assignedTrips.isNotEmpty) ...[
-              Text(
-                'Active Grouped & Single Trips In Progress',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              ..._assignedTrips.map((trip) => _buildActiveTripCard(trip)),
-            ] else ...[
-              _buildEmptyActiveTripState(),
-            ],
-
-            const SizedBox(height: 24),
-            // Quick Accept Nearby Orders Carousel
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Quick-Accept Next Nearby Batches',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                TextButton(
-                  onPressed: widget.onExploreRadar,
-                  child: Text('View Radar (5km)', style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryTerracotta)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (_nearbyAvailableTrips.isNotEmpty)
-              ..._nearbyAvailableTrips.take(3).map((trip) => _buildNearbyQuickTripCard(trip))
-            else
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppTheme.borderLight),
-                ),
-                child: Center(
-                  child: Text('All radar orders synced! Check Radar tab for live updates.', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary)),
-                ),
-              ),
-          ],
-        ),
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_assignedTrips.isNotEmpty)
+            ..._assignedTrips.map((t) => _buildActiveTripCard(t))
+          else
+            _buildEmptyActiveTripState(),
+        ],
       ),
     );
   }
@@ -789,7 +739,7 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
           const SizedBox(height: 12),
           Text(
             trip.productBags.length > 1
-                ? '${trip.productBags.length} Products (${trip.productBags.length} Units • ${trip.quantityKg.toStringAsFixed(trip.quantityKg.truncateToDouble() == trip.quantityKg ? 0 : 1)} kg) • ${trip.grainTypeName}'
+                ? '${trip.productBags.length} Products • ${trip.quantityKg.toStringAsFixed(trip.quantityKg.truncateToDouble() == trip.quantityKg ? 0 : 1)} kg • ${trip.grainTypeName}'
                 : '${trip.productBags.isNotEmpty ? trip.productBags.first.unitText : "${trip.quantityKg} kg"} • ${trip.grainTypeName}',
             style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary),
           ),
@@ -886,7 +836,7 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
               final dropAddr = trip.isLeg1GrainPickup ? trip.millAddress : stop.deliveryAddress;
               final stopBags = stop.productBags;
               final stopUnitStr = stopBags.length > 1
-                  ? '${stopBags.length} Products (${stopBags.length} Units)'
+                  ? '${stopBags.length} Products'
                   : (stopBags.isNotEmpty ? stopBags.first.unitText : '${stop.quantityKg.toStringAsFixed(1)} kg');
 
               return Container(
@@ -969,7 +919,7 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
           const SizedBox(height: 16),
           Text(
             'No Ongoing Trips Right Now',
-            style: GoogleFonts.playfairDisplay(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+  style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
           ),
           const SizedBox(height: 6),
           Text(
@@ -988,6 +938,10 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
           ),
+          if (_nearbyAvailableTrips.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            ..._nearbyAvailableTrips.take(2).map((trip) => _buildNearbyQuickTripCard(trip)),
+          ],
         ],
       ),
     );
@@ -1020,7 +974,7 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
                 Text(trip.customerName, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13)),
                 Text(
                   trip.productBags.length > 1
-                      ? '${trip.productBags.length} Products (${trip.productBags.length} Units) • ${trip.grainTypeName}'
+                      ? '${trip.productBags.length} Products • ${trip.grainTypeName}'
                       : '${trip.productBags.isNotEmpty ? trip.productBags.first.unitText : "${trip.quantityKg} kg"} • ${trip.grainTypeName}',
                   style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
                   maxLines: 1,
@@ -1100,7 +1054,6 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
     final stopsList = (item['stops'] is List) ? (item['stops'] as List) : [];
 
     int totalStopProducts = 0;
-    int totalStopUnits = 0;
     double totalStopKg = 0.0;
     double calculatedBatchPayout = 0.0;
 
@@ -1129,7 +1082,6 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
 
         final stopBags = stopParts.map((p) => ParsedProductUnitInfo.parse(p, stopFallbackEach)).toList();
         totalStopProducts += stopBags.isNotEmpty ? stopBags.length : 1;
-        totalStopUnits += stopBags.isNotEmpty ? stopBags.length : 1;
       }
     }
 
@@ -1156,13 +1108,13 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
       final stopCount = stopsList.length;
       final kgFormatted = totalStopKg.toStringAsFixed(totalStopKg.truncateToDouble() == totalStopKg ? 0 : 1);
       if (totalStopProducts > 1) {
-        headerUnitText = '$totalStopProducts Products ($totalStopUnits Units • $kgFormatted kg) • Stacked Batch: $stopCount Orders';
+        headerUnitText = '$totalStopProducts Products ($kgFormatted kg) • Stacked Batch: $stopCount Orders';
       } else {
         headerUnitText = '$kgFormatted kg • Stacked Batch: $stopCount Orders';
       }
     } else {
       headerUnitText = isMultiProduct
-          ? '${parsedBags.length} Products (${parsedBags.length} Units • ${rawQtyKg.toStringAsFixed(rawQtyKg.truncateToDouble() == rawQtyKg ? 0 : 1)} kg)'
+          ? '${parsedBags.length} Products (${rawQtyKg.toStringAsFixed(rawQtyKg.truncateToDouble() == rawQtyKg ? 0 : 1)} kg)'
           : (parsedBags.isNotEmpty ? '${parsedBags.first.unitText} • ${parsedBags.first.cleanName}' : '${rawQtyKg.toStringAsFixed(rawQtyKg.truncateToDouble() == rawQtyKg ? 0 : 1)} kg • $rawGrainType');
     }
 
@@ -1298,7 +1250,7 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
 
               final stopBags = stopParts.map((p) => ParsedProductUnitInfo.parse(p, stopFallbackEach)).toList();
               final stopSummary = stopBags.length > 1
-                  ? '${stopBags.length} Products (${stopBags.length} Units)'
+                  ? '${stopBags.length} Products'
                   : (stopBags.isNotEmpty ? stopBags.first.unitText : '$stopQty kg');
 
               return Container(

@@ -127,7 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Center(
                 child: Text(
                   'Welcome Back',
-                  style: GoogleFonts.playfairDisplay(
+                  style: GoogleFonts.plusJakartaSans(
                     fontSize: 30,
                     fontWeight: FontWeight.bold,
                     color: AppTheme.textPrimary,

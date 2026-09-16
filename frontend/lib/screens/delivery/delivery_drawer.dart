@@ -98,6 +98,9 @@ class _DeliveryDrawerState extends State<DeliveryDrawer> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      // Background loading profile state initialized
+    }
     final currentUser = AuthApiService.instance.currentUser;
     final riderName = _profile?.name ??
         (currentUser?['name']?.toString().trim().isNotEmpty == true
@@ -360,7 +363,7 @@ class _DeliveryDrawerState extends State<DeliveryDrawer> {
                         )
                       : Switch.adaptive(
                           value: _isOnline,
-                          activeColor: const Color(0xFF1E8449),
+                          activeTrackColor: const Color(0xFF1E8449),
                           onChanged: _toggleDutyStatus,
                         ),
                 ],
@@ -687,7 +690,7 @@ class _DeliveryDrawerState extends State<DeliveryDrawer> {
             const SizedBox(width: 8),
             Text(
               'Rider Safety Desk',
-              style: GoogleFonts.playfairDisplay(fontWeight: FontWeight.bold, fontSize: 18),
+    style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 18),
             ),
           ],
         ),
@@ -743,7 +746,7 @@ class _DeliveryDrawerState extends State<DeliveryDrawer> {
             const SizedBox(width: 8),
             Text(
               'Partner Battery Hubs',
-              style: GoogleFonts.playfairDisplay(fontWeight: FontWeight.bold, fontSize: 18),
+    style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 18),
             ),
           ],
         ),
@@ -794,7 +797,7 @@ class _DeliveryDrawerState extends State<DeliveryDrawer> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           'Log Out as Rider?',
-          style: GoogleFonts.playfairDisplay(fontWeight: FontWeight.bold, fontSize: 18),
+style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         content: Text(
           'Are you sure you want to end your shift and log out? You will stop receiving order dispatches.',

@@ -52,7 +52,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ),
         title: Text(
           'Notifications',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,

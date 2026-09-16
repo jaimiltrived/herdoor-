@@ -314,7 +314,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           'Cancel Order?',
-          style: GoogleFonts.playfairDisplay(fontWeight: FontWeight.bold, fontSize: 20),
+style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 20),
         ),
         content: Text(
           'Are you sure you want to cancel order ${_order.orderId}? This cannot be undone once milling begins.',
@@ -405,7 +405,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
         ),
         title: Text(
           _order.millName.isNotEmpty ? _order.millName : 'HerDoor Flour Mill',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 20,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
@@ -581,7 +581,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
               const SizedBox(height: 10),
               Text(
                 _order.itemSummary,
-                style: GoogleFonts.playfairDisplay(
+      style: GoogleFonts.plusJakartaSans(
                   fontSize: 21,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimary,
@@ -1382,7 +1382,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
           children: [
             Text(
               'HerDoor Order Support',
-              style: GoogleFonts.playfairDisplay(fontSize: 20, fontWeight: FontWeight.bold),
+    style: GoogleFonts.plusJakartaSans(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(

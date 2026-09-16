@@ -145,7 +145,7 @@ class _MerchantStoreDetailsScreenState extends State<MerchantStoreDetailsScreen>
         ),
         title: Text(
           'Store Details & Profile',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
@@ -213,7 +213,7 @@ class _MerchantStoreDetailsScreenState extends State<MerchantStoreDetailsScreen>
                               children: [
                                 Text(
                                   _nameController.text.isNotEmpty ? _nameController.text : 'Store Name',
-                                  style: GoogleFonts.playfairDisplay(
+                        style: GoogleFonts.plusJakartaSans(
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,

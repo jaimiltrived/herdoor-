@@ -122,7 +122,7 @@ class _PackageScannerWidgetState extends State<PackageScannerWidget>
           children: [
             Text(
               'Enter the printed code on the package label (e.g. PKG-${widget.orderNumber.replaceAll('#', '')}-01):',
-              style: GoogleFonts.inter(fontSize: 13, color: Colors.grey[700]),
+              style: GoogleFonts.plusJakartaSans(fontSize: 13, color: Colors.grey[700]),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -141,7 +141,7 @@ class _PackageScannerWidgetState extends State<PackageScannerWidget>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey)),
+            child: Text('Cancel', style: GoogleFonts.plusJakartaSans(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -155,7 +155,7 @@ class _PackageScannerWidgetState extends State<PackageScannerWidget>
                 _handleScanInput(code);
               }
             },
-            child: Text('Verify Code', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text('Verify Code', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -193,7 +193,7 @@ class _PackageScannerWidgetState extends State<PackageScannerWidget>
                         ),
                         Text(
                           'Order ${widget.orderNumber} • ${widget.subtitle}',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.plusJakartaSans(
                             fontSize: 12,
                             color: Colors.grey[400],
                           ),
@@ -238,7 +238,7 @@ class _PackageScannerWidgetState extends State<PackageScannerWidget>
                       const SizedBox(width: 10),
                       Text(
                         'Verified Packages',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.plusJakartaSans(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
@@ -324,7 +324,7 @@ class _PackageScannerWidgetState extends State<PackageScannerWidget>
                           ),
                           child: Text(
                             _feedbackMessage!,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.plusJakartaSans(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                               fontSize: 13,
@@ -343,7 +343,7 @@ class _PackageScannerWidgetState extends State<PackageScannerWidget>
                         _isAllVerified
                             ? 'All Packages Verified!'
                             : 'Align package QR inside frame',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.plusJakartaSans(
                           color: Colors.white70,
                           fontSize: 12,
                         ),
@@ -410,14 +410,14 @@ class _PackageScannerWidgetState extends State<PackageScannerWidget>
                             pkg.productName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.plusJakartaSans(
                               color: Colors.grey[300],
                               fontSize: 12,
                             ),
                           ),
                           Text(
                             '${pkg.expectedWeight.toStringAsFixed(1)} ${pkg.unit}',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.plusJakartaSans(
                               color: Colors.amber,
                               fontWeight: FontWeight.bold,
                               fontSize: 12,
@@ -445,7 +445,7 @@ class _PackageScannerWidgetState extends State<PackageScannerWidget>
                     ),
                     onPressed: _showManualEntryDialog,
                     icon: const Icon(Icons.keyboard, size: 18),
-                    label: Text('Manual Code', style: GoogleFonts.inter(fontSize: 13)),
+                    label: Text('Manual Code', style: GoogleFonts.plusJakartaSans(fontSize: 13)),
                   ),
                   const SizedBox(width: 12),
                   Expanded(

@@ -96,7 +96,7 @@ class _MillSafetyScreenState extends State<MillSafetyScreen> {
         ),
         title: Text(
           'Food Safety & Hygiene',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 20,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
@@ -124,7 +124,7 @@ class _MillSafetyScreenState extends State<MillSafetyScreen> {
                     children: [
                       Text(
                         'Mill Hygiene & Quality Verification',
-                        style: GoogleFonts.playfairDisplay(
+              style: GoogleFonts.plusJakartaSans(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
                           color: AppTheme.textPrimary,
@@ -209,7 +209,7 @@ class _MillSafetyScreenState extends State<MillSafetyScreen> {
                             const SizedBox(height: 14),
                             Text(
                               '$_grade Grade Food Safety Index',
-                              style: GoogleFonts.playfairDisplay(
+                    style: GoogleFonts.plusJakartaSans(
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,

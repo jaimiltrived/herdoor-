@@ -65,7 +65,7 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
             children: [
               Text(
                 'Add New Flour / Grain Product',
-                style: GoogleFonts.playfairDisplay(
+      style: GoogleFonts.plusJakartaSans(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimary,
@@ -219,7 +219,7 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
       builder: (context) => AlertDialog(
         title: Text(
           isStockIn ? 'Add Stock (+ Stock In)' : 'Deduct Stock (- Stock Out)',
-          style: GoogleFonts.playfairDisplay(fontWeight: FontWeight.bold),
+style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -293,7 +293,7 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
       builder: (context) => AlertDialog(
         title: Text(
           'Delete ${item.name}?',
-          style: GoogleFonts.playfairDisplay(fontWeight: FontWeight.bold),
+style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
         ),
         content: Text(
           'Are you sure you want to remove this product from your mill inventory?',
@@ -344,7 +344,7 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
                   children: [
                     Text(
                       'Inventory & Supplies',
-                      style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.plusJakartaSans(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
                         color: AppTheme.textPrimary,
@@ -654,7 +654,7 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
                   children: [
                     Text(
                       item.name,
-                      style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.plusJakartaSans(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: AppTheme.textPrimary,
@@ -734,7 +734,7 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
                       children: [
                         Text(
                           '${item.stockKg.toInt()} kg',
-                          style: GoogleFonts.playfairDisplay(
+                style: GoogleFonts.plusJakartaSans(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                             color: item.inStock ? AppTheme.textPrimary : Colors.red[700],
@@ -818,7 +818,7 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
                   children: [
                     Text(
                       'Procure Bulk Raw Grain',
-                      style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.plusJakartaSans(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: AppTheme.textPrimary,
@@ -1007,7 +1007,7 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
               const SizedBox(height: 12),
               Text(
                 'Raw Grain Vendor Procurement',
-                style: GoogleFonts.playfairDisplay(
+      style: GoogleFonts.plusJakartaSans(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
@@ -1090,7 +1090,7 @@ class _MerchantInventoryScreenState extends State<MerchantInventoryScreen> {
               children: [
                 Text(
                   title,
-                  style: GoogleFonts.playfairDisplay(
+        style: GoogleFonts.plusJakartaSans(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: AppTheme.textPrimary,

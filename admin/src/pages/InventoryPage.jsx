@@ -222,7 +222,7 @@ export default function InventoryPage() {
 
                 <div style={{ padding: '0 20px 20px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-light)', paddingTop: 16 }}>
                   <span className="serif-heading" style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--primary-terracotta)' }}>
-                    ${item.price.toFixed(2)}
+                    ₹{item.price.toFixed(2)}
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Stock Toggle</span>
@@ -338,7 +338,7 @@ export default function InventoryPage() {
 
                   <div>
                     <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '4px' }}>
-                      Price ($)
+                      Price (₹)
                     </label>
                     <input
                       type="number" step="0.5" required
@@ -418,7 +418,7 @@ export default function InventoryPage() {
 
                   <div>
                     <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '4px' }}>
-                      Price ($)
+                      Price (₹)
                     </label>
                     <input
                       type="number" step="0.5" required

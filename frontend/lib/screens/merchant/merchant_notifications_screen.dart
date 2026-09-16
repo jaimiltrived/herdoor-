@@ -187,7 +187,7 @@ class _MerchantNotificationsScreenState extends State<MerchantNotificationsScree
         ),
         title: Text(
           'Notifications',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 20,
             fontWeight: FontWeight.bold,
             color: AppTheme.textPrimary,

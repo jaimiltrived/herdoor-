@@ -75,7 +75,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
         title: Text(
           'Edit Profile',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,

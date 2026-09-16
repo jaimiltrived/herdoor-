@@ -75,7 +75,7 @@ class _DeliveryProfileScreenState extends State<DeliveryProfileScreen> {
             : null,
         title: Text(
           'Rider Hub & Profile',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
@@ -333,7 +333,7 @@ class _DeliveryProfileScreenState extends State<DeliveryProfileScreen> {
                   const SizedBox(width: 6),
                   Text(
                     'Shift Booking Hub',
-                    style: GoogleFonts.playfairDisplay(fontSize: 16, fontWeight: FontWeight.bold),
+          style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -412,7 +412,7 @@ class _DeliveryProfileScreenState extends State<DeliveryProfileScreen> {
                   const SizedBox(width: 6),
                   Text(
                     'Ahmedabad Rider Leaderboard',
-                    style: GoogleFonts.playfairDisplay(fontSize: 15, fontWeight: FontWeight.bold),
+          style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),

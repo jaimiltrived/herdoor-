@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
 import '../../models/merchant_models.dart';
@@ -136,6 +137,101 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
     if (success) {
       _fetchOrdersData(showLoading: false);
     }
+  }
+
+  void _showAcceptOrderTimeModal(BuildContext context, MerchantOrder order) {
+    int selectedMins = 30;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Accept Order #${order.orderId}',
+              style: GoogleFonts.plusJakartaSans(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Select estimated milling & packing time for customer & driver:',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [15, 30, 45, 60].map((mins) {
+                      final isSelected = selectedMins == mins;
+                      return ChoiceChip(
+                        label: Text('$mins Mins'),
+                        selected: isSelected,
+                        selectedColor: const Color(0xFF6E5616),
+                        labelStyle: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.bold,
+                          color: isSelected ? Colors.white : AppTheme.textPrimary,
+                        ),
+                        onSelected: (selected) {
+                          if (selected) {
+                            setModalState(() => selectedMins = mins);
+                          }
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _handleAcceptOrder(order);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6E5616),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        'CONFIRM & START MILLING ($selectedMins MINS)',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _executeDeclineWithProof(MerchantOrder order, String reason, String details, int photoCount) async {
@@ -474,9 +570,6 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final int totalOrdersCount =
-        _newOrders.length + _pendingOrders.length + _completedMillingOrders.length + _deliveredOrders.length;
-    final int activeCount = _newOrders.length + _pendingOrders.length;
 
     return RefreshIndicator(
       onRefresh: _fetchOrdersData,
@@ -509,52 +602,31 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
             Row(
               children: [
                 Expanded(
-                  child: Container(
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
+                  child: Material(
+                    color: AppTheme.primaryTerracotta,
+                    borderRadius: BorderRadius.circular(24),
+                    child: InkWell(
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppTheme.borderLight),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.filter_list_rounded, size: 20, color: AppTheme.textPrimary),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Filter',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.textPrimary,
-                          ),
+                      onTap: () => _showExportModal(context),
+                      child: Container(
+                        height: 48,
+                        alignment: Alignment.center,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.file_download_outlined, size: 20, color: Colors.white),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Export',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Container(
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryTerracotta,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.file_download_outlined, size: 20, color: Colors.white),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Export',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -562,79 +634,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Today's Overview Stats Card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFCF9F5),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFF3ECE1)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Today's Overview",
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '$totalOrdersCount',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.textPrimary,
-                              ),
-                            ),
-                            Text(
-                              'Total Orders',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 13,
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '$activeCount',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.primaryTerracotta,
-                              ),
-                            ),
-                            Text(
-                              'Active / Action Required',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 13,
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
+           
             // 4 Filter Toggle Bar: NEW, Pending, Completed, Delivered
             Container(
               padding: const EdgeInsets.all(4),
@@ -895,7 +895,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Units & Quantity',
+                              'Products & Quantity',
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 12,
                                 color: AppTheme.textSecondary,
@@ -903,7 +903,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                             ),
                             Text(
                               order.productBags.length > 1
-                                  ? '${order.productBags.length} Products (${order.productBags.length} Units • ${order.quantityText})'
+                                  ? '${order.productBags.length} Products • ${order.quantityText}'
                                   : (order.productBags.isNotEmpty ? order.productBags.first.unitText : order.quantityText),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -1021,43 +1021,6 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            height: 40,
-            child: OutlinedButton.icon(
-              onPressed: () async {
-                final res = await Navigator.push<bool>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => MillOwnerQrScannerScreen(order: order),
-                  ),
-                );
-                if (mounted) {
-                  if (res == true && order.numericId != null) {
-                    setState(() {
-                      _completedIntakeOrderIds.add(order.numericId!);
-                    });
-                  }
-                  _fetchOrdersData();
-                }
-              },
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFFB7791F),
-                side: const BorderSide(color: Color(0xFFD69E2E)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                backgroundColor: const Color(0xFFFFFBEB),
-              ),
-              icon: const Icon(Icons.qr_code_scanner_rounded, size: 16, color: Color(0xFFB7791F)),
-              label: Text(
-                '🌾 Scan & Inspect Grain Bags (Accept / Reject)',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF92400E),
-                ),
-              ),
-            ),
-          ),
         ],
       );
     } else if (_selectedFilterTab == 1) {
@@ -1208,78 +1171,340 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
     }
   }
 
-  void _showAcceptOrderTimeModal(BuildContext context, MerchantOrder order) {
-    String selectedTime = '30 Mins';
+  // --- EXPORT ORDERS FUNCTIONALITY ---
+
+  String _getTabName(int index) {
+    switch (index) {
+      case 0: return 'NEW';
+      case 1: return 'Pending';
+      case 2: return 'Completed';
+      case 3: return 'Delivered';
+      default: return 'Orders';
+    }
+  }
+
+  void _showExportModal(BuildContext context) {
+    int exportScope = 0; // 0: Current Tab, 1: All Orders
 
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final scopeOrders = exportScope == 0
+                ? _currentTabOrders
+                : [..._newOrders, ..._pendingOrders, ..._completedMillingOrders, ..._deliveredOrders];
+            final tabName = _getTabName(_selectedFilterTab);
+
+            final totalWeight = scopeOrders.fold<double>(0, (sum, o) {
+              final w = double.tryParse(o.quantityText.replaceAll(RegExp(r'[^\d.]'), '')) ?? 0.0;
+              return sum + w;
+            });
+            final totalPrice = scopeOrders.fold<double>(0, (sum, o) => sum + o.totalPrice);
+
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryTerracotta.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.file_download_outlined, color: AppTheme.primaryTerracotta, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Export Orders Report',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            'Generate CSV summary for record keeping',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Select Scope',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ChoiceChip(
+                          label: Text('$tabName (${scopeOrders.length})'),
+                          selected: exportScope == 0,
+                          onSelected: (val) {
+                            setModalState(() => exportScope = 0);
+                          },
+                          selectedColor: AppTheme.primaryTerracotta.withValues(alpha: 0.15),
+                          labelStyle: GoogleFonts.plusJakartaSans(
+                            color: exportScope == 0 ? AppTheme.primaryTerracotta : AppTheme.textSecondary,
+                            fontWeight: exportScope == 0 ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ChoiceChip(
+                          label: Text('All Orders (${_newOrders.length + _pendingOrders.length + _completedMillingOrders.length + _deliveredOrders.length})'),
+                          selected: exportScope == 1,
+                          onSelected: (val) {
+                            setModalState(() => exportScope = 1);
+                          },
+                          selectedColor: AppTheme.primaryTerracotta.withValues(alpha: 0.15),
+                          labelStyle: GoogleFonts.plusJakartaSans(
+                            color: exportScope == 1 ? AppTheme.primaryTerracotta : AppTheme.textSecondary,
+                            fontWeight: exportScope == 1 ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  // Summary Container
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9F6F0),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppTheme.borderLight),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildExportSummaryItem('Orders', '${scopeOrders.length}'),
+                        _buildExportSummaryItem('Weight', '${totalWeight.toStringAsFixed(1)} kg'),
+                        _buildExportSummaryItem('Value', '₹${totalPrice.toStringAsFixed(0)}'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _copyCSVToClipboard(context, scopeOrders);
+                          },
+                          icon: const Icon(Icons.copy_rounded, size: 18),
+                          label: const Text('Copy CSV'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            foregroundColor: AppTheme.primaryTerracotta,
+                            side: const BorderSide(color: AppTheme.primaryTerracotta),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _exportOrdersToCSV(context, scopeOrders);
+                          },
+                          icon: const Icon(Icons.file_download_rounded, size: 18),
+                          label: const Text('Export CSV'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            backgroundColor: AppTheme.primaryTerracotta,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildExportSummaryItem(String label, String value) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.primaryTerracotta,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 11,
+            color: AppTheme.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _generateCSV(List<MerchantOrder> orders) {
+    final StringBuffer buffer = StringBuffer();
+    buffer.writeln('Order ID,Customer Name,Grain Type,Quantity,Total Price (₹),Status,Mill Name,Time');
+    for (final o in orders) {
+      final id = o.orderId;
+      final name = '"${(o.customerName).replaceAll('"', '""')}"';
+      final grain = '"${(o.grainType).replaceAll('"', '""')}"';
+      final quantity = '"${(o.quantityText).replaceAll('"', '""')}"';
+      final price = o.totalPrice;
+      final status = '"${(o.statusTag).replaceAll('"', '""')}"';
+      final mill = '"${(o.millName).replaceAll('"', '""')}"';
+      final time = '"${(o.timeAgo).replaceAll('"', '""')}"';
+      buffer.writeln('$id,$name,$grain,$quantity,$price,$status,$mill,$time');
+    }
+    return buffer.toString();
+  }
+
+  void _copyCSVToClipboard(BuildContext context, List<MerchantOrder> orders) {
+    final csv = _generateCSV(orders);
+    Clipboard.setData(ClipboardData(text: csv));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white),
+            const SizedBox(width: 8),
+            Text('Copied CSV for ${orders.length} orders to clipboard!'),
+          ],
+        ),
+        backgroundColor: Colors.green[700],
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 3),
       ),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Container(
-          padding: const EdgeInsets.all(24),
+    );
+  }
+
+  void _exportOrdersToCSV(BuildContext context, List<MerchantOrder> orders) {
+    final csv = _generateCSV(orders);
+    Clipboard.setData(ClipboardData(text: csv));
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.file_download_done_rounded, color: AppTheme.primaryTerracotta, size: 28),
+            const SizedBox(width: 8),
+            Text(
+              'Orders Report Exported',
+              style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Set Completion Time',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                ),
+                'Exported ${orders.length} orders report in CSV format! (Data copied to clipboard)',
+                style: GoogleFonts.plusJakartaSans(fontSize: 13, color: AppTheme.textSecondary),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 16),
               Text(
-                'Select estimated milling & packing time for ${order.orderId}:',
-                style: GoogleFonts.plusJakartaSans(color: AppTheme.textSecondary, fontSize: 13),
+                'CSV Data Preview:',
+                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13),
               ),
-              const SizedBox(height: 18),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: ['20 Mins', '30 Mins', '45 Mins', '60 Mins'].map((time) {
-                  final isSelected = selectedTime == time;
-                  return GestureDetector(
-                    onTap: () => setModalState(() => selectedTime = time),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFF6E5616) : const Color(0xFFF6F0E7),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        time,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontWeight: FontWeight.bold,
-                          color: isSelected ? Colors.white : AppTheme.textPrimary,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: () {
-                    order.estimatedCompletionTime = selectedTime;
-                    _handleAcceptOrder(order);
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6E5616),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              const SizedBox(height: 8),
+              Container(
+                constraints: const BoxConstraints(maxHeight: 180),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF6F0E7),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppTheme.borderLight),
+                ),
+                child: SingleChildScrollView(
+                  child: SelectableText(
+                    csv,
+                    style: GoogleFonts.firaCode(fontSize: 11, color: AppTheme.textPrimary),
                   ),
-                  child: Text('Confirm & Start Milling', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, color: Colors.white)),
                 ),
               ),
             ],
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Close', style: GoogleFonts.plusJakartaSans(color: AppTheme.textSecondary)),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: csv));
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('CSV copied to clipboard (${orders.length} orders)'),
+                  backgroundColor: AppTheme.primaryTerracotta,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            icon: const Icon(Icons.copy_rounded, size: 16),
+            label: Text('Copy CSV Data', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryTerracotta,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ],
       ),
     );
   }

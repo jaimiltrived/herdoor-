@@ -130,7 +130,7 @@ class _MerchantApplicationScreenState extends State<MerchantApplicationScreen> {
         ),
         title: Text(
           'Become a Shopkeeper',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
@@ -189,7 +189,7 @@ class _MerchantApplicationScreenState extends State<MerchantApplicationScreen> {
                                   children: [
                                     Text(
                                       'Partner with HerDoor',
-                                      style: GoogleFonts.playfairDisplay(
+                            style: GoogleFonts.plusJakartaSans(
                                         fontSize: 20,
                                         fontWeight: FontWeight.bold,
                                         color: Colors.white,

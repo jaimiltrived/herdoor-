@@ -113,8 +113,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return widget.cartItems.fold(0.0, (total, item) => total + (item['price'] * item['quantity']));
   }
 
-  double get _deliveryFee => 2.00;
-  double get _pickupFee => _requiresPickup ? 1.50 : 0.0;
+  double get _deliveryFee => 35.00;
+  double get _pickupFee => _requiresPickup ? 20.00 : 0.0;
   double get _total => _subtotal + _deliveryFee + _pickupFee;
 
   Widget _buildInvoiceRow(String label, String amount, {bool isTotal = false}) {
@@ -153,7 +153,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         elevation: 0,
         title: Text(
           'Checkout',
-          style: GoogleFonts.playfairDisplay(color: AppTheme.primaryTerracotta, fontSize: 22, fontWeight: FontWeight.bold),
+style: GoogleFonts.plusJakartaSans(color: AppTheme.primaryTerracotta, fontSize: 22, fontWeight: FontWeight.bold),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTheme.textPrimary, size: 20),
@@ -209,11 +209,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
               child: Column(
                 children: [
-                  _buildInvoiceRow('Subtotal (${widget.cartItems.length} items)', '\$${_subtotal.toStringAsFixed(2)}'),
-                  if (_requiresPickup) _buildInvoiceRow('Pickup Fee', '\$${_pickupFee.toStringAsFixed(2)}'),
-                  _buildInvoiceRow('Delivery Fee', '\$${_deliveryFee.toStringAsFixed(2)}'),
+                  _buildInvoiceRow('Subtotal (${widget.cartItems.length} items)', '₹${_subtotal.toStringAsFixed(2)}'),
+                  if (_requiresPickup) _buildInvoiceRow('Pickup Fee', '₹${_pickupFee.toStringAsFixed(2)}'),
+                  _buildInvoiceRow('Delivery Fee', '₹${_deliveryFee.toStringAsFixed(2)}'),
                   const Divider(height: 24),
-                  _buildInvoiceRow('Grand Total', '\$${_total.toStringAsFixed(2)}', isTotal: true),
+                  _buildInvoiceRow('Grand Total', '₹${_total.toStringAsFixed(2)}', isTotal: true),
                 ],
               ),
             ),
@@ -307,7 +307,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 );
               },
               child: Text(
-                'Proceed to Payment (\$${_total.toStringAsFixed(2)})',
+                'Proceed to Payment (₹${_total.toStringAsFixed(2)})',
                 style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               ),
             ),

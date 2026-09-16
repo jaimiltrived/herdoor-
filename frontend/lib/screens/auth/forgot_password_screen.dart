@@ -137,7 +137,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         ),
         title: Text(
           'Reset Password',
-          style: GoogleFonts.playfairDisplay(
+          style: GoogleFonts.plusJakartaSans(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
@@ -193,7 +193,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         Center(
           child: Text(
             'Forgot Password?',
-            style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.plusJakartaSans(
               fontSize: 28,
               fontWeight: FontWeight.bold,
               color: AppTheme.textPrimary,
@@ -292,7 +292,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         Center(
           child: Text(
             'Enter Verification Code',
-            style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.plusJakartaSans(
               fontSize: 28,
               fontWeight: FontWeight.bold,
               color: AppTheme.textPrimary,
@@ -415,7 +415,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         Center(
           child: Text(
             'Create New Password',
-            style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.plusJakartaSans(
               fontSize: 28,
               fontWeight: FontWeight.bold,
               color: AppTheme.textPrimary,
@@ -554,7 +554,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         const SizedBox(height: 28),
         Text(
           'Password Reset!',
-          style: GoogleFonts.playfairDisplay(
+          style: GoogleFonts.plusJakartaSans(
             fontSize: 30,
             fontWeight: FontWeight.bold,
             color: AppTheme.textPrimary,

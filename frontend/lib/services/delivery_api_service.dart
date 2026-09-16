@@ -208,7 +208,7 @@ class DeliveryApiService {
 
           if (response.statusCode == 200) {
             final body = jsonDecode(response.body);
-            final list = body['data']?['deliveries'] as List?;
+            final list = (body['data']?['trips'] as List?) ?? (body['data']?['deliveries'] as List?);
             if (list != null && list.isNotEmpty) {
               return DeliveryTrip.fromJson(Map<String, dynamic>.from(list[0] as Map));
             }

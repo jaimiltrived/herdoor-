@@ -6,6 +6,7 @@ import '../services/customer_api_service.dart';
 import 'mill_detail_screen.dart';
 import 'profile_screen.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/favorite_button.dart';
 
 class MillsListScreen extends StatefulWidget {
   final VoidCallback onStartOrder;
@@ -61,13 +62,17 @@ class _MillsListScreenState extends State<MillsListScreen> {
   Future<void> _loadLiveMills() async {
     setState(() => _isLoading = true);
     try {
-      final liveMills = await CustomerApiService.instance.getNearbyMills();
+      final query = _searchController.text.trim();
+      final liveMills = await CustomerApiService.instance.getNearbyMills(
+        category: _selectedCategory,
+        search: query,
+      );
       final liveFavs = await CustomerApiService.instance.getFavorites();
       if (liveFavs != null) {
         MockData.favoriteMillIds.clear();
         MockData.favoriteMillIds.addAll(liveFavs.map((f) => f.id.toString()));
       }
-      if (liveMills != null && liveMills.isNotEmpty && mounted) {
+      if (liveMills != null && mounted) {
         setState(() {
           _allMills = liveMills;
           _isLoading = false;
@@ -119,7 +124,7 @@ class _MillsListScreenState extends State<MillsListScreen> {
               ),
         title: Text(
           'Flour Mills Near You',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
@@ -170,7 +175,7 @@ class _MillsListScreenState extends State<MillsListScreen> {
                                   icon: const Icon(Icons.clear_rounded, color: AppTheme.textMuted),
                                   onPressed: () {
                                     _searchController.clear();
-                                    _applyFilter();
+                                    _loadLiveMills();
                                   },
                                 ),
                               const Padding(
@@ -225,7 +230,7 @@ class _MillsListScreenState extends State<MillsListScreen> {
                           setState(() {
                             _selectedCategory = category['name'];
                           });
-                          _applyFilter();
+                          _loadLiveMills();
                         },
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -382,56 +387,10 @@ class _MillsListScreenState extends State<MillsListScreen> {
                                      Positioned(
                                        top: 10,
                                        right: 10,
-                                       child: GestureDetector(
-                                         onTap: () async {
-                                           final messenger = ScaffoldMessenger.of(context);
-                                           final isFav = MockData.isFavorite(mill.id);
-                                           setState(() {
-                                             MockData.toggleFavorite(mill.id);
-                                           });
-
-                                           if (isFav) {
-                                             await CustomerApiService.instance.removeFavorite(mill.id);
-                                           } else {
-                                             await CustomerApiService.instance.addFavorite(mill.id);
-                                           }
-
-                                           if (!mounted) return;
-                                           messenger.hideCurrentSnackBar();
-                                           messenger.showSnackBar(
-                                             SnackBar(
-                                               content: Text(
-                                                 isFav
-                                                     ? '${mill.name} removed from favorites'
-                                                     : '${mill.name} added to favorites',
-                                                 style: GoogleFonts.plusJakartaSans(),
-                                               ),
-                                               duration: const Duration(seconds: 2),
-                                             ),
-                                           );
-                                         },
-                                         child: Container(
-                                           padding: const EdgeInsets.all(8),
-                                           decoration: BoxDecoration(
-                                             color: Colors.white,
-                                             shape: BoxShape.circle,
-                                             boxShadow: [
-                                               BoxShadow(
-                                                 color: Colors.black.withValues(alpha: 0.15),
-                                                 blurRadius: 6,
-                                               ),
-                                             ],
-                                           ),
-                                           child: Icon(
-                                             MockData.isFavorite(mill.id)
-                                                 ? Icons.favorite_rounded
-                                                 : Icons.favorite_border_rounded,
-                                             color: MockData.isFavorite(mill.id)
-                                                 ? AppTheme.primaryTerracotta
-                                                 : AppTheme.textSecondary,
-                                             size: 18,
-                                           ),
-                                         ),
+                                       child: FavoriteButton(
+                                         mill: mill,
+                                         size: 34,
+                                         iconSize: 18,
                                        ),
                                      ),
                                   ],

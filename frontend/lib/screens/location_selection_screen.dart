@@ -49,7 +49,7 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
         ),
         title: Text(
           'Select Location',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,

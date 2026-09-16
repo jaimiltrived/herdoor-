@@ -274,7 +274,7 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
                             children: [
                               Text(
                                 _displayOrder.productBags.length > 1
-                                    ? 'Items (${_displayOrder.productBags.length} Units)'
+                                    ? '${_displayOrder.productBags.length} Products'
                                     : 'Item',
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 12,

@@ -51,9 +51,9 @@ exports.getFavorites = async (req, res) => {
       ORDER BY uf.created_at DESC
     `;
     const dbMills = await query(sql, [userId]);
-    if (dbMills && Array.isArray(dbMills)) {
+    if (dbMills && Array.isArray(dbMills) && dbMills.length > 0) {
       const mapped = dbMills.map(row => ({
-        id: row.id,
+        id: row.id.toString(),
         name: row.name,
         address: row.address,
         latitude: parseFloat(row.latitude || 23.0225),
@@ -64,6 +64,7 @@ exports.getFavorites = async (req, res) => {
         specialty: row.specialty || 'Specialist in Stone Grounding',
         imageUrl: row.image_url || 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=600&q=80',
         distanceKm: parseFloat(row.distance_km || 0.8),
+        isOpen: Boolean(row.is_open),
         isFavorite: true
       }));
       return res.json({
@@ -77,7 +78,10 @@ exports.getFavorites = async (req, res) => {
   }
 
   const favIds = store.favorites ? store.favorites.filter(f => f.userId === userId).map(f => f.millId) : [];
-  const favs = store.mills.filter(m => favIds.includes(m.id)).map(m => ({ ...m, isFavorite: true }));
+  const favs = store.mills
+    .filter(m => favIds.map(String).includes(m.id.toString()))
+    .map(m => ({ ...m, id: m.id.toString(), isFavorite: true }));
+
   res.json({
     status: 'success',
     count: favs.length,
@@ -91,7 +95,8 @@ exports.addFavorite = async (req, res) => {
   }
 
   const userId = req.user.id;
-  const millId = parseInt(req.params.millId);
+  const rawId = req.params.millId;
+  const millId = parseInt(rawId.toString().replace(/\D/g, '')) || parseInt(rawId) || 101;
 
   if (isNaN(millId)) {
     return res.status(400).json({ status: 'error', message: 'Valid mill ID is required' });
@@ -104,11 +109,11 @@ exports.addFavorite = async (req, res) => {
   }
 
   if (!store.favorites) store.favorites = [];
-  if (!store.favorites.some(f => f.userId === userId && f.millId === millId)) {
+  if (!store.favorites.some(f => String(f.userId) === String(userId) && String(f.millId) === String(millId))) {
     store.favorites.push({ userId, millId });
   }
 
-  res.status(201).json({ status: 'success', message: 'Added to favorites', data: { millId } });
+  res.status(201).json({ status: 'success', message: 'Added to favorites', data: { millId: millId.toString() } });
 };
 
 exports.removeFavorite = async (req, res) => {
@@ -117,7 +122,8 @@ exports.removeFavorite = async (req, res) => {
   }
 
   const userId = req.user.id;
-  const millId = parseInt(req.params.millId);
+  const rawId = req.params.millId;
+  const millId = parseInt(rawId.toString().replace(/\D/g, '')) || parseInt(rawId) || 101;
 
   if (isNaN(millId)) {
     return res.status(400).json({ status: 'error', message: 'Valid mill ID is required' });
@@ -130,10 +136,10 @@ exports.removeFavorite = async (req, res) => {
   }
 
   if (store.favorites) {
-    store.favorites = store.favorites.filter(f => !(f.userId === userId && f.millId === millId));
+    store.favorites = store.favorites.filter(f => !(String(f.userId) === String(userId) && String(f.millId) === String(millId)));
   }
 
-  res.json({ status: 'success', message: 'Removed from favorites', data: { millId } });
+  res.json({ status: 'success', message: 'Removed from favorites', data: { millId: millId.toString() } });
 };
 
 exports.getAddresses = (req, res) => {

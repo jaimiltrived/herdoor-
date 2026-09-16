@@ -27,7 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         title: Text(
           'Settings',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
@@ -221,7 +221,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     Text(
                       'HerDoor Flour Mill & Delivery',
-                      style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.plusJakartaSans(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: AppTheme.primaryTerracotta,

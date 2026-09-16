@@ -147,7 +147,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         ),
         title: Text(
           'Order Invoice',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
@@ -175,7 +175,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                     const SizedBox(height: 16),
                     Text(
                       'Order Successful',
-                      style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.plusJakartaSans(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
                         color: AppTheme.textPrimary,
@@ -331,7 +331,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               ),
                             ),
                             Text(
-                              '\$$itemTotal',
+                              '₹$itemTotal',
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
@@ -343,10 +343,10 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                       );
                     }),
                     const Divider(height: 24, color: AppTheme.borderLight),
-                    _buildInvoiceRow('Subtotal', '\$${widget.subtotal.toStringAsFixed(2)}'),
+                    _buildInvoiceRow('Subtotal', '₹${widget.subtotal.toStringAsFixed(2)}'),
                     if (widget.pickupFee > 0)
-                      _buildInvoiceRow('Pickup Fee', '\$${widget.pickupFee.toStringAsFixed(2)}'),
-                    _buildInvoiceRow('Delivery Fee', '\$${widget.deliveryFee.toStringAsFixed(2)}'),
+                      _buildInvoiceRow('Pickup Fee', '₹${widget.pickupFee.toStringAsFixed(2)}'),
+                    _buildInvoiceRow('Delivery Fee', '₹${widget.deliveryFee.toStringAsFixed(2)}'),
                     const Divider(height: 24, color: AppTheme.borderLight),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -360,8 +360,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                           ),
                         ),
                         Text(
-                          '\$${widget.total.toStringAsFixed(2)}',
-                          style: GoogleFonts.playfairDisplay(
+                          '₹${widget.total.toStringAsFixed(2)}',
+                style: GoogleFonts.plusJakartaSans(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
                             color: AppTheme.primaryTerracotta,

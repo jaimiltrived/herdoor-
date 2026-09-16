@@ -296,9 +296,9 @@ exports.getActiveOrders = async (req, res) => {
 
   try {
     const userId = req.user.id;
-    // Task 3: Exclude PROCESSING, PACKING, READY, RECEIVED_AT_MILL from Customer Active List
+    // Include ALL active leg 1 and leg 2 statuses (excluding only finalized ones)
     const dbOrders = await query(
-      `SELECT o.*, m.name as mill_name FROM orders o LEFT JOIN mills m ON o.mill_id = m.id WHERE o.user_id = ? AND o.status IN ('PLACED', 'ACCEPTED', 'CONFIRMED', 'ASSIGNED', 'OUT_FOR_DELIVERY', 'RETURN_TO_CUSTOMER', 'REJECTED_AT_MILL') ORDER BY o.id DESC`,
+      `SELECT o.*, m.name as mill_name FROM orders o LEFT JOIN mills m ON o.mill_id = m.id WHERE o.user_id = ? AND o.status NOT IN ('DELIVERED', 'COMPLETED', 'CANCELLED', 'RETURNED', 'RETURNED_TO_CUSTOMER') ORDER BY o.id DESC`,
       [userId]
     );
     if (dbOrders && Array.isArray(dbOrders)) {
@@ -331,7 +331,7 @@ exports.getActiveOrders = async (req, res) => {
     console.warn('MySQL getActiveOrders error:', err.message);
   }
 
-  const memoryOrders = store.orders.filter(o => o.userId === req.user.id && ['PLACED', 'ACCEPTED', 'PROCESSING', 'PACKING', 'READY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'].includes(o.status));
+  const memoryOrders = store.orders.filter(o => o.userId === req.user.id && !['DELIVERED', 'COMPLETED', 'CANCELLED', 'RETURNED', 'RETURNED_TO_CUSTOMER'].includes(o.status));
   res.json({ status: 'success', count: memoryOrders.length, data: { orders: memoryOrders } });
 };
 

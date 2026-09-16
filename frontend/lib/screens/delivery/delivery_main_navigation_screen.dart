@@ -8,6 +8,8 @@ import 'delivery_earnings_screen.dart';
 import 'delivery_profile_screen.dart';
 import 'delivery_drawer.dart';
 
+import '../../services/auth_api_service.dart';
+
 class DeliveryMainNavigationScreen extends StatefulWidget {
   final VoidCallback onLogout;
   final VoidCallback onSwitchToCustomer;
@@ -29,12 +31,51 @@ class _DeliveryMainNavigationScreenState extends State<DeliveryMainNavigationScr
   int _currentIndex = 0;
   DeliveryTrip? _currentActiveTrip;
 
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedState();
+  }
+
+  Future<void> _loadSavedState() async {
+    final tab = await AuthApiService.instance.getSavedTab(UserRole.delivery);
+    final tripData = await AuthApiService.instance.getSavedActiveTripData();
+
+    if (mounted) {
+      setState(() {
+        if (tab >= 0 && tab < 4) {
+          _currentIndex = tab;
+        }
+        if (tripData != null) {
+          try {
+            _currentActiveTrip = DeliveryTrip.fromJson(tripData);
+            _currentIndex = 1; // Direct to trip sheet if active trip restored
+          } catch (e) {
+            debugPrint('Failed to parse saved active trip: $e');
+          }
+        }
+      });
+    }
+  }
+
   void _openDrawer() {
     _scaffoldKey.currentState?.openDrawer();
   }
 
   void _onSelectTab(int index) {
     setState(() => _currentIndex = index);
+    AuthApiService.instance.saveActiveTab(UserRole.delivery, index);
+  }
+
+  void _setActiveTrip(DeliveryTrip? trip) {
+    setState(() {
+      _currentActiveTrip = trip;
+    });
+    if (trip != null) {
+      AuthApiService.instance.saveActiveTripData(trip.toJson());
+    } else {
+      AuthApiService.instance.clearActiveTripData();
+    }
   }
 
   @override
@@ -43,23 +84,21 @@ class _DeliveryMainNavigationScreenState extends State<DeliveryMainNavigationScr
       DeliveryDashboardScreen(
         onOpenDrawer: _openDrawer,
         onTripAccepted: (trip) {
-          setState(() {
-            _currentActiveTrip = trip;
-            _currentIndex = 1; // Switch to Trip Sheet tab
-          });
+          _setActiveTrip(trip);
+          _onSelectTab(1); // Switch to Trip Sheet tab
         },
       ),
       DeliveryTripSheetScreen(
         activeTrip: _currentActiveTrip,
         onOpenDrawer: _openDrawer,
         onTripSelected: (trip) {
-          setState(() => _currentActiveTrip = trip);
+          _setActiveTrip(trip);
         },
         onExploreRadar: () {
-          setState(() => _currentIndex = 0);
+          _onSelectTab(0);
         },
         onTripCompleted: () {
-          setState(() => _currentActiveTrip = null);
+          _setActiveTrip(null);
         },
       ),
       DeliveryEarningsScreen(

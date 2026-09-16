@@ -83,7 +83,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
         title: Text(
           'Create Account',
-          style: GoogleFonts.playfairDisplay(
+          style: GoogleFonts.plusJakartaSans(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
@@ -98,7 +98,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             children: [
               Text(
                 'Join HerDoor Flour Mill',
-                style: GoogleFonts.playfairDisplay(
+                style: GoogleFonts.plusJakartaSans(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimary,

@@ -3,7 +3,7 @@ const { query } = require('../config/database');
 const { calculateDistance } = require('../utils/geo');
 
 exports.getNearbyMills = async (req, res) => {
-  const { latitude, longitude, radius = 10 } = req.query;
+  const { latitude, longitude, radius = 10, category, search } = req.query;
 
   if (!latitude || !longitude) {
     return res.status(400).json({
@@ -25,10 +25,22 @@ exports.getNearbyMills = async (req, res) => {
 
   let millsList = [];
   try {
-    const dbMills = await query(
-      'SELECT * FROM mills WHERE latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ? LIMIT 50',
-      [minLat, maxLat, minLon, maxLon]
-    );
+    let sql = 'SELECT * FROM mills WHERE latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?';
+    const params = [minLat, maxLat, minLon, maxLon];
+
+    if (category && category.trim() !== '' && category.trim().toLowerCase() !== 'all') {
+      sql += ' AND (LOWER(specialty) LIKE ? OR LOWER(name) LIKE ?)';
+      params.push(`%${category.trim().toLowerCase()}%`, `%${category.trim().toLowerCase()}%`);
+    }
+
+    if (search && search.trim() !== '') {
+      sql += ' AND (LOWER(name) LIKE ? OR LOWER(specialty) LIKE ? OR LOWER(address) LIKE ?)';
+      params.push(`%${search.trim().toLowerCase()}%`, `%${search.trim().toLowerCase()}%`, `%${search.trim().toLowerCase()}%`);
+    }
+
+    sql += ' LIMIT 50';
+
+    const dbMills = await query(sql, params);
     if (dbMills && Array.isArray(dbMills) && dbMills.length > 0) {
       millsList = dbMills.map(m => ({
         id: m.id,
@@ -53,7 +65,7 @@ exports.getNearbyMills = async (req, res) => {
     millsList = store.mills;
   }
 
-  const nearby = millsList
+  let nearby = millsList
     .map(mill => {
       const distance = calculateDistance(userLat, userLon, mill.latitude, mill.longitude);
       return {
@@ -67,12 +79,33 @@ exports.getNearbyMills = async (req, res) => {
         isOpen: mill.isOpen,
         estimatedTime: mill.estimatedTime,
         services: mill.services || ['Flour Grinding', 'Home Delivery'],
+        specialty: mill.specialty || 'Fresh Stone Ground Flour',
         latitude: mill.latitude,
         longitude: mill.longitude
       };
     })
     .filter(m => m.distance <= maxRadius)
     .sort((a, b) => a.distance - b.distance);
+
+  if (category && category.trim() !== '' && category.trim().toLowerCase() !== 'all') {
+    const catLower = category.trim().toLowerCase();
+    nearby = nearby.filter(m => {
+      const specialty = (m.specialty || '').toLowerCase();
+      const name = (m.name || '').toLowerCase();
+      const services = (m.services || []).join(' ').toLowerCase();
+      return specialty.includes(catLower) || name.includes(catLower) || services.includes(catLower);
+    });
+  }
+
+  if (search && search.trim() !== '') {
+    const searchLower = search.trim().toLowerCase();
+    nearby = nearby.filter(m => {
+      const specialty = (m.specialty || '').toLowerCase();
+      const name = (m.name || '').toLowerCase();
+      const address = (m.address || '').toLowerCase();
+      return name.includes(searchLower) || specialty.includes(searchLower) || address.includes(searchLower);
+    });
+  }
 
   res.json({
     status: 'success',

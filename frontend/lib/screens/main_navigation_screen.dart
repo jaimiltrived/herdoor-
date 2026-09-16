@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'favorites_screen.dart';
 import '../theme/app_theme.dart';
+import '../models/merchant_models.dart';
+import '../services/auth_api_service.dart';
 import 'dashboard_screen.dart';
 import 'mills_list_screen.dart';
 import 'orders_list_screen.dart';
@@ -25,11 +27,27 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
   bool _isDrawerOpen = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedTabState();
+  }
+
+  Future<void> _loadSavedTabState() async {
+    final tab = await AuthApiService.instance.getSavedTab(UserRole.customer);
+    if (mounted && tab >= 0 && tab < 4) {
+      setState(() {
+        _currentIndex = tab;
+      });
+    }
+  }
+
   void _onSelectTab(int index) {
     setState(() {
       _currentIndex = index;
       _isDrawerOpen = false;
     });
+    AuthApiService.instance.saveActiveTab(UserRole.customer, index);
   }
 
   void _toggleDrawer() {

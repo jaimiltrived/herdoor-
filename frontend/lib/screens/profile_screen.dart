@@ -119,7 +119,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 : null),
         title: Text(
           'My Profile',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,

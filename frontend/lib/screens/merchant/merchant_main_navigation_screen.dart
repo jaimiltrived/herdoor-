@@ -7,6 +7,8 @@ import 'merchant_orders_screen.dart';
 import 'merchant_inventory_screen.dart';
 import 'merchant_profile_screen.dart';
 import '../../services/merchant_api_service.dart';
+import '../../services/auth_api_service.dart';
+import '../../models/merchant_models.dart';
 import 'merchant_notifications_screen.dart';
 
 class MerchantMainNavigationScreen extends StatefulWidget {
@@ -32,6 +34,16 @@ class _MerchantMainNavigationScreenState extends State<MerchantMainNavigationScr
   void initState() {
     super.initState();
     _fetchUnreadCount();
+    _loadSavedTabState();
+  }
+
+  Future<void> _loadSavedTabState() async {
+    final tab = await AuthApiService.instance.getSavedTab(UserRole.merchant);
+    if (mounted && tab >= 0 && tab < 4) {
+      setState(() {
+        _currentIndex = tab;
+      });
+    }
   }
 
   Future<void> _fetchUnreadCount() async {
@@ -47,6 +59,7 @@ class _MerchantMainNavigationScreenState extends State<MerchantMainNavigationScr
     setState(() {
       _currentIndex = index;
     });
+    AuthApiService.instance.saveActiveTab(UserRole.merchant, index);
   }
 
   @override

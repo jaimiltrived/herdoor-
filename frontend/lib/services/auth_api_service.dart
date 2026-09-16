@@ -57,16 +57,107 @@ class AuthApiService {
     }
   }
 
-  /// Logout and clear storage
+  /// Logout but preserve last active stage & stage preferences for seamless recovery upon re-login
   Future<void> logout() async {
     _token = null;
     _currentUser = null;
     _savedRole = null;
     if (!kIsWeb) {
       try {
-        await _storage.deleteAll();
+        await _storage.delete(key: 'jwt_token');
+        await _storage.delete(key: 'current_user');
       } catch (_) {}
     }
+  }
+
+  /// Save active navigation tab index for a specific user role
+  Future<void> saveActiveTab(UserRole role, int index) async {
+    if (kIsWeb) return;
+    try {
+      final key = 'last_tab_${role.name}';
+      await _storage.write(key: key, value: index.toString());
+    } catch (e) {
+      debugPrint('Error saving active tab: $e');
+    }
+  }
+
+  /// Get saved navigation tab index for a specific user role
+  Future<int> getSavedTab(UserRole role) async {
+    if (kIsWeb) return 0;
+    try {
+      final key = 'last_tab_${role.name}';
+      final val = await _storage.read(key: key);
+      if (val != null) {
+        return int.tryParse(val) ?? 0;
+      }
+    } catch (e) {
+      debugPrint('Error loading saved tab: $e');
+    }
+    return 0;
+  }
+
+  /// Save active delivery trip JSON payload to survive restarts & app closures
+  Future<void> saveActiveTripData(Map<String, dynamic> tripJson) async {
+    if (kIsWeb) return;
+    try {
+      await _storage.write(key: 'active_delivery_trip', value: jsonEncode(tripJson));
+    } catch (e) {
+      debugPrint('Error saving active trip: $e');
+    }
+  }
+
+  /// Retrieve active delivery trip JSON payload
+  Future<Map<String, dynamic>?> getSavedActiveTripData() async {
+    if (kIsWeb) return null;
+    try {
+      final str = await _storage.read(key: 'active_delivery_trip');
+      if (str != null && str.isNotEmpty) {
+        return jsonDecode(str) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('Error reading saved trip data: $e');
+    }
+    return null;
+  }
+
+  /// Clear active delivery trip payload on completion
+  Future<void> clearActiveTripData() async {
+    if (kIsWeb) return;
+    try {
+      await _storage.delete(key: 'active_delivery_trip');
+    } catch (_) {}
+  }
+
+  /// Save active order ID or tracking state
+  Future<void> saveActiveOrderData(Map<String, dynamic> orderJson) async {
+    if (kIsWeb) return;
+    try {
+      await _storage.write(key: 'active_customer_order', value: jsonEncode(orderJson));
+    } catch (e) {
+      debugPrint('Error saving active order: $e');
+    }
+  }
+
+  /// Retrieve active order JSON payload
+  Future<Map<String, dynamic>?> getSavedActiveOrderData() async {
+    if (kIsWeb) return null;
+    try {
+      final str = await _storage.read(key: 'active_customer_order');
+      if (str != null && str.isNotEmpty) {
+        return jsonDecode(str) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('Error reading saved order data: $e');
+    }
+    return null;
+  }
+
+  /// Clear active order payload
+  Future<void> clearActiveOrderData() async {
+    if (kIsWeb) return;
+    try {
+      await _storage.delete(key: 'active_customer_order');
+    } catch (_) {}
   }
 
   /// User / Merchant / Rider / Admin Login

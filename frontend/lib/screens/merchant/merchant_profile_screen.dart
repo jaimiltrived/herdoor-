@@ -91,7 +91,7 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
           children: [
             Text(
               'Edit Merchant Profile',
-              style: GoogleFonts.playfairDisplay(
+    style: GoogleFonts.plusJakartaSans(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.textPrimary,
@@ -234,7 +234,7 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
                                 Expanded(
                                   child: Text(
                                     _millName,
-                                    style: GoogleFonts.playfairDisplay(
+                          style: GoogleFonts.plusJakartaSans(
                                       fontSize: 19,
                                       fontWeight: FontWeight.bold,
                                       color: AppTheme.textPrimary,

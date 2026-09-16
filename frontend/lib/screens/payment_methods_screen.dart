@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import '../services/customer_api_service.dart';
+import '../models/app_models.dart';
 import 'invoice_screen.dart';
 
 class PaymentMethodsScreen extends StatefulWidget {
@@ -74,7 +75,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
         ),
         title: Text(
           'Payment',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
@@ -95,7 +96,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              '\$${widget.total.toStringAsFixed(2)}',
+              '₹${widget.total.toStringAsFixed(2)}',
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
@@ -247,6 +248,36 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                       address: widget.address,
                     );
 
+                    // Sync to MockData.orders for instant link across Customer, Merchant & Delivery UIs
+                    final millisStr = DateTime.now().millisecondsSinceEpoch.toString();
+                    final fallbackId = '#HD-${millisStr.substring(millisStr.length - 4)}';
+                    final newOrderModel = OrderModel(
+                      orderId: placedOrder?.orderId ?? fallbackId,
+                      millName: widget.millName,
+                      itemSummary: combinedGrainNames,
+                      quantityKg: '${totalQuantityKg.toStringAsFixed(0)} kg',
+                      estimatedDelivery: 'Within 20 minutes',
+                      statusStep: 'IN PROGRESS',
+                      totalPrice: widget.total,
+                      isActive: true,
+                      date: 'Just now',
+                      selectedGrain: combinedGrainNames,
+                      pickupAddress: widget.address,
+                      deliveryAddress: widget.address,
+                      paymentMethod: paymentStr,
+                      millingFee: widget.subtotal,
+                      deliveryFee: widget.deliveryFee,
+                      items: widget.cartItems,
+                      trackingSteps: [
+                        TrackingStep(title: 'Order Placed', subtitle: 'We received your order.', timeText: 'Just now', isCompleted: true),
+                        TrackingStep(title: 'Milling in Progress', subtitle: 'Stone chakki grinding', timeText: 'In progress', isCurrent: true),
+                        TrackingStep(title: 'Ready for Pickup', subtitle: 'Milled & sealed', timeText: 'Pending'),
+                        TrackingStep(title: 'Out for Delivery', subtitle: 'Assigned to driver', timeText: 'Pending'),
+                        TrackingStep(title: 'Delivered', subtitle: 'Handover at doorstep', timeText: 'Pending'),
+                      ],
+                    );
+                    MockData.orders.insert(0, newOrderModel);
+
                     if (!mounted) return;
                     setState(() => _isProcessing = false);
                     navigator.push(
@@ -280,7 +311,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                     child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
                   )
                 : Text(
-                    'Pay \$${widget.total.toStringAsFixed(2)}',
+                    'Pay ₹${widget.total.toStringAsFixed(2)}',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,

@@ -39,12 +39,12 @@ class AppTheme {
         onSurface: textPrimary,
       ),
       textTheme: TextTheme(
-        displayLarge: GoogleFonts.playfairDisplay(
+        displayLarge: GoogleFonts.plusJakartaSans(
           fontSize: 32,
           fontWeight: FontWeight.bold,
           color: textPrimary,
         ),
-        displayMedium: GoogleFonts.playfairDisplay(
+        displayMedium: GoogleFonts.plusJakartaSans(
           fontSize: 26,
           fontWeight: FontWeight.bold,
           color: textPrimary,
@@ -85,7 +85,7 @@ class AppTheme {
         elevation: 0,
         centerTitle: true,
         iconTheme: const IconThemeData(color: textPrimary),
-        titleTextStyle: GoogleFonts.playfairDisplay(
+        titleTextStyle: GoogleFonts.plusJakartaSans(
           fontSize: 22,
           fontWeight: FontWeight.bold,
           color: primaryTerracotta,

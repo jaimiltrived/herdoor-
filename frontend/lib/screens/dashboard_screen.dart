@@ -12,6 +12,7 @@ import 'order_tracking_screen.dart';
 import 'cart_screen.dart';
 import 'profile_screen.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/favorite_button.dart';
 
 class DashboardScreen extends StatefulWidget {
   final Function(int) onNavigateTab;
@@ -60,10 +61,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final millsFuture = CustomerApiService.instance.getNearbyMills();
       final ordersFuture = CustomerApiService.instance.getCustomerOrders();
+      final favsFuture = CustomerApiService.instance.getFavorites();
 
-      final results = await Future.wait([millsFuture, ordersFuture]);
+      final results = await Future.wait([millsFuture, ordersFuture, favsFuture]);
 
       if (mounted) {
+        final liveFavs = results[2] as List<FlourMill>?;
+        if (liveFavs != null) {
+          MockData.favoriteMillIds.clear();
+          MockData.favoriteMillIds.addAll(liveFavs.map((f) => f.id.toString()));
+        }
         setState(() {
           _dynamicMills = results[0] as List<FlourMill>?;
           _dynamicOrders = results[1] as List<MerchantOrder>?;
@@ -152,19 +159,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (_dynamicOrders != null && _dynamicOrders!.isNotEmpty) {
       for (final o in _dynamicOrders!) {
         final s = o.statusTag.toUpperCase();
-        final isActive = [
-          'NEW',
-          'PLACED',
-          'ACCEPTED',
-          'PROCESSING',
-          'PACKING',
-          'READY',
-          'READY FOR PICKUP',
-          'READY_FOR_PICKUP',
-          'OUT FOR DELIVERY',
-          'OUT_FOR_DELIVERY',
-          'IN PROGRESS'
+        final isTerminal = [
+          'COMPLETED',
+          'DELIVERED',
+          'CANCELLED',
+          'CANCELED',
+          'RETURNED',
+          'RETURNED_TO_CUSTOMER',
+          'REJECTED',
+          'REJECTED_AT_MILL'
         ].contains(s);
+        final isActive = !isTerminal;
 
         if (isActive) {
           activeOrdersList.add(
@@ -193,9 +198,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     // Resolve past orders
-    final dynamicPastOrders = _dynamicOrders?.where((o) =>
-        ['COMPLETED', 'DELIVERED'].contains(o.statusTag.toUpperCase())
-    ).toList();
+    final dynamicPastOrders = _dynamicOrders?.where((o) {
+      final s = o.statusTag.toUpperCase();
+      return ['COMPLETED', 'DELIVERED', 'CANCELLED', 'CANCELED', 'RETURNED', 'RETURNED_TO_CUSTOMER', 'REJECTED'].contains(s);
+    }).toList();
 
     final pastOrders = dynamicPastOrders ?? <dynamic>[];
 
@@ -235,7 +241,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         const SizedBox(width: 4),
                         Text(
                           'HerDoor',
-                          style: GoogleFonts.playfairDisplay(
+                          style: GoogleFonts.plusJakartaSans(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
                             color: AppTheme.primaryTerracotta,
@@ -619,22 +625,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: mill.isOpen
-                                                ? AppTheme.mustardGold.withValues(alpha: 0.2)
-                                                : Colors.grey.shade200,
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          child: Text(
-                                            mill.statusText,
-                                            style: GoogleFonts.plusJakartaSans(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                              color: mill.isOpen ? AppTheme.mustardDark : Colors.grey.shade700,
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: mill.isOpen
+                                                    ? AppTheme.mustardGold.withValues(alpha: 0.2)
+                                                    : Colors.grey.shade200,
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: Text(
+                                                mill.statusText,
+                                                style: GoogleFonts.plusJakartaSans(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: mill.isOpen ? AppTheme.mustardDark : Colors.grey.shade700,
+                                                ),
+                                              ),
                                             ),
-                                          ),
+                                            const SizedBox(width: 8),
+                                            FavoriteButton(
+                                              mill: mill,
+                                              size: 32,
+                                              iconSize: 18,
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
@@ -1008,7 +1024,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     color: AppTheme.primaryTerracotta,
                   ),
                 ),
-                const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.primaryTerracotta),
               ],
             ),
           ],

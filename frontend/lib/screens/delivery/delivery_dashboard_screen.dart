@@ -33,6 +33,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
   RiderEarnings? _earnings;
   List<DeliveryTrip> _allTrips = [];
   List<DeliveryTrip> _assignedTrips = [];
+  bool _hasAutoResumedActiveTrip = false;
   final Set<int> _selectedTripOrderIds = <int>{};
   DeliveryTrip? _incomingAlertTrip;
   int _alertCountdown = 30;
@@ -87,6 +88,36 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
     super.dispose();
   }
 
+  List<DeliveryTrip> _filterActiveAssignedTrips(List<DeliveryTrip> rawAssigned, Set<dynamic> completedKeys) {
+    final List<DeliveryTrip> filtered = [];
+    final Set<dynamic> seen = {};
+
+    for (final a in rawAssigned) {
+      final statusUpper = a.status.toUpperCase();
+      if (completedKeys.contains(a.orderId) ||
+          completedKeys.contains(a.orderNumber) ||
+          (a.groupCode != null && completedKeys.contains(a.groupCode)) ||
+          statusUpper == 'DELIVERED' ||
+          statusUpper == 'COMPLETED' ||
+          statusUpper == 'CANCELLED') {
+        continue;
+      }
+
+      if (a.isBatch && a.stops.isNotEmpty) {
+        final allStopsDone = a.stops.every((s) => completedKeys.contains(s.orderId) || completedKeys.contains(s.orderNumber));
+        if (allStopsDone) continue;
+      }
+
+      final key = a.orderNumber.isNotEmpty ? a.orderNumber : '${a.orderId}';
+      if (seen.contains(key) || seen.contains(a.orderId)) continue;
+      seen.add(key);
+      seen.add(a.orderId);
+      filtered.add(a);
+    }
+
+    return filtered;
+  }
+
   void _startRealtimeLiveSync() {
     _realtimeSyncTimer?.cancel();
     _realtimeSyncTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
@@ -123,9 +154,11 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           }
         }
 
-        final assignedIds = assigned.map((a) => a.orderId).toSet();
-        final assignedNums = assigned.map((a) => a.orderNumber).toSet();
-        for (var a in assigned) {
+        final filteredAssigned = _filterActiveAssignedTrips(assigned, completedKeys);
+
+        final assignedIds = filteredAssigned.map((a) => a.orderId).toSet();
+        final assignedNums = filteredAssigned.map((a) => a.orderNumber).toSet();
+        for (var a in filteredAssigned) {
           assignedIds.addAll(a.stops.map((s) => s.orderId));
           assignedNums.addAll(a.stops.map((s) => s.orderNumber));
         }
@@ -155,10 +188,10 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           final previousIds = _allTrips.map((t) => t.orderId).toSet();
           final newTrips = filteredTrips.where((t) => !previousIds.contains(t.orderId)).toList();
 
-          if (newTrips.isNotEmpty || filteredTrips.length != _allTrips.length) {
+          if (newTrips.isNotEmpty || filteredTrips.length != _allTrips.length || filteredAssigned.length != _assignedTrips.length) {
             setState(() {
               _allTrips = filteredTrips;
-              _assignedTrips = assigned;
+              _assignedTrips = filteredAssigned;
               _earnings = earnings;
               _selectedTripOrderIds.retainAll(filteredTrips.map((t) => t.orderId));
             });
@@ -207,9 +240,11 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
         }
       }
 
-      final assignedIds = assigned.map((a) => a.orderId).toSet();
-      final assignedNums = assigned.map((a) => a.orderNumber).toSet();
-      for (var a in assigned) {
+      final filteredAssigned = _filterActiveAssignedTrips(assigned, completedKeys);
+
+      final assignedIds = filteredAssigned.map((a) => a.orderId).toSet();
+      final assignedNums = filteredAssigned.map((a) => a.orderNumber).toSet();
+      for (var a in filteredAssigned) {
         assignedIds.addAll(a.stops.map((s) => s.orderId));
         assignedNums.addAll(a.stops.map((s) => s.orderNumber));
       }
@@ -241,10 +276,37 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           _isOnline = _profile?.isOnline ?? true;
           _earnings = results[1] as RiderEarnings;
           _allTrips = filteredTrips;
-          _assignedTrips = assigned;
+          _assignedTrips = filteredAssigned;
           _selectedTripOrderIds.retainAll(filteredTrips.map((t) => t.orderId));
           _isLoading = false;
         });
+
+        if (!_hasAutoResumedActiveTrip && filteredAssigned.isNotEmpty) {
+          _hasAutoResumedActiveTrip = true;
+          final activeTrip = filteredAssigned.first;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ActiveTripScreen(
+                    trip: activeTrip,
+                    onTripCompleted: () {
+                      if (Navigator.canPop(context)) {
+                        Navigator.pop(context);
+                      }
+                      DeliveryApiService.instance.invalidateCache();
+                      _loadDashboardData();
+                    },
+                  ),
+                ),
+              ).then((_) {
+                DeliveryApiService.instance.invalidateCache();
+                _loadDashboardData();
+              });
+            }
+          });
+        }
       }
     } catch (_) {
       if (mounted) {
@@ -674,15 +736,23 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
     );
   }
 
-  List<DeliveryTrip> get _filteredTrips {
+  List<DeliveryTrip> get _baseAvailableTrips {
     return _allTrips.where((t) {
       if (t.distanceKm > _selectedRadiusKm) return false;
       if (_selectedVehicle == 'BIKE_EV' && t.vehicleTypeAllowed == 'CAR_VAN') return false;
       if (_selectedVehicle == 'BIKE_EV' && t.quantityKg > 15.0) return false;
-      if (_selectedFilter == 'HomeToMill' && !t.isLeg1GrainPickup) return false;
-      if (_selectedFilter == 'MillToHome' && !t.isLeg2FlourDelivery) return false;
       return true;
     }).toList();
+  }
+
+  List<DeliveryTrip> get _filteredTrips {
+    final baseTrips = _baseAvailableTrips;
+    if (_selectedFilter == 'HomeToMill') {
+      return baseTrips.where((t) => t.isLeg1GrainPickup).toList();
+    } else if (_selectedFilter == 'MillToHome') {
+      return baseTrips.where((t) => t.isLeg2FlourDelivery).toList();
+    }
+    return baseTrips;
   }
 
   @override
@@ -1018,11 +1088,14 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                       const Icon(Icons.flash_auto_rounded, size: 16, color: Color(0xFFF1C40F)),
                       const SizedBox(width: 6),
                       Text(
-                        'Auto-Accept Trips Mode',
+                        _isOnline
+                            ? (_assignedTrips.isNotEmpty ? 'DUTY ACTIVE • ${_assignedTrips.length} RUN IN PROGRESS' : 'DUTY ACTIVE • READY FOR RUNS')
+                            : 'OFFLINE • GO ONLINE TO ACCEPT TRIPS',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
                           color: Colors.white,
+                          letterSpacing: 0.5,
                         ),
                       ),
                     ],
@@ -1206,9 +1279,10 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
   }
 
   Widget _buildFilterChips() {
-    final homeToMillCount = _allTrips.where((t) => t.isLeg1GrainPickup).length + _assignedTrips.where((t) => t.isLeg1GrainPickup).length;
-    final millToHomeCount = _allTrips.where((t) => t.isLeg2FlourDelivery).length + _assignedTrips.where((t) => t.isLeg2FlourDelivery).length;
-    final totalCount = _allTrips.length + _assignedTrips.length;
+    final baseTrips = _baseAvailableTrips;
+    final homeToMillCount = baseTrips.where((t) => t.isLeg1GrainPickup).length;
+    final millToHomeCount = baseTrips.where((t) => t.isLeg2FlourDelivery).length;
+    final totalCount = baseTrips.length;
 
     final filters = [
       {'key': 'All', 'label': 'All Orders ($totalCount)'},
@@ -1911,6 +1985,98 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
     );
   }
 
+  Widget _buildActiveTripPersistentBanner() {
+    if (_assignedTrips.isEmpty) return const SizedBox.shrink();
+    final activeTrip = _assignedTrips.first;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E8449),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1E8449).withValues(alpha: 0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.navigation_rounded, color: Colors.white, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'RUN IN PROGRESS • ${activeTrip.orderNumber}',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                    color: Colors.white,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  activeTrip.resolvedLegBadge,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    color: Colors.white.withValues(alpha: 0.9),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ActiveTripScreen(
+                    trip: activeTrip,
+                    onTripCompleted: () {
+                      if (Navigator.canPop(context)) {
+                        Navigator.pop(context);
+                      }
+                      _loadDashboardData();
+                    },
+                  ),
+                ),
+              ).then((_) => _loadDashboardData());
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF1E8449),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+            ),
+            child: Text(
+              'RESUME ➔',
+              style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAvailableTripsSection() {
     final trips = _filteredTrips;
     final allSelected = trips.isNotEmpty && _selectedTripOrderIds.containsAll(trips.map((t) => t.orderId));
@@ -1918,6 +2084,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _buildActiveTripPersistentBanner(),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -1925,14 +2092,6 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Nearby 5km Delivery Requests (${trips.length})',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
                   if (trips.length > 1)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),

@@ -61,25 +61,23 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
     if (_apiOrders != null && _apiOrders!.isNotEmpty) {
       for (final o in _apiOrders!) {
         final s = o.statusTag.toUpperCase();
-        final isActive = [
-          'NEW',
-          'PLACED',
-          'ACCEPTED',
-          'PROCESSING',
-          'PACKING',
-          'READY',
-          'READY FOR PICKUP',
-          'READY_FOR_PICKUP',
-          'OUT FOR DELIVERY',
-          'OUT_FOR_DELIVERY',
-          'IN PROGRESS'
+        final isTerminal = [
+          'COMPLETED',
+          'DELIVERED',
+          'CANCELLED',
+          'CANCELED',
+          'RETURNED',
+          'RETURNED_TO_CUSTOMER',
+          'REJECTED',
+          'REJECTED_AT_MILL'
         ].contains(s);
+        final isActive = !isTerminal;
 
         final mapped = OrderModel(
           orderId: o.orderId,
           millName: o.millName.isNotEmpty ? o.millName : 'Artisan Mill Co.',
           itemSummary: o.itemsSummary,
-          quantityKg: o.productBags.length > 1 ? '${o.productBags.length} Products (${o.productBags.length} Units)' : (o.productBags.isNotEmpty ? o.productBags.first.unitText : o.quantityText),
+          quantityKg: o.productBags.length > 1 ? '${o.productBags.length} Products' : (o.productBags.isNotEmpty ? o.productBags.first.unitText : o.quantityText),
           estimatedDelivery: 'Within 20 minutes',
           statusStep: o.statusTag,
           totalPrice: o.totalPrice,
@@ -117,7 +115,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
         ),
         title: Text(
           'HerDoor Flour Mill',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 20,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
@@ -151,7 +149,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
             children: [
               Text(
                 'Order History',
-                style: GoogleFonts.playfairDisplay(
+      style: GoogleFonts.plusJakartaSans(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimary,
@@ -348,11 +346,11 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                   color: AppTheme.textPrimary,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 5),
               Text(
                 order.itemSummary.toLowerCase().contains(order.quantityKg.toLowerCase())
                     ? order.itemSummary
-                    : (order.quantityKg.isNotEmpty ? '${order.itemSummary} • ${order.quantityKg}' : order.itemSummary),
+                    : (order.quantityKg.isNotEmpty ? '${order.quantityKg} • ${order.itemSummary}' : order.itemSummary),
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 14,
                   color: AppTheme.textSecondary,
@@ -418,6 +416,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
 
   Widget _buildStatusBadge(String status) {
     final s = status.toUpperCase();
+    final displayStatus = s == 'COMPLETED' ? 'DELIVERED' : status;
     Color bgColor;
     Color textColor;
 
@@ -442,7 +441,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
-        status,
+        displayStatus,
         style: GoogleFonts.plusJakartaSans(
           fontSize: 12,
           fontWeight: FontWeight.bold,

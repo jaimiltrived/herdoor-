@@ -104,6 +104,55 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
     return _tripStops[_currentStopIndex.clamp(0, _tripStops.length - 1)];
   }
 
+  TripStage _resolveInitialTripStage() {
+    if (_isRejectedAtMill) {
+      return TripStage.returningToCustomer;
+    }
+    if (_isRejectedAtDoorstep) {
+      return TripStage.returningToMill;
+    }
+
+    final statusUpper = widget.trip.status.toUpperCase();
+
+    // Check if flour has been picked up from mill or is out for delivery to customer home
+    final bool isOutForCustomerDelivery = statusUpper == 'OUT_FOR_DELIVERY' ||
+        statusUpper == 'PICKED_UP_FROM_MILL' ||
+        statusUpper == 'IN_TRANSIT_TO_CUSTOMER' ||
+        statusUpper == 'DELIVERY_IN_PROGRESS' ||
+        statusUpper == 'PICKED_UP' ||
+        widget.trip.stops.any((s) => s.isPickedUp && !widget.trip.isLeg1GrainPickup);
+
+    if (isOutForCustomerDelivery) {
+      return TripStage.atCustomerDelivery;
+    }
+
+    // Check if raw grain was picked up from customer home (Leg 1) heading to mill
+    final bool isPickedUpFromHome = statusUpper == 'PICKED_UP_FROM_HOME' ||
+        statusUpper == 'IN_TRANSIT_TO_MILL' ||
+        (widget.trip.isLeg1GrainPickup && widget.trip.stops.any((s) => s.isPickedUp));
+
+    if (isPickedUpFromHome) {
+      return TripStage.headingToMill;
+    }
+
+    // Check if rider is at mill
+    final bool isAtMill = statusUpper == 'AT_MILL' ||
+        statusUpper == 'PENDING_INSPECTION' ||
+        statusUpper == 'INSPECTION_PENDING' ||
+        statusUpper == 'PROCESSING';
+
+    if (isAtMill) {
+      return widget.trip.isLeg1GrainPickup ? TripStage.atMillDelivery : TripStage.atMillPickup;
+    }
+
+    // Default stage by leg type
+    if (widget.trip.isLeg1GrainPickup) {
+      return TripStage.headingToCustomer;
+    }
+
+    return TripStage.headingToMill;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -116,14 +165,13 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
     _isRejectedAtDoorstep = widget.trip.isReturnToMill;
     _customerRejectionReason = widget.trip.rejectionReason ?? '';
 
-    if (_isRejectedAtMill) {
-      _currentStage = TripStage.returningToCustomer;
-    } else if (_isRejectedAtDoorstep) {
-      _currentStage = TripStage.returningToMill;
-    } else if (widget.trip.isLeg1GrainPickup) {
-      _currentStage = TripStage.headingToCustomer;
-    } else {
-      _currentStage = TripStage.headingToMill;
+    _currentStage = _resolveInitialTripStage();
+    if (_currentStage == TripStage.atCustomerDelivery) {
+      _productBags = _productBags.map((b) => b.copyWith(isPickedUp: true)).toList();
+      _tripStops = _tripStops.map((s) => s.copyWith(isPickedUp: true)).toList();
+      _resetNavigationForCustomerStage();
+    } else if (_currentStage == TripStage.headingToMill && widget.trip.isLeg1GrainPickup) {
+      _tripStops = _tripStops.map((s) => s.copyWith(isPickedUp: true)).toList();
     }
 
     _pulseController = AnimationController(
@@ -550,7 +598,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
               children: [
                 const Icon(Icons.chat_rounded, color: Color(0xFF2ECC71)),
                 const SizedBox(width: 8),
-                Text('Quick WhatsApp Message to $name', style: GoogleFonts.playfairDisplay(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text('Quick WhatsApp Message to $name', style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold)),
               ],
             ),
             const SizedBox(height: 14),
@@ -594,7 +642,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
               children: [
                 const Icon(Icons.warning_amber_rounded, color: Color(0xFFC0392B)),
                 const SizedBox(width: 8),
-                Text('Trip Problem & Emergency SOS', style: GoogleFonts.playfairDisplay(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text('Trip Problem & Emergency SOS', style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold)),
               ],
             ),
             const SizedBox(height: 12),
@@ -695,7 +743,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                             children: [
                               Text(
                                 isPickup ? 'Verify Product Flour Bag' : 'Doorstep Product Bag Scan',
-                                style: GoogleFonts.playfairDisplay(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
+                                style: GoogleFonts.plusJakartaSans(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
                               ),
                               Text(
                                 '${currentBag.orderNumber} • ${currentBag.customerName}',
@@ -1466,7 +1514,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
             const SizedBox(height: 16),
             Text(
               '🔄 Grain Returned to Customer!',
-              style: GoogleFonts.playfairDisplay(
+              style: GoogleFonts.plusJakartaSans(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.textPrimary,
@@ -1577,7 +1625,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
             const SizedBox(height: 16),
             Text(
               '🔄 Flour Returned to Mill!',
-              style: GoogleFonts.playfairDisplay(
+              style: GoogleFonts.plusJakartaSans(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.textPrimary,
@@ -1661,7 +1709,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
             const SizedBox(height: 16),
             Text(
               'Trip ${widget.trip.orderNumber.startsWith('#') ? widget.trip.orderNumber : '#${widget.trip.orderNumber}'} Completed!',
-              style: GoogleFonts.playfairDisplay(
+              style: GoogleFonts.plusJakartaSans(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.textPrimary,
@@ -1757,7 +1805,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
             children: [
               Text(
                 'Trip ${widget.trip.orderNumber.startsWith('#') ? widget.trip.orderNumber : '#${widget.trip.orderNumber}'}',
-                style: GoogleFonts.playfairDisplay(
+                style: GoogleFonts.plusJakartaSans(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.primaryTerracotta,
@@ -1931,7 +1979,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                 : (_isRejectedAtDoorstep
                     ? 'Flour Return Completed!'
                     : 'Trip ${widget.trip.orderNumber.startsWith('#') ? widget.trip.orderNumber : '#${widget.trip.orderNumber}'} Completed!'),
-            style: GoogleFonts.playfairDisplay(
+            style: GoogleFonts.plusJakartaSans(
               fontSize: 22,
               fontWeight: FontWeight.bold,
               color: AppTheme.textPrimary,
@@ -2436,7 +2484,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                             children: [
                               Text(
                                 'Step ${index + 1} of $totalSteps: $title',
-                                style: GoogleFonts.playfairDisplay(
+                                style: GoogleFonts.plusJakartaSans(
                                   fontSize: 17,
                                   fontWeight: FontWeight.bold,
                                   color: AppTheme.textPrimary,
@@ -3120,7 +3168,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                   const SizedBox(width: 8),
                   Text(
                     'Stop ${_currentStopIndex + 1} of ${_tripStops.length}: Grain Pickup',
-                    style: GoogleFonts.playfairDisplay(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -3256,20 +3304,6 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
           ),
           const SizedBox(height: 12),
 
-          // Customer Pickup PIN
-          Text('Customer Pickup PIN:', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12)),
-          const SizedBox(height: 6),
-          TextField(
-            controller: _pinController,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: '4-Digit Pickup PIN',
-              hintText: 'e.g. ${stop.pickupPin.isNotEmpty ? stop.pickupPin : "4821"}',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            ),
-          ),
-          const SizedBox(height: 16),
 
           // Confirm Grain Pickup Button
           SizedBox(
@@ -3326,7 +3360,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                   const SizedBox(width: 8),
                   Text(
                     'En-Route to Mill: Drop Raw Grain',
-                    style: GoogleFonts.playfairDisplay(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -3466,7 +3500,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                   const SizedBox(width: 8),
                   Text(
                     'Leg 2: Mill Flour Pickup (${_productBags.length} Bags)',
-                    style: GoogleFonts.playfairDisplay(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -3643,7 +3677,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                   const SizedBox(width: 8),
                   Text(
                     'Leg 1 Mill Drop: Raw Grain Handover',
-                    style: GoogleFonts.playfairDisplay(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -3959,7 +3993,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                   const SizedBox(width: 8),
                   Text(
                     'Stop ${_currentStopIndex + 1} of ${_tripStops.length}: Doorstep Drop',
-                    style: GoogleFonts.playfairDisplay(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -4043,7 +4077,27 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
               ),
             );
           }),
-          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: OutlinedButton.icon(
+              onPressed: _openCustomerScanAndQualityDialog,
+              icon: Icon(
+                _allCustomerBagsScanned ? Icons.check_circle_rounded : Icons.qr_code_scanner_rounded,
+                size: 18,
+                color: const Color(0xFF1E8449),
+              ),
+              label: Text(
+                _allCustomerBagsScanned ? 'Customer Quality Verified' : 'Verify Customer Quality & Scan',
+                style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF1E8449)),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: _allCustomerBagsScanned ? const Color(0xFF1E8449) : AppTheme.borderLight),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
 
           // Primary DROP AT HOME Button
           SizedBox(
@@ -4147,7 +4201,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                   const SizedBox(width: 8),
                   Text(
                     'Return to Customer Doorstep',
-                    style: GoogleFonts.playfairDisplay(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -4344,7 +4398,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                   const SizedBox(width: 8),
                   Text(
                     'Return to Flour Mill',
-                    style: GoogleFonts.playfairDisplay(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -4597,7 +4651,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Shopkeeper Intake Inspection', style: GoogleFonts.playfairDisplay(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text('Shopkeeper Intake Inspection', style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold)),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
@@ -4799,7 +4853,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Customer Quality Check', style: GoogleFonts.playfairDisplay(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text('Customer Quality Check', style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold)),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
@@ -4957,7 +5011,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
                       children: [
                         const Icon(Icons.timeline_rounded, color: AppTheme.primaryTerracotta),
                         const SizedBox(width: 8),
-                        Text('Order Timeline', style: GoogleFonts.playfairDisplay(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text('Order Timeline', style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold)),
                       ],
                     ),
                     Container(

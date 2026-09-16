@@ -465,7 +465,7 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                         children: [
                           Text(
                             'Mill Intake & Inspection',
-                            style: GoogleFonts.playfairDisplay(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
                           ),
                           Text(
                             'Driver Handover • Leg 1 Grain Check',

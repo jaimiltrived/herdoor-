@@ -381,10 +381,10 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Units & Quantity', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary)),
+                          Text('Products & Quantity', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary)),
                           Text(
                             order.productBags.length > 1
-                                ? '${order.productBags.length} Bags (${order.quantityText})'
+                                ? '${order.productBags.length} Products • ${order.quantityText}'
                                 : order.quantityText,
                             style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold),
                           ),

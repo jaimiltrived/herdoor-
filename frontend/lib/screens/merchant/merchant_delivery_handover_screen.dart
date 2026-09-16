@@ -597,7 +597,7 @@ class _MerchantDeliveryHandoverScreenState extends State<MerchantDeliveryHandove
                         children: [
                           Text(
                             widget.order.deliveryDriverName ?? 'Vikram Delivery Agent',
-                            style: GoogleFonts.playfairDisplay(
+                  style: GoogleFonts.plusJakartaSans(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: AppTheme.textPrimary,

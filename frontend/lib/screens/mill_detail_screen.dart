@@ -8,6 +8,7 @@ import 'cart_screen.dart';
 import 'mill_map_screen.dart';
 import '../services/customer_api_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../widgets/favorite_button.dart';
 
 class MillDetailScreen extends StatefulWidget {
   final FlourMill mill;
@@ -34,28 +35,39 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
 
   List<Map<String, dynamic>> _readymadeProducts = [
     {
-      'title': 'Pre-packed Wheat',
+      'title': 'Wheat Flour (Fresh Atta)',
       'desc': '1kg Pack • Stone ground flour',
+      'unit': '1 kg',
       'imageUrl': 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&w=400&q=80',
-      'price': 2.50,
+      'price': 45.00,
+    },
+    {
+      'title': 'Raw Premium Sharbati Wheat',
+      'desc': '1kg Pack • Premium unground grain',
+      'unit': '1 kg',
+      'imageUrl': 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&w=400&q=80',
+      'price': 36.00,
+    },
+    {
+      'title': 'Multigrain Dietary Flour',
+      'desc': '1kg Pack • 7 Grain high fiber mix',
+      'unit': '1 kg',
+      'imageUrl': 'https://images.unsplash.com/photo-1586444248902-2f64eddc13df?auto=format&fit=crop&w=400&q=80',
+      'price': 68.00,
     },
     {
       'title': 'Masala Mix',
       'desc': '500g Pack • Premium blend spices',
+      'unit': '500g',
       'imageUrl': 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=400&q=80',
-      'price': 3.00,
-    },
-    {
-      'title': 'Organic Multigrain Flour',
-      'desc': '1kg Pack • 7 Grain high fiber mix',
-      'imageUrl': 'https://images.unsplash.com/photo-1586444248902-2f64eddc13df?auto=format&fit=crop&w=400&q=80',
-      'price': 3.50,
+      'price': 55.00,
     },
     {
       'title': 'Pure Besan (Gram Flour)',
       'desc': '500g Pack • Fine ground chana dal',
+      'unit': '500g',
       'imageUrl': 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80',
-      'price': 2.20,
+      'price': 40.00,
     },
   ];
 
@@ -77,11 +89,17 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
     final products = await CustomerApiService.instance.getMillProducts(millId);
     if (products != null && products.isNotEmpty && mounted) {
       setState(() {
-        _readymadeProducts = products.map((p) => {
-          'title': p['name'] ?? 'Product',
-          'desc': p['subtitle'] ?? 'Fresh from mill',
-          'imageUrl': p['imageUrl'] ?? 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&w=400&q=80',
-          'price': (p['price'] as num?)?.toDouble() ?? 2.50,
+        _readymadeProducts = products.map((p) {
+          final title = (p['name'] ?? 'Product').toString();
+          final desc = p['subtitle'] ?? 'Fresh from mill';
+          final unit = title.toLowerCase().contains('500g') || desc.toLowerCase().contains('500g') ? '500g' : '1 kg';
+          return {
+            'title': title,
+            'desc': desc.contains('kg') || desc.contains('500g') ? desc : '$unit Pack • $desc',
+            'unit': unit,
+            'imageUrl': p['imageUrl'] ?? 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&w=400&q=80',
+            'price': (p['price'] as num?)?.toDouble() ?? 45.00,
+          };
         }).toList();
       });
     }
@@ -142,20 +160,30 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                                 onPressed: () => Navigator.pop(context),
                               ),
                             ),
-                            CircleAvatar(
-                              backgroundColor: Colors.white.withValues(alpha: 0.85),
-                              child: IconButton(
-                                icon: const Icon(Icons.share_outlined, color: AppTheme.textPrimary, size: 20),
-                                onPressed: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Link copied for ${widget.mill.name}'),
-                                      duration: const Duration(seconds: 2),
-                                      backgroundColor: AppTheme.primaryTerracotta,
-                                    ),
-                                  );
-                                },
-                              ),
+                            Row(
+                              children: [
+                                FavoriteButton(
+                                  mill: widget.mill,
+                                  size: 40,
+                                  iconSize: 22,
+                                ),
+                                const SizedBox(width: 8),
+                                CircleAvatar(
+                                  backgroundColor: Colors.white.withValues(alpha: 0.85),
+                                  child: IconButton(
+                                    icon: const Icon(Icons.share_outlined, color: AppTheme.textPrimary, size: 20),
+                                    onPressed: () {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Link copied for ${widget.mill.name}'),
+                                          duration: const Duration(seconds: 2),
+                                          backgroundColor: AppTheme.primaryTerracotta,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -293,11 +321,33 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                             ),
                             const SizedBox(width: 10),
                             GestureDetector(
-                              onTap: () {
+                              onTap: () async {
+                                final messenger = ScaffoldMessenger.of(context);
+                                final currentlyFav = _isFavorite;
                                 setState(() {
                                   _isFavorite = !_isFavorite;
                                   MockData.toggleFavorite(widget.mill.id);
                                 });
+
+                                if (currentlyFav) {
+                                  await CustomerApiService.instance.removeFavorite(widget.mill.id);
+                                } else {
+                                  await CustomerApiService.instance.addFavorite(widget.mill.id);
+                                }
+
+                                if (!mounted) return;
+                                messenger.hideCurrentSnackBar();
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      !currentlyFav
+                                          ? '${widget.mill.name} added to favorites'
+                                          : '${widget.mill.name} removed from favorites',
+                                      style: GoogleFonts.plusJakartaSans(),
+                                    ),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
                               },
                               child: Container(
                                 padding: const EdgeInsets.all(8),
@@ -393,7 +443,7 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                                             const SizedBox(height: 16),
                                             Text(
                                               '${widget.mill.name} Timings',
-                                              style: GoogleFonts.playfairDisplay(
+                                    style: GoogleFonts.plusJakartaSans(
                                                 fontSize: 20,
                                                 fontWeight: FontWeight.bold,
                                                 color: AppTheme.textPrimary,
@@ -737,8 +787,9 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                             return _ReadymadeItemCard(
                               title: prod['title'] ?? 'Product',
                               desc: prod['desc'] ?? '',
+                              unit: prod['unit'] ?? '1 kg',
                               imageUrl: prod['imageUrl'] ?? 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&w=400&q=80',
-                              price: (prod['price'] as num?)?.toDouble() ?? 2.50,
+                              price: (prod['price'] as num?)?.toDouble() ?? 45.00,
                               onAddToCart: (item) {
                                 setState(() {
                                   _cartItems.add(item);
@@ -807,7 +858,7 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
                       Text(
                         _cartItems.isEmpty 
                             ? 'Cart is empty' 
-                            : 'View Cart (${_cartItems.length} items) - \$${_cartTotal.toStringAsFixed(2)}',
+                            : 'View Cart (${_cartItems.length} items) - ₹${_cartTotal.toStringAsFixed(2)}',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -862,6 +913,7 @@ class _MillDetailScreenState extends State<MillDetailScreen> {
 class _ReadymadeItemCard extends StatefulWidget {
   final String title;
   final String desc;
+  final String unit;
   final String imageUrl;
   final double price;
   final Function(Map<String, dynamic> item) onAddToCart;
@@ -869,6 +921,7 @@ class _ReadymadeItemCard extends StatefulWidget {
   const _ReadymadeItemCard({
     required this.title,
     required this.desc,
+    this.unit = '1 kg',
     required this.imageUrl,
     required this.price,
     required this.onAddToCart,
@@ -884,6 +937,9 @@ class _ReadymadeItemCardState extends State<_ReadymadeItemCard> {
   @override
   Widget build(BuildContext context) {
     final totalPrice = widget.price * _quantity;
+    final displayUnit = widget.unit.isNotEmpty ? widget.unit : '1 kg';
+    final isGram = displayUnit.toLowerCase().contains('500g') || displayUnit.toLowerCase().contains('g');
+    final stepperText = isGram ? '$_quantity Pack' : '$_quantity kg';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -936,13 +992,34 @@ class _ReadymadeItemCardState extends State<_ReadymadeItemCard> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      '\$${widget.price.toStringAsFixed(2)} each',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryTerracotta,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          '₹${widget.price.toStringAsFixed(2)}',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.primaryTerracotta,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.surfaceWarm,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AppTheme.primaryTerracotta.withValues(alpha: 0.2)),
+                          ),
+                          child: Text(
+                            '/ $displayUnit',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.primaryTerracotta,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -975,7 +1052,7 @@ class _ReadymadeItemCardState extends State<_ReadymadeItemCard> {
                       ),
                     ),
                     Text(
-                      '$_quantity',
+                      stepperText,
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
@@ -1007,7 +1084,7 @@ class _ReadymadeItemCardState extends State<_ReadymadeItemCard> {
                 ),
                 onPressed: () {
                   widget.onAddToCart({
-                    'name': widget.title,
+                    'name': '${widget.title} ($stepperText)',
                     'type': 'readymade',
                     'quantity': _quantity,
                     'price': widget.price,
@@ -1015,7 +1092,7 @@ class _ReadymadeItemCardState extends State<_ReadymadeItemCard> {
                 },
                 icon: const Icon(Icons.shopping_bag_outlined, size: 16),
                 label: Text(
-                  'Add • \$${totalPrice.toStringAsFixed(2)}',
+                  'Add • ₹${totalPrice.toStringAsFixed(2)}',
                   style: GoogleFonts.plusJakartaSans(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
@@ -1048,7 +1125,7 @@ class _CustomMillingItemCardState extends State<_CustomMillingItemCard> {
 
   @override
   Widget build(BuildContext context) {
-    const unitPrice = 0.50;
+    const unitPrice = 5.00;
     final totalPrice = unitPrice * _quantity;
 
     return Container(
@@ -1111,7 +1188,7 @@ class _CustomMillingItemCardState extends State<_CustomMillingItemCard> {
                         border: Border.all(color: AppTheme.primaryTerracotta.withValues(alpha: 0.3)),
                       ),
                       child: Text(
-                        'Milling Price: \$0.50/kg',
+                        'Milling Price: ₹5.00/kg',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
@@ -1193,7 +1270,7 @@ class _CustomMillingItemCardState extends State<_CustomMillingItemCard> {
                 },
                 icon: const Icon(Icons.shopping_bag_outlined, size: 16),
                 label: Text(
-                  'Add • \$${totalPrice.toStringAsFixed(2)}',
+                  'Add • ₹${totalPrice.toStringAsFixed(2)}',
                   style: GoogleFonts.plusJakartaSans(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,

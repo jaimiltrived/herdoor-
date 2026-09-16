@@ -6,6 +6,7 @@ import '../services/customer_api_service.dart';
 import 'mill_detail_screen.dart';
 import 'profile_screen.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/favorite_button.dart';
 
 class FavoritesScreen extends StatefulWidget {
   final VoidCallback? onOpenDrawer;
@@ -36,7 +37,15 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     final favs = await CustomerApiService.instance.getFavorites();
     if (mounted) {
       setState(() {
-        _favorites = favs ?? [];
+        if (favs != null && favs.isNotEmpty) {
+          _favorites = favs;
+          MockData.favoriteMillIds.addAll(favs.map((f) => f.id.toString()));
+        } else {
+          // Fallback or merge with local favorites
+          _favorites = (favs ?? []).isNotEmpty 
+              ? favs 
+              : MockData.mills.where((m) => MockData.isFavorite(m.id)).toList();
+        }
         _isLoading = false;
       });
     }
@@ -44,7 +53,21 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final favMills = _favorites ?? [];
+    // Merge API favorites and local favorited mills so switching tabs displays changes immediately
+    final Map<String, FlourMill> mergedMap = {};
+    if (_favorites != null) {
+      for (var m in _favorites!) {
+        if (MockData.isFavorite(m.id)) {
+          mergedMap[m.id.toString()] = m;
+        }
+      }
+    }
+    for (var m in MockData.mills) {
+      if (MockData.isFavorite(m.id)) {
+        mergedMap[m.id.toString()] = m;
+      }
+    }
+    final favMills = mergedMap.values.toList();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -55,7 +78,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         ),
         title: Text(
           'Favorites',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
@@ -164,57 +187,17 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               Positioned(
                 top: 10,
                 right: 10,
-                child: GestureDetector(
-                  onTap: () async {
-                    final millId = mill.id;
+                child: FavoriteButton(
+                  mill: mill,
+                  size: 34,
+                  iconSize: 18,
+                  onChanged: (isFav) {
                     setState(() {
-                      _favorites?.removeWhere((m) => m.id == millId);
-                      MockData.toggleFavorite(millId);
+                      if (!isFav) {
+                        _favorites?.removeWhere((m) => m.id == mill.id);
+                      }
                     });
-
-                    await CustomerApiService.instance.removeFavorite(millId);
-
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          '${mill.name} removed from favorites',
-                          style: GoogleFonts.plusJakartaSans(),
-                        ),
-                        action: SnackBarAction(
-                          label: 'Undo',
-                          textColor: AppTheme.mustardGold,
-                          onPressed: () async {
-                            setState(() {
-                              _favorites?.add(mill);
-                              MockData.toggleFavorite(millId);
-                            });
-                            await CustomerApiService.instance.addFavorite(millId);
-                          },
-                        ),
-                        duration: const Duration(seconds: 3),
-                      ),
-                    );
                   },
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.15),
-                          blurRadius: 6,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.favorite_rounded,
-                      color: AppTheme.primaryTerracotta,
-                      size: 20,
-                    ),
-                  ),
                 ),
               ),
               Positioned(
@@ -340,7 +323,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             const SizedBox(height: 20),
             Text(
               'No Favorites Saved Yet',
-              style: GoogleFonts.playfairDisplay(
+    style: GoogleFonts.plusJakartaSans(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.textPrimary,

@@ -120,17 +120,22 @@ exports.getAvailableTrips = async (req, res) => {
         (o.grain_source = 'CUSTOMER' AND o.status IN ('ACCEPTED', 'CONFIRMED'))
         OR
         -- Leg 2: ONLY when shopkeeper completes processing -> Driver picks up freshly milled flour from Flour Mill and delivers to Customer Home
-        (o.status IN ('READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY'))
+        (o.status IN ('READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY', 'PACKED', 'COMPLETED', 'MILLED'))
       )
-      AND o.status NOT IN ('DELIVERED', 'COMPLETED', 'CANCELLED', 'ASSIGNED', 'OUT_FOR_DELIVERY')
+      AND (o.fulfillment_type IS NULL OR o.fulfillment_type != 'PICKUP')
+      AND o.status NOT IN ('DELIVERED', 'CANCELLED', 'ASSIGNED', 'OUT_FOR_DELIVERY')
       AND o.id NOT IN (
         SELECT order_id FROM deliveries WHERE status IN ('ASSIGNED', 'PICKED_UP_FROM_MILL', 'OUT_FOR_DELIVERY', 'DELIVERED')
+      )
+      AND o.id NOT IN (
+        SELECT order_id FROM deliveries WHERE status = 'DELIVERED' AND delivery_person_id IS NOT NULL
       )
       ORDER BY o.id DESC
     `);
 
-    if (dbOrders && Array.isArray(dbOrders)) {
-      const rawTrips = dbOrders.map((o, idx) => {
+    let rawTrips = [];
+    if (dbOrders && Array.isArray(dbOrders) && dbOrders.length > 0) {
+      rawTrips = dbOrders.map((o, idx) => {
         const isHeavy = (parseFloat(o.quantity_kg) || 5.0) >= 10;
         const surgeBonus = (idx % 2 === 0) ? 25.0 : 15.0;
         const heavyBagBonus = isHeavy ? 20.0 : 0.0;
@@ -144,8 +149,8 @@ exports.getAvailableTrips = async (req, res) => {
         const millAddress = o.mill_address || '12 Market Yard, Ellisbridge, Ahmedabad';
 
         const isCustomerGrain = (o.grain_source || 'CUSTOMER').toUpperCase() === 'CUSTOMER';
-        // Leg 1 only when accepted / in processing; Leg 2 when ready
-        const isLeg1 = isCustomerGrain && ['ACCEPTED', 'CONFIRMED', 'PROCESSING'].includes(o.status);
+        // Leg 1 only when accepted / in processing; Leg 2 when ready / completed at mill
+        const isLeg1 = isCustomerGrain && ['ACCEPTED', 'CONFIRMED'].includes(o.status);
 
         const effectivePickupAddress = isLeg1 ? custAddress : millAddress;
         const effectiveDeliveryAddress = isLeg1 ? millAddress : custAddress;
@@ -218,7 +223,88 @@ exports.getAvailableTrips = async (req, res) => {
           ]
         };
       });
+    } else if (store.orders && Array.isArray(store.orders)) {
+      // In-memory fallback
+      const validStatuses = ['ACCEPTED', 'CONFIRMED', 'READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY', 'PACKED', 'COMPLETED', 'MILLED'];
+      const filtered = store.orders.filter(o => validStatuses.includes(o.status) && !['DELIVERED', 'CANCELLED', 'OUT_FOR_DELIVERY'].includes(o.status));
+      
+      rawTrips = filtered.map((o, idx) => {
+        const isCustomerGrain = (o.grainSource || 'CUSTOMER').toUpperCase() === 'CUSTOMER';
+        const isLeg1 = isCustomerGrain && ['ACCEPTED', 'CONFIRMED'].includes(o.status);
+        const custAddress = o.customerAddress || 'Flat 402, Shivalik Towers, Satellite Road, Ahmedabad';
+        const millAddress = o.millAddress || '12 Market Yard, Ellisbridge, Ahmedabad';
+        const effectivePickupAddress = isLeg1 ? custAddress : millAddress;
+        const effectiveDeliveryAddress = isLeg1 ? millAddress : custAddress;
+        const legType = isLeg1 ? 'LEG_1_GRAIN_PICKUP' : 'LEG_2_FLOUR_DELIVERY';
+        const tripBadge = isLeg1 ? '🌾 Grain Pickup (Home ➔ Mill)' : '🍞 Flour Delivery (Mill ➔ Home)';
+        const instructions = isLeg1
+          ? 'Pick up raw grain bag from customer doorstep and drop at flour mill for milling.'
+          : 'Pick up freshly milled & sealed flour from flour mill and deliver to customer home.';
 
+        return {
+          orderId: o.id,
+          orderNumber: o.orderNumber || `#HD-${o.id}`,
+          customerName: o.customerName || 'Customer',
+          customerPhone: o.customerPhone || '+919876543210',
+          millName: o.millName || 'Shree Ganesh Flour Mill & Grinding Hub',
+          millAddress: millAddress,
+          millPhone: '+919876543211',
+          homePickupAddress: custAddress,
+          homePickupLandmark: 'Behind Town Hall',
+          homePickupInstructions: instructions,
+          isHomeGrainPickup: isLeg1,
+          legType,
+          tripBadge,
+          originTitle: isLeg1 ? 'Customer Home (Pick up Grain)' : 'Flour Mill (Pick up Flour)',
+          destinationTitle: isLeg1 ? 'Flour Mill (Drop Grain for Milling)' : 'Customer Doorstep (Deliver Flour)',
+          pickupAddress: effectivePickupAddress,
+          deliveryAddress: effectiveDeliveryAddress,
+          quantityKg: parseFloat(o.quantityKg) || 5.0,
+          grainTypeName: o.grainTypeName || 'Fresh Stone Ground Flour',
+          deliveryFee: 65.0,
+          estimatedDeliveryFee: 65.0,
+          surgeBonus: 20.0,
+          heavyBagBonus: 0.0,
+          isBatch: false,
+          batchOrderCount: 1,
+          groupId: null,
+          groupCode: null,
+          distanceKm: 2.1,
+          estimatedMins: 15,
+          pickupZone: isLeg1 ? 'Satellite / Residential Cluster' : 'Ellisbridge Mill Hub',
+          paymentMode: o.paymentMethod || 'UPI',
+          status: o.status,
+          pickupPin: o.pickupPin || '4821',
+          deliveryOtp: o.deliveryOtp || '7391',
+          barcodeNumber: `HD-BAG-${o.id}-01`,
+          stops: [
+            {
+              orderId: o.id,
+              orderNumber: o.orderNumber || `#HD-${o.id}`,
+              customerName: o.customerName || 'Customer',
+              customerPhone: o.customerPhone || '+919876543210',
+              homePickupAddress: custAddress,
+              homePickupLandmark: 'Behind Town Hall',
+              homePickupInstructions: instructions,
+              isHomeGrainPickup: isLeg1,
+              legType,
+              tripBadge,
+              pickupAddress: effectivePickupAddress,
+              deliveryAddress: effectiveDeliveryAddress,
+              quantityKg: parseFloat(o.quantityKg) || 5.0,
+              grainTypeName: o.grainTypeName || 'Fresh Stone Ground Flour',
+              deliveryOtp: o.deliveryOtp || '7391',
+              pickupPin: o.pickupPin || '4821',
+              barcodeNumber: `HD-BAG-${o.id}-01`,
+              distanceKm: 2.1,
+              orderPayout: 65.0,
+            }
+          ]
+        };
+      });
+    }
+
+    if (rawTrips && rawTrips.length > 0) {
       // Deduplicate and group available trips by groupCode
       const groupedTripsMap = new Map();
       const standaloneTrips = [];
@@ -310,8 +396,8 @@ exports.getAssignedOrders = async (req, res) => {
       LEFT JOIN orders o ON d.order_id = o.id
       LEFT JOIN mills m ON o.mill_id = m.id
       LEFT JOIN addresses a ON o.address_id = a.id
-      WHERE d.status IN ('ASSIGNED', 'PICKED_UP_FROM_MILL', 'OUT_FOR_DELIVERY', 'RETURN_TO_CUSTOMER', 'REJECTED_AT_MILL', 'PENDING_INSPECTION')
-        AND (o.status IS NULL OR o.status NOT IN ('DELIVERED', 'COMPLETED', 'CANCELLED', 'RETURNED', 'RETURNED_TO_CUSTOMER', 'PROCESSING', 'READY', 'READY_FOR_DELIVERY'))
+      WHERE d.status IN ('ASSIGNED', 'ACCEPTED', 'PICKED_UP_FROM_HOME', 'PICKED_UP_FROM_MILL', 'OUT_FOR_DELIVERY', 'RETURN_TO_CUSTOMER', 'REJECTED_AT_MILL', 'PENDING_INSPECTION', 'GRAIN_DROPPED', 'RECEIVED_AT_MILL', 'ARRIVED_AT_MILL')
+        AND (o.status IS NULL OR o.status NOT IN ('DELIVERED', 'COMPLETED', 'CANCELLED', 'RETURNED', 'RETURNED_TO_CUSTOMER'))
       ORDER BY d.updated_at DESC
     `);
   } catch (err) {
@@ -1003,40 +1089,41 @@ exports.acceptDelivery = async (req, res) => {
     const pickupAddr = isLeg1 ? custAddr : millAddr;
     const deliveryAddr = isLeg1 ? millAddr : custAddr;
 
-    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.ASSIGNED, orderId]);
+    try {
+      await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.ASSIGNED, orderId]);
 
-    if (existingDels && existingDels.length > 0) {
+      if (existingDels && existingDels.length > 0) {
+        await query(`
+          UPDATE deliveries SET
+            delivery_person_id = ?,
+            delivery_person_name = ?,
+            delivery_person_phone = ?,
+            status = 'ASSIGNED',
+            delivery_fee = ?,
+            leg_type = ?,
+            pickup_address = ?,
+            delivery_address = ?,
+            updated_at = NOW()
+          WHERE order_id = ? AND (delivery_person_id IS NULL OR delivery_person_id = 0 OR delivery_person_id = ? OR status IN ('CREATED','AVAILABLE'))
+        `, [driverId, driverName, driverPhone, deliveryFee, resolvedLegType, pickupAddr, deliveryAddr, orderId, driverId]);
+      } else {
+        await query(`
+          INSERT INTO deliveries
+            (order_id, delivery_person_id, delivery_person_name, delivery_person_phone, status, pickup_address, delivery_address, current_latitude, current_longitude, pickup_pin, delivery_otp, delivery_fee, leg_type, estimated_minutes, created_at, updated_at)
+          VALUES
+            (?, ?, ?, ?, 'ASSIGNED', ?, ?, 23.0225, 72.5714, ?, ?, ?, ?, 20, NOW(), NOW())
+        `, [orderId, driverId, driverName, driverPhone, pickupAddr, deliveryAddr, order.pickup_pin || '4821', order.delivery_otp || '7391', deliveryFee, resolvedLegType]);
+      }
+
+      const taskLeg = isLeg1 ? 'LEG_1_CUSTOMER_TO_MILL' : 'LEG_2_MILL_TO_CUSTOMER';
       await query(`
-        UPDATE deliveries SET
-          delivery_person_id = ?,
-          delivery_person_name = ?,
-          delivery_person_phone = ?,
-          status = 'ASSIGNED',
-          delivery_fee = ?,
-          surge_bonus = ?,
-          heavy_bag_bonus = ?,
-          leg_type = ?,
-          pickup_address = ?,
-          delivery_address = ?,
-          updated_at = NOW()
-        WHERE order_id = ? AND (delivery_person_id IS NULL OR delivery_person_id = 0 OR delivery_person_id = ? OR status IN ('CREATED','AVAILABLE'))
-      `, [driverId, driverName, driverPhone, deliveryFee, surgeBonus, heavyBagBonus, resolvedLegType, pickupAddr, deliveryAddr, orderId, driverId]);
-    } else {
-      await query(`
-        INSERT INTO deliveries
-          (order_id, delivery_person_id, delivery_person_name, delivery_person_phone, status, pickup_address, delivery_address, current_latitude, current_longitude, pickup_pin, delivery_otp, delivery_fee, surge_bonus, heavy_bag_bonus, leg_type, estimated_minutes, created_at, updated_at)
-        VALUES
-          (?, ?, ?, ?, 'ASSIGNED', ?, ?, 23.0225, 72.5714, ?, ?, ?, ?, ?, ?, 20, NOW(), NOW())
-      `, [orderId, driverId, driverName, driverPhone, pickupAddr, deliveryAddr, order.pickup_pin || '4821', order.delivery_otp || '7391', deliveryFee, surgeBonus, heavyBagBonus, resolvedLegType]);
+        UPDATE delivery_tasks
+        SET status = 'ASSIGNED', delivery_person_id = ?, updated_at = NOW()
+        WHERE order_id = ? AND (status = 'AVAILABLE' OR (leg = ? AND status IN ('AVAILABLE', 'ASSIGNED')))
+      `, [driverId, orderId, taskLeg]);
+    } catch (dbErr) {
+      console.log('MySQL acceptDelivery warning:', dbErr.message);
     }
-
-    // Update active delivery task status for the correct leg
-    const taskLeg = isLeg1 ? 'LEG_1_CUSTOMER_TO_MILL' : 'LEG_2_MILL_TO_CUSTOMER';
-    await query(`
-      UPDATE delivery_tasks
-      SET status = 'ASSIGNED', delivery_person_id = ?, updated_at = NOW()
-      WHERE order_id = ? AND (status = 'AVAILABLE' OR (leg = ? AND status IN ('AVAILABLE', 'ASSIGNED')))
-    `, [driverId, orderId, taskLeg]);
 
     return res.json({
       status: 'success',

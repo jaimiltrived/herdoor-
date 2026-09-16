@@ -349,7 +349,8 @@ class StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final resolvedLight = light ?? resolveStatusLight(status, type: type);
     final def = getStatusLightDef(resolvedLight);
-    final displayLabel = label ?? status ?? def.label;
+    final rawLabel = label ?? status ?? def.label;
+    final displayLabel = rawLabel.toUpperCase() == 'COMPLETED' ? 'DELIVERED' : rawLabel;
 
     final effectiveTextStyle = textStyle ??
         TextStyle(

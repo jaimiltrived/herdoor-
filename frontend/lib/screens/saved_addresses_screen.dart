@@ -89,7 +89,7 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
           children: [
             Text(
               'Add New Address',
-              style: GoogleFonts.playfairDisplay(
+    style: GoogleFonts.plusJakartaSans(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.primaryTerracotta,
@@ -191,7 +191,7 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
         ),
         title: Text(
           'Saved Addresses',
-          style: GoogleFonts.playfairDisplay(
+style: GoogleFonts.plusJakartaSans(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryTerracotta,
