@@ -283,7 +283,9 @@ class _MerchantOrderProcessDetailScreenState extends State<MerchantOrderProcessD
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                _displayOrder.itemsSummary,
+                                _displayOrder.productBags.length > 1
+                                    ? '${_displayOrder.productBags.length} Products (${_displayOrder.quantityText})'
+                                    : _displayOrder.itemsSummary,
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,

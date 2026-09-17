@@ -50,6 +50,7 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
               o.statusTag == 'READY FOR PICKUP' ||
               o.statusTag == 'READY' ||
               o.statusTag == 'Ready for Pickup' ||
+              o.statusTag == 'ASSIGNED' ||
               o.statusTag == 'OUT FOR DELIVERY' ||
               o.statusTag == 'OUT_FOR_DELIVERY');
           for (var o in readyFromActive) {
@@ -74,7 +75,8 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
               .where((o) =>
                   (o.statusTag == 'READY FOR PICKUP' ||
                    o.statusTag == 'READY' ||
-                   o.statusTag == 'Ready for Pickup') &&
+                   o.statusTag == 'Ready for Pickup' ||
+                   o.statusTag == 'ASSIGNED') &&
                   !_dispatchedOrders.any((d) => d.orderId == o.orderId))
               .toList();
 
@@ -319,6 +321,16 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
 }
 
   Widget _buildReadyOrderPickupCard(BuildContext context, MerchantOrder order) {
+    final bool hasDriver = order.deliveryDriverName != null &&
+        order.deliveryDriverName!.isNotEmpty &&
+        !order.deliveryDriverName!.toLowerCase().contains('awaiting') &&
+        !order.deliveryDriverName!.toLowerCase().contains('waiting');
+    final String driverDisplayName = hasDriver ? order.deliveryDriverName! : 'Waiting for Driver Assignment...';
+    final String vehicleDisplayName = hasDriver
+        ? (order.deliveryDriverVehicle ?? 'Electric Scooter #GJ-01-AB-1234')
+        : 'Nearby Delivery Partner will be assigned';
+    final String driverFirstName = hasDriver ? driverDisplayName.split(' ').first : 'Driver';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -359,7 +371,7 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
                   ),
                 ),
                 Text(
-                  order.itemsSummary,
+                  order.timeAgo.isNotEmpty ? order.timeAgo : 'Recently',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 13,
                     color: AppTheme.textSecondary,
@@ -373,7 +385,12 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Grain Type', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary)),
-                          Text(order.grainType, style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold)),
+                          Text(
+                            order.displayGrainType,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold),
+                          ),
                         ],
                       ),
                     ),
@@ -449,7 +466,11 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
                           color: const Color(0xFFFFE082),
                           border: Border.all(color: const Color(0xFF6E5616), width: 1.5),
                         ),
-                        child: const Icon(Icons.two_wheeler_rounded, color: Color(0xFF6E5616), size: 22),
+                        child: Icon(
+                          hasDriver ? Icons.two_wheeler_rounded : Icons.person_search_rounded,
+                          color: const Color(0xFF6E5616),
+                          size: 22,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -459,20 +480,22 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
                             Row(
                               children: [
                                 Text(
-                                  order.deliveryDriverName ?? 'Vikram Delivery Agent',
+                                  driverDisplayName,
                                   style: GoogleFonts.plusJakartaSans(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
                                     color: AppTheme.textPrimary,
                                   ),
                                 ),
-                                const SizedBox(width: 6),
-                                const Icon(Icons.verified_rounded, color: Color(0xFF2ECC71), size: 15),
+                                if (hasDriver) ...[
+                                  const SizedBox(width: 6),
+                                  const Icon(Icons.verified_rounded, color: Color(0xFF2ECC71), size: 15),
+                                ],
                               ],
                             ),
                             const SizedBox(height: 1),
                             Text(
-                              '${order.deliveryDriverVehicle ?? "Electric Scooter #GJ-01-AB-1234"} • Only Authorized Boy',
+                              hasDriver ? '$vehicleDisplayName • Only Authorized Boy' : vehicleDisplayName,
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 11,
                                 color: const Color(0xFF6E5616),
@@ -485,15 +508,15 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE8F8F0),
+                          color: hasDriver ? const Color(0xFFE8F8F0) : const Color(0xFFFAF2DD),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          'Verified Boy',
+                          hasDriver ? 'Verified Boy' : 'Awaiting Boy',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
-                            color: const Color(0xFF27AE60),
+                            color: hasDriver ? const Color(0xFF27AE60) : const Color(0xFF8C6D1F),
                           ),
                         ),
                       ),
@@ -515,7 +538,7 @@ class _MerchantActiveDriverPickupScreenState extends State<MerchantActiveDriverP
                     ),
                     icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 20),
                     label: Text(
-                      'Allow & Handover to ${order.deliveryDriverName?.split(' ').first ?? 'Driver'}',
+                      'Allow & Handover to $driverFirstName',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,

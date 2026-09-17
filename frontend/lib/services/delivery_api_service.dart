@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/merchant_models.dart';
 import '../models/package_model.dart';
@@ -552,8 +553,37 @@ class DeliveryApiService {
     return null;
   }
 
-  /// Get Active Assigned Trips for Rider
+  /// Update trip stage in backend and persist to AuthApiService
+  Future<bool> updateTripStage(int orderId, String stage, {List<String>? scannedBags}) async {
+    // Immediately persist locally
+    await AuthApiService.instance.updateActiveTripStage(orderId, stage, scannedBags: scannedBags);
+
+    if (!shouldSkipNetwork) {
+      final authOk = await ensureAuthenticated();
+      if (authOk) {
+        try {
+          final response = await http
+              .post(
+                Uri.parse('$baseUrl/delivery/orders/$orderId/stage'),
+                headers: _headers,
+                body: jsonEncode({
+                  'stage': stage,
+                  'scannedBags': ?scannedBags,
+                }),
+              )
+              .timeout(_timeout);
+          return response.statusCode == 200;
+        } catch (_) {
+          _markOffline();
+        }
+      }
+    }
+    return true;
+  }
+
+  /// Get Active Assigned Trips for Rider (Supports 3-4 concurrent orders seamlessly)
   Future<List<DeliveryTrip>> getAssignedTrips() async {
+    List<DeliveryTrip> serverTrips = [];
     if (!shouldSkipNetwork) {
       final authOk = await ensureAuthenticated();
       if (authOk) {
@@ -567,9 +597,9 @@ class DeliveryApiService {
 
           if (response.statusCode == 200) {
             final body = jsonDecode(response.body);
-            final list = body['data']?['trips'] as List?;
-            if (list != null && list.isNotEmpty) {
-              return list
+            final list = (body['data']?['trips'] as List?) ?? (body['data']?['deliveries'] as List?);
+            if (list != null) {
+              serverTrips = list
                   .map((t) => DeliveryTrip.fromJson(Map<String, dynamic>.from(t as Map)))
                   .toList();
             }
@@ -579,7 +609,49 @@ class DeliveryApiService {
         }
       }
     }
-    return [];
+
+    // Load locally saved active trips to merge with server
+    final localMaps = await AuthApiService.instance.getAllSavedActiveTrips();
+    final Map<dynamic, DeliveryTrip> mergedMap = {};
+
+    // 1. Add server trips
+    for (final trip in serverTrips) {
+      mergedMap[trip.orderId] = trip;
+    }
+
+    // 2. Merge local trips
+    for (final m in localMaps) {
+      try {
+        final localTrip = DeliveryTrip.fromJson(m);
+        if (mergedMap.containsKey(localTrip.orderId)) {
+          final existing = mergedMap[localTrip.orderId]!;
+          // Preserve local stage or scanned bags if server does not have it
+          final effectiveStage = (existing.currentStage != null && existing.currentStage!.isNotEmpty)
+              ? existing.currentStage
+              : localTrip.currentStage;
+          final effectiveBags = (existing.scannedBagIds.isNotEmpty)
+              ? existing.scannedBagIds
+              : localTrip.scannedBagIds;
+          mergedMap[localTrip.orderId] = existing.copyWith(
+            currentStage: effectiveStage,
+            scannedBagIds: effectiveBags,
+          );
+        } else {
+          // Local trip not in server response yet
+          mergedMap[localTrip.orderId] = localTrip;
+        }
+      } catch (e) {
+        debugPrint('Error merging local active trip: $e');
+      }
+    }
+
+    final result = mergedMap.values.toList();
+    // Cache merged trips into local storage
+    if (result.isNotEmpty) {
+      AuthApiService.instance.saveActiveTrips(result.map((t) => t.toJson()).toList());
+    }
+
+    return result;
   }
 
   /// Get Completed / Previous Delivered Trips & History

@@ -739,8 +739,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
   List<DeliveryTrip> get _baseAvailableTrips {
     return _allTrips.where((t) {
       if (t.distanceKm > _selectedRadiusKm) return false;
-      if (_selectedVehicle == 'BIKE_EV' && t.vehicleTypeAllowed == 'CAR_VAN') return false;
-      if (_selectedVehicle == 'BIKE_EV' && t.quantityKg > 15.0) return false;
+      if ((_selectedVehicle == 'AUTO' || _selectedVehicle == 'BIKE_EV') && t.vehicleTypeAllowed == 'CAR_VAN') return false;
+      if ((_selectedVehicle == 'AUTO' || _selectedVehicle == 'BIKE_EV') && t.quantityKg > 35.0) return false;
       return true;
     }).toList();
   }
@@ -1290,34 +1290,84 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
       {'key': 'MillToHome', 'label': '🍞 Mill ➔ Home ($millToHomeCount)'},
     ];
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: filters.map((f) {
-          final isSelected = _selectedFilter == f['key'];
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(
-                f['label']!,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                  color: isSelected ? Colors.white : AppTheme.textPrimary,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Active Orders',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            if (totalCount > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F8F0),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFA2E4D4)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xFF2ECC71),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      '$totalCount Available',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF27AE60),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              selected: isSelected,
-              selectedColor: AppTheme.primaryTerracotta,
-              backgroundColor: Colors.white,
-              side: BorderSide(color: isSelected ? AppTheme.primaryTerracotta : AppTheme.borderLight),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              onSelected: (val) {
-                if (val) setState(() => _selectedFilter = f['key']!);
-              },
-            ),
-          );
-        }).toList(),
-      ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: filters.map((f) {
+              final isSelected = _selectedFilter == f['key'];
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(
+                    f['label']!,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      color: isSelected ? Colors.white : AppTheme.textPrimary,
+                    ),
+                  ),
+                  selected: isSelected,
+                  selectedColor: AppTheme.primaryTerracotta,
+                  backgroundColor: Colors.white,
+                  side: BorderSide(color: isSelected ? AppTheme.primaryTerracotta : AppTheme.borderLight),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  onSelected: (val) {
+                    if (val) setState(() => _selectedFilter = f['key']!);
+                  },
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1476,7 +1526,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
               Icon(
                 trip.isLeg1GrainPickup ? Icons.storefront_rounded : Icons.location_on_rounded,
                 size: 20,
-                color: trip.isLeg1GrainPickup ? const Color(0xFF6E5616) : const Color(0xFF1E8449),
+                color: trip.isLeg1GrainPickup ? const Color(0xFF6E5616) : AppTheme.primaryTerracotta,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1678,18 +1728,18 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
               Expanded(
                 child: InkWell(
                   onTap: () {
-                    setState(() => _selectedVehicle = 'BIKE_EV');
+                    setState(() => _selectedVehicle = 'AUTO');
                     _loadDashboardData();
                   },
                   borderRadius: BorderRadius.circular(14),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                     decoration: BoxDecoration(
-                      color: _selectedVehicle == 'BIKE_EV' ? const Color(0xFFFAF3EB) : const Color(0xFFF9F7F5),
+                      color: (_selectedVehicle == 'AUTO' || _selectedVehicle == 'BIKE_EV') ? const Color(0xFFFAF3EB) : const Color(0xFFF9F7F5),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: _selectedVehicle == 'BIKE_EV' ? AppTheme.primaryTerracotta : AppTheme.borderLight,
-                        width: _selectedVehicle == 'BIKE_EV' ? 2 : 1,
+                        color: (_selectedVehicle == 'AUTO' || _selectedVehicle == 'BIKE_EV') ? AppTheme.primaryTerracotta : AppTheme.borderLight,
+                        width: (_selectedVehicle == 'AUTO' || _selectedVehicle == 'BIKE_EV') ? 2 : 1,
                       ),
                     ),
                     child: Column(
@@ -1698,22 +1748,22 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('🛵', style: TextStyle(fontSize: 20)),
-                            if (_selectedVehicle == 'BIKE_EV')
+                            const Text('🛺', style: TextStyle(fontSize: 20)),
+                            if (_selectedVehicle == 'AUTO' || _selectedVehicle == 'BIKE_EV')
                               const Icon(Icons.check_circle_rounded, color: AppTheme.primaryTerracotta, size: 16),
                           ],
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Bike / EV Scooter',
+                          'Auto / Rickshaw',
                           style: GoogleFonts.plusJakartaSans(
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
-                            color: _selectedVehicle == 'BIKE_EV' ? AppTheme.primaryTerracotta : AppTheme.textPrimary,
+                            color: (_selectedVehicle == 'AUTO' || _selectedVehicle == 'BIKE_EV') ? AppTheme.primaryTerracotta : AppTheme.textPrimary,
                           ),
                         ),
                         Text(
-                          'Max 15 kg • 1-2 Quick Deliveries',
+                          'Max 30 kg • 1-3 Quick Deliveries',
                           style: GoogleFonts.plusJakartaSans(fontSize: 10, color: AppTheme.textSecondary),
                         ),
                       ],
@@ -2697,9 +2747,9 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: trip.isLeg1GrainPickup ? const Color(0xFFFAF6F0) : const Color(0xFFF0FDF4),
+              color: trip.isLeg1GrainPickup ? const Color(0xFFFAF6F0) : const Color(0xFFF5ECE4),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: trip.isLeg1GrainPickup ? const Color(0xFFECE4D9) : const Color(0xFFBBF7D0)),
+              border: Border.all(color: trip.isLeg1GrainPickup ? const Color(0xFFECE4D9) : const Color(0xFFDCC8B8)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2713,7 +2763,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                           Icon(
                             trip.isLeg1GrainPickup ? Icons.storefront_rounded : Icons.location_on_rounded,
                             size: 16,
-                            color: trip.isLeg1GrainPickup ? const Color(0xFF6E5616) : const Color(0xFF1E8449),
+                            color: trip.isLeg1GrainPickup ? const Color(0xFF6E5616) : AppTheme.primaryTerracotta,
                           ),
                           const SizedBox(width: 6),
                           Flexible(
@@ -2723,7 +2773,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                                   : '2. DELIVER FLOUR TO CUSTOMER HOME:',
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 11,
-                                color: trip.isLeg1GrainPickup ? const Color(0xFF6E5616) : const Color(0xFF1E8449),
+                                color: trip.isLeg1GrainPickup ? const Color(0xFF6E5616) : AppTheme.primaryTerracotta,
                                 fontWeight: FontWeight.w800,
                               ),
                               overflow: TextOverflow.ellipsis,
@@ -2736,7 +2786,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: trip.isLeg1GrainPickup ? const Color(0xFFF3ECE1) : const Color(0xFFDCFCE7),
+                        color: trip.isLeg1GrainPickup ? const Color(0xFFF3ECE1) : const Color(0xFFEADBCE),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -2745,7 +2795,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 10,
-                          color: trip.isLeg1GrainPickup ? const Color(0xFF6E5616) : const Color(0xFF15803D),
+                          color: trip.isLeg1GrainPickup ? const Color(0xFF6E5616) : const Color(0xFF6E372D),
                           fontWeight: FontWeight.bold,
                         ),
                       ),

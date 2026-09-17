@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
 import '../../models/merchant_models.dart';
 import '../../services/delivery_api_service.dart';
+import '../../services/auth_api_service.dart';
 import '../../services/merchant_api_service.dart';
 
 enum TripStage {
@@ -112,15 +113,25 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
       return TripStage.returningToMill;
     }
 
+    // 1. Check explicit currentStage saved from backend or local persistence
+    final savedStage = widget.trip.currentStage;
+    if (savedStage != null && savedStage.isNotEmpty) {
+      for (final s in TripStage.values) {
+        if (s.name == savedStage) return s;
+      }
+    }
+
     final statusUpper = widget.trip.status.toUpperCase();
 
     // Check if flour has been picked up from mill or is out for delivery to customer home
-    final bool isOutForCustomerDelivery = statusUpper == 'OUT_FOR_DELIVERY' ||
+    // STRICT: Only applies to Leg 2 (delivery of flour), NOT Leg 1 (grain pickup)
+    final bool isOutForCustomerDelivery = !widget.trip.isLeg1GrainPickup && (
+        statusUpper == 'OUT_FOR_DELIVERY' ||
         statusUpper == 'PICKED_UP_FROM_MILL' ||
         statusUpper == 'IN_TRANSIT_TO_CUSTOMER' ||
         statusUpper == 'DELIVERY_IN_PROGRESS' ||
         statusUpper == 'PICKED_UP' ||
-        widget.trip.stops.any((s) => s.isPickedUp && !widget.trip.isLeg1GrainPickup);
+        widget.trip.stops.any((s) => s.isPickedUp));
 
     if (isOutForCustomerDelivery) {
       return TripStage.atCustomerDelivery;
@@ -129,7 +140,8 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
     // Check if raw grain was picked up from customer home (Leg 1) heading to mill
     final bool isPickedUpFromHome = statusUpper == 'PICKED_UP_FROM_HOME' ||
         statusUpper == 'IN_TRANSIT_TO_MILL' ||
-        (widget.trip.isLeg1GrainPickup && widget.trip.stops.any((s) => s.isPickedUp));
+        (widget.trip.isLeg1GrainPickup &&
+            (widget.trip.stops.any((s) => s.isPickedUp) || widget.trip.scannedBagIds.isNotEmpty));
 
     if (isPickedUpFromHome) {
       return TripStage.headingToMill;
@@ -153,6 +165,39 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
     return TripStage.headingToMill;
   }
 
+  void _setAndPersistStage(TripStage stage) {
+    setState(() {
+      _currentStage = stage;
+    });
+    final pickedBagIds = _productBags.where((b) => b.isPickedUp).map((b) => b.bagId).toList();
+    DeliveryApiService.instance.updateTripStage(
+      widget.trip.orderId,
+      stage.name,
+      scannedBags: pickedBagIds,
+    );
+    AuthApiService.instance.updateActiveTripStage(
+      widget.trip.orderId,
+      stage.name,
+      scannedBags: pickedBagIds,
+    );
+    if (widget.trip.isBatch) {
+      for (final stop in _tripStops) {
+        if (stop.orderId != widget.trip.orderId) {
+          DeliveryApiService.instance.updateTripStage(
+            stop.orderId,
+            stage.name,
+            scannedBags: pickedBagIds,
+          );
+          AuthApiService.instance.updateActiveTripStage(
+            stop.orderId,
+            stage.name,
+            scannedBags: pickedBagIds,
+          );
+        }
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -172,6 +217,14 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
       _resetNavigationForCustomerStage();
     } else if (_currentStage == TripStage.headingToMill && widget.trip.isLeg1GrainPickup) {
       _tripStops = _tripStops.map((s) => s.copyWith(isPickedUp: true)).toList();
+      _productBags = _productBags.map((b) => b.copyWith(isPickedUp: true)).toList();
+      _resetNavigationForMillStage();
+    } else if (_currentStage == TripStage.atMillDelivery && widget.trip.isLeg1GrainPickup) {
+      _tripStops = _tripStops.map((s) => s.copyWith(isPickedUp: true)).toList();
+      _productBags = _productBags.map((b) => b.copyWith(isPickedUp: true)).toList();
+      if (widget.trip.scannedBagIds.isNotEmpty) {
+        _scannedMillBags.addAll(widget.trip.scannedBagIds);
+      }
     }
 
     _pulseController = AnimationController(
@@ -494,6 +547,20 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
         stage: _currentStage.name,
         trafficCondition: _trafficCondition,
       );
+    });
+  }
+
+  void _resetNavigationForMillStage() {
+    setState(() {
+      _routeProgress = 0.20;
+      _distanceMeters = 1250;
+      _etaSeconds = 300;
+      _currentSpeedKmH = 32;
+      _currentTurnInstruction = widget.trip.isLeg1GrainPickup
+          ? 'En-route to ${widget.trip.millName} to drop raw grain'
+          : 'En-route to ${widget.trip.millName} for flour pickup';
+      _currentTurnIcon = Icons.straight_rounded;
+      _trafficCondition = 'CLEAR';
     });
   }
 
@@ -1170,12 +1237,9 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
     setState(() => _isProcessing = false);
 
     if (res['success'] == true) {
-      setState(() {
-        _currentStage = TripStage.headingToCustomer;
-        // Mark all product bags and stops picked up
-        _productBags = _productBags.map((b) => b.copyWith(isPickedUp: true)).toList();
-        _tripStops = _tripStops.map((s) => s.copyWith(isPickedUp: true)).toList();
-      });
+      _productBags = _productBags.map((b) => b.copyWith(isPickedUp: true)).toList();
+      _tripStops = _tripStops.map((s) => s.copyWith(isPickedUp: true)).toList();
+      _setAndPersistStage(TripStage.headingToCustomer);
       _resetNavigationForCustomerStage();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1230,9 +1294,9 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
         // Advance to next customer stop in group batch
         setState(() {
           _currentStopIndex++;
-          _currentStage = TripStage.headingToCustomer;
-          _resetNavigationForCustomerStage();
         });
+        _setAndPersistStage(TripStage.headingToCustomer);
+        _resetNavigationForCustomerStage();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('✅ Grain collected for Stop $_currentStopIndex! Heading to Stop ${_currentStopIndex + 1} (${_activeStop.customerName}).'),
@@ -1241,16 +1305,8 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
         );
       } else {
         // All customer stops collected -> proceed to mill!
-        setState(() {
-          _currentStage = TripStage.headingToMill;
-          _routeProgress = 0.10;
-          _distanceMeters = 1850;
-          _etaSeconds = 380;
-          _currentSpeedKmH = 34;
-          _currentTurnInstruction = 'All grain bags collected! Head towards ${widget.trip.millName}';
-          _currentTurnIcon = Icons.straight_rounded;
-          _trafficCondition = 'CLEAR';
-        });
+        _setAndPersistStage(TripStage.headingToMill);
+        _resetNavigationForMillStage();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('✅ All grain bags collected! Navigating to ${widget.trip.millName} for drop-off & inspection.'),
@@ -1310,8 +1366,14 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
       } catch (_) {}
 
       // All bags are verified! Complete Leg 1:
+      _setAndPersistStage(TripStage.completed);
+      AuthApiService.instance.removeActiveTrip(widget.trip.orderId);
+      if (widget.trip.isBatch) {
+        for (final stop in _tripStops) {
+          AuthApiService.instance.removeActiveTrip(stop.orderId);
+        }
+      }
       setState(() {
-        _currentStage = TripStage.completed;
         _isProcessing = false;
       });
       _navSimulationTimer?.cancel();
@@ -1351,11 +1413,11 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
         setState(() {
           _isProcessing = false;
           _currentStopIndex++;
-          _currentStage = TripStage.headingToCustomer;
           _hasDoorstepPhoto = false;
           _hasCustomerSignature = false;
-          _resetNavigationForCustomerStage();
         });
+        _setAndPersistStage(TripStage.headingToCustomer);
+        _resetNavigationForCustomerStage();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('✅ Stop $_currentStopIndex Complete! Navigating to Stop ${_currentStopIndex + 1} (${_activeStop.customerName}).'),
@@ -1385,9 +1447,15 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
         await Future.wait(batchConfirmFutures);
 
         if (!mounted) return;
+        _setAndPersistStage(TripStage.completed);
+        AuthApiService.instance.removeActiveTrip(widget.trip.orderId);
+        if (widget.trip.isBatch) {
+          for (final stop in _tripStops) {
+            AuthApiService.instance.removeActiveTrip(stop.orderId);
+          }
+        }
         setState(() {
           _isProcessing = false;
-          _currentStage = TripStage.completed;
         });
         _navSimulationTimer?.cancel();
         _showCompletionDialog();
@@ -3453,9 +3521,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> with TickerProvider
             height: 50,
             child: ElevatedButton.icon(
               onPressed: () {
-                setState(() {
-                  _currentStage = TripStage.atMillDelivery;
-                });
+                _setAndPersistStage(TripStage.atMillDelivery);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('📍 Arrived at ${widget.trip.millName}! Mill owner will inspect & scan all grain bags.'),

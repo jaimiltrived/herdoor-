@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 
 enum UserRole {
@@ -202,7 +203,13 @@ class MerchantOrder {
     } else if (rawStatus == 'READY' || rawStatus == 'READY_FOR_PICKUP') {
       mappedTag = 'READY FOR PICKUP';
       mappedColor = const Color(0xFFCBA034);
-    } else if (rawStatus == 'OUT_FOR_DELIVERY') {
+    } else if (rawStatus == 'ASSIGNED') {
+      final isLeg2 = json['deliveryLegType'] == 'LEG_2_FLOUR_DELIVERY' ||
+          json['delivery_leg_type'] == 'LEG_2_FLOUR_DELIVERY' ||
+          json['statusTag'] == 'READY FOR PICKUP';
+      mappedTag = isLeg2 ? 'READY FOR PICKUP' : 'IN PROGRESS';
+      mappedColor = const Color(0xFFCBA034);
+    } else if (rawStatus == 'OUT_FOR_DELIVERY' || rawStatus == 'OUT FOR DELIVERY') {
       mappedTag = 'OUT FOR DELIVERY';
       mappedColor = const Color(0xFF3498DB);
     } else if (rawStatus == 'COMPLETED' || rawStatus == 'DELIVERED' || rawStatus == 'PICKED_UP') {
@@ -213,6 +220,17 @@ class MerchantOrder {
       mappedColor = const Color(0xFFE74C3C);
     } else {
       mappedTag = rawStatus;
+    }
+
+    final String? backendStatusTag = json['statusTag']?.toString();
+    if (backendStatusTag != null && backendStatusTag.isNotEmpty) {
+      if (backendStatusTag == 'READY FOR PICKUP' || backendStatusTag == 'READY') {
+        mappedTag = 'READY FOR PICKUP';
+        mappedColor = const Color(0xFFCBA034);
+      } else if (backendStatusTag == 'OUT FOR DELIVERY' || backendStatusTag == 'OUT_FOR_DELIVERY') {
+        mappedTag = 'OUT FOR DELIVERY';
+        mappedColor = const Color(0xFF3498DB);
+      }
     }
 
     final String custName = json['customerName'] ?? json['userName'] ?? 'Customer ${rawId ?? ""}';
@@ -268,9 +286,18 @@ class MerchantOrder {
       statusColor: mappedColor,
       binLocation: json['binLocation'] ?? 'Bin A-4',
       estimatedCompletionTime: estTime,
-      deliveryDriverName: json['deliveryDriverName'],
-      deliveryDriverPhone: json['deliveryDriverPhone'],
-      deliveryDriverVehicle: json['deliveryDriverVehicle'],
+      deliveryDriverName: json['deliveryDriverName'] ??
+          json['driverName'] ??
+          json['delivery_person_name'] ??
+          json['driver_name'],
+      deliveryDriverPhone: json['deliveryDriverPhone'] ??
+          json['driverPhone'] ??
+          json['delivery_person_phone'] ??
+          json['driver_phone'],
+      deliveryDriverVehicle: json['deliveryDriverVehicle'] ??
+          json['driverVehicle'] ??
+          json['delivery_person_vehicle'] ??
+          json['vehicle_number'],
       timelineSteps: steps,
       totalPrice: price,
       millName: resolvedMill,
@@ -278,6 +305,17 @@ class MerchantOrder {
       rejectionReason: json['rejectionReason'],
       rejectionNotes: json['rejectionNotes'],
     );
+  }
+
+  String get displayGrainType {
+    if (productBags.length > 1) {
+      return 'Multi-Grain (${productBags.length} Items)';
+    }
+    if (productBags.isNotEmpty && productBags.first.productName.isNotEmpty) {
+      return productBags.first.productName;
+    }
+    final cleaned = grainType.replaceAll(RegExp(r'^\d+(\.\d+)?\s*(kg|g|unit)\s*', caseSensitive: false), '').trim();
+    return cleaned.isNotEmpty ? cleaned : 'Fresh Ground Flour';
   }
 
   List<ProductBagItem> get productBags {
@@ -685,6 +723,32 @@ class DeliveryTripStop {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'orderId': orderId,
+      'orderNumber': orderNumber,
+      'customerName': customerName,
+      'customerPhone': customerPhone,
+      'deliveryAddress': deliveryAddress,
+      'homePickupAddress': homePickupAddress,
+      'homePickupLandmark': homePickupLandmark,
+      'homePickupInstructions': homePickupInstructions,
+      'isHomeGrainPickup': isHomeGrainPickup,
+      'quantityKg': quantityKg,
+      'grainTypeName': grainTypeName,
+      'deliveryOtp': deliveryOtp,
+      'pickupPin': pickupPin,
+      'barcodeNumber': barcodeNumber,
+      'isPickedUp': isPickedUp,
+      'isDelivered': isDelivered,
+      'distanceKm': distanceKm,
+      'latitude': latitude,
+      'longitude': longitude,
+      'customerNotes': customerNotes,
+      'orderPayout': orderPayout,
+    };
+  }
+
   List<ProductBagItem> get productBags {
     final rawParts = grainTypeName
         .split(RegExp(r',|\+|\band\b|&'))
@@ -993,6 +1057,8 @@ class DeliveryTrip {
   final String? rejectionReason;
   final List<DeliveryTripStop> stops;
   final List<OrderTimelineEvent> timeline;
+  final String? currentStage;
+  final List<String> scannedBagIds;
 
   DeliveryTrip({
     required this.orderId,
@@ -1039,6 +1105,8 @@ class DeliveryTrip {
     this.rejectionReason,
     this.stops = const [],
     this.timeline = const [],
+    this.currentStage,
+    this.scannedBagIds = const [],
   });
 
   bool get isReturnToCustomer =>
@@ -1123,7 +1191,8 @@ class DeliveryTrip {
       return '${productBags.length} Products • $kgStr';
     }
     final unit = productBags.isNotEmpty ? productBags.first.unitText : kgStr;
-    return '$unit • $grainTypeName';
+    final name = productBags.isNotEmpty ? productBags.first.productName : grainTypeName;
+    return '$unit • $name';
   }
 
   List<DeliveryTripStop> get resolvedStops {
@@ -1190,56 +1259,170 @@ class DeliveryTrip {
       resolvedDelivery = 'Flat 402, Shivalik Towers, Satellite Road, Ahmedabad';
     }
 
+    final rawStage = json['currentStage'] ?? json['current_stage'] ?? json['stage'];
+    final rawScanned = json['scannedBagIds'] ?? json['scanned_bags'] ?? json['scannedBags'];
+    List<String> parsedScannedBags = [];
+    if (rawScanned is List) {
+      parsedScannedBags = rawScanned.map((e) => e.toString()).toList();
+    } else if (rawScanned is String && rawScanned.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawScanned);
+        if (decoded is List) {
+          parsedScannedBags = decoded.map((e) => e.toString()).toList();
+        }
+      } catch (_) {}
+    }
+
     return DeliveryTrip(
-      orderId: json['orderId'] ?? json['id'] ?? 0,
-      orderNumber: json['orderNumber'] ?? '#HD-${json['orderId'] ?? json['id'] ?? '101'}',
-      customerName: json['customerName'] ?? 'Customer',
-      customerPhone: json['customerPhone'] ?? '+919876543210',
-      millName: json['millName'] ?? 'Shree Ganesh Flour Mill',
+      orderId: json['orderId'] ?? json['order_id'] ?? json['id'] ?? 0,
+      orderNumber: json['orderNumber'] ?? json['order_number'] ?? '#HD-${json['orderId'] ?? json['order_id'] ?? json['id'] ?? '101'}',
+      customerName: json['customerName'] ?? json['customer_name'] ?? 'Customer',
+      customerPhone: json['customerPhone'] ?? json['customer_phone'] ?? '+919876543210',
+      millName: json['millName'] ?? json['mill_name'] ?? 'Shree Ganesh Flour Mill',
       millAddress: rawMill,
-      millPhone: json['millPhone'] ?? '+919876543211',
+      millPhone: json['millPhone'] ?? json['mill_phone'] ?? '+919876543211',
       deliveryAddress: resolvedDelivery,
       homePickupAddress: resolvedHome,
-      homePickupLandmark: json['homePickupLandmark'] ?? 'Near Central Bank',
-      homePickupInstructions: json['homePickupInstructions'] ?? 'Pick up raw grain bag from doorstep',
+      homePickupLandmark: json['homePickupLandmark'] ?? json['home_pickup_landmark'] ?? 'Near Central Bank',
+      homePickupInstructions: json['homePickupInstructions'] ?? json['home_pickup_instructions'] ?? 'Pick up raw grain bag from doorstep',
       isHomeGrainPickup: homeGrain,
       legType: parsedLeg,
-      tripBadge: json['tripBadge'],
-      originTitle: json['originTitle'],
-      destinationTitle: json['destinationTitle'],
-      quantityKg: (json['quantityKg'] ?? 5.0).toDouble(),
-      grainTypeName: json['grainTypeName'] ?? 'Fresh Wheat Flour',
-      deliveryFee: (json['deliveryFee'] ?? json['estimatedDeliveryFee'] ?? 40.0).toDouble(),
-      distanceKm: (json['distanceKm'] ?? 2.8).toDouble(),
+      tripBadge: json['tripBadge'] ?? json['trip_badge'],
+      originTitle: json['originTitle'] ?? json['origin_title'],
+      destinationTitle: json['destinationTitle'] ?? json['destination_title'],
+      quantityKg: (json['quantityKg'] ?? json['quantity_kg'] ?? 5.0).toDouble(),
+      grainTypeName: json['grainTypeName'] ?? json['grain_type_name'] ?? 'Fresh Wheat Flour',
+      deliveryFee: (json['deliveryFee'] ?? json['delivery_fee'] ?? json['estimatedDeliveryFee'] ?? 40.0).toDouble(),
+      distanceKm: (json['distanceKm'] ?? json['distance_km'] ?? 2.8).toDouble(),
       status: json['status'] ?? 'ASSIGNED',
-      pickupPin: json['pickupPin'] ?? '4821',
-      deliveryOtp: json['deliveryOtp'] ?? '7391',
-      barcodeNumber: json['barcodeNumber'] ?? 'HD-BAG-${json['orderId'] ?? json['id'] ?? '101'}',
-      currentLatitude: (json['currentLatitude'] ?? 23.0225).toDouble(),
-      currentLongitude: (json['currentLongitude'] ?? 72.5714).toDouble(),
-      millLatitude: (json['millLatitude'] ?? 23.0280).toDouble(),
-      millLongitude: (json['millLongitude'] ?? 72.5680).toDouble(),
-      customerNotes: json['customerNotes'] ?? 'Leave at doorstep and ring bell',
-      isBatch: json['isBatch'] ?? (parsedStops.length > 1),
-      batchOrderCount: json['batchOrderCount'] ?? (parsedStops.isNotEmpty ? parsedStops.length : 1),
-      surgeBonus: (json['surgeBonus'] ?? 0.0).toDouble(),
-      heavyBagBonus: (json['heavyBagBonus'] ?? ((json['quantityKg'] ?? 5.0) >= 10 ? 20.0 : 0.0)).toDouble(),
-      estimatedMins: json['estimatedMins'] ?? 18,
-      pickupZone: json['pickupZone'] ?? 'Central Ahmedabad',
-      paymentMode: json['paymentMode'] ?? 'PREPAID_ONLINE',
-      vehicleTypeAllowed: json['vehicleTypeAllowed'] ?? 'ANY',
-      groupCode: json['groupCode']?.toString(),
-      groupId: json['groupId'] is int ? json['groupId'] as int : (json['groupId'] != null ? int.tryParse(json['groupId'].toString()) : null),
-      isReturnLeg: json['isReturnLeg'] ?? (statusStr == 'RETURN_TO_CUSTOMER' || statusStr == 'REJECTED_AT_MILL' || parsedLeg == 'RETURN_LEG_GRAIN_RETURN'),
-      isRejectedByMill: json['isRejectedByMill'] ?? (statusStr == 'RETURN_TO_CUSTOMER' || statusStr == 'REJECTED_AT_MILL'),
-      rejectionReason: json['rejectionReason']?.toString(),
+      pickupPin: json['pickupPin'] ?? json['pickup_pin'] ?? '4821',
+      deliveryOtp: json['deliveryOtp'] ?? json['delivery_otp'] ?? '7391',
+      barcodeNumber: json['barcodeNumber'] ?? json['barcode_number'] ?? 'HD-BAG-${json['orderId'] ?? json['order_id'] ?? json['id'] ?? '101'}',
+      currentLatitude: (json['currentLatitude'] ?? json['current_latitude'] ?? 23.0225).toDouble(),
+      currentLongitude: (json['currentLongitude'] ?? json['current_longitude'] ?? 72.5714).toDouble(),
+      millLatitude: (json['millLatitude'] ?? json['mill_latitude'] ?? 23.0280).toDouble(),
+      millLongitude: (json['millLongitude'] ?? json['mill_longitude'] ?? 72.5680).toDouble(),
+      customerNotes: json['customerNotes'] ?? json['customer_notes'] ?? 'Leave at doorstep and ring bell',
+      isBatch: json['isBatch'] ?? json['is_batch'] ?? (parsedStops.length > 1),
+      batchOrderCount: json['batchOrderCount'] ?? json['batch_order_count'] ?? (parsedStops.isNotEmpty ? parsedStops.length : 1),
+      surgeBonus: (json['surgeBonus'] ?? json['surge_bonus'] ?? 0.0).toDouble(),
+      heavyBagBonus: (json['heavyBagBonus'] ?? json['heavy_bag_bonus'] ?? ((json['quantityKg'] ?? json['quantity_kg'] ?? 5.0) >= 10 ? 20.0 : 0.0)).toDouble(),
+      estimatedMins: json['estimatedMins'] ?? json['estimated_mins'] ?? 18,
+      pickupZone: json['pickupZone'] ?? json['pickup_zone'] ?? 'Central Ahmedabad',
+      paymentMode: json['paymentMode'] ?? json['payment_mode'] ?? 'PREPAID_ONLINE',
+      vehicleTypeAllowed: json['vehicleTypeAllowed'] ?? json['vehicle_type_allowed'] ?? 'ANY',
+      groupCode: json['groupCode']?.toString() ?? json['group_code']?.toString(),
+      groupId: json['groupId'] is int ? json['groupId'] as int : (json['groupId'] != null ? int.tryParse(json['groupId'].toString()) : (json['group_id'] is int ? json['group_id'] as int : (json['group_id'] != null ? int.tryParse(json['group_id'].toString()) : null))),
+      isReturnLeg: json['isReturnLeg'] ?? json['is_return_leg'] ?? (statusStr == 'RETURN_TO_CUSTOMER' || statusStr == 'REJECTED_AT_MILL' || parsedLeg == 'RETURN_LEG_GRAIN_RETURN'),
+      isRejectedByMill: json['isRejectedByMill'] ?? json['is_rejected_by_mill'] ?? (statusStr == 'RETURN_TO_CUSTOMER' || statusStr == 'REJECTED_AT_MILL'),
+      rejectionReason: (json['rejectionReason'] ?? json['rejection_reason'])?.toString(),
       stops: parsedStops,
       timeline: parsedTimeline,
+      currentStage: rawStage?.toString(),
+      scannedBagIds: parsedScannedBags,
+    );
+  }
+
+  DeliveryTrip copyWith({
+    String? status,
+    String? currentStage,
+    List<String>? scannedBagIds,
+    List<DeliveryTripStop>? stops,
+    String? legType,
+    double? currentLatitude,
+    double? currentLongitude,
+  }) {
+    return DeliveryTrip(
+      orderId: orderId,
+      orderNumber: orderNumber,
+      customerName: customerName,
+      customerPhone: customerPhone,
+      millName: millName,
+      millAddress: millAddress,
+      millPhone: millPhone,
+      deliveryAddress: deliveryAddress,
+      homePickupAddress: homePickupAddress,
+      homePickupLandmark: homePickupLandmark,
+      homePickupInstructions: homePickupInstructions,
+      isHomeGrainPickup: isHomeGrainPickup,
+      legType: legType ?? this.legType,
+      tripBadge: tripBadge,
+      originTitle: originTitle,
+      destinationTitle: destinationTitle,
+      quantityKg: quantityKg,
+      grainTypeName: grainTypeName,
+      deliveryFee: deliveryFee,
+      distanceKm: distanceKm,
+      status: status ?? this.status,
+      pickupPin: pickupPin,
+      deliveryOtp: deliveryOtp,
+      barcodeNumber: barcodeNumber,
+      currentLatitude: currentLatitude ?? this.currentLatitude,
+      currentLongitude: currentLongitude ?? this.currentLongitude,
+      millLatitude: millLatitude,
+      millLongitude: millLongitude,
+      customerNotes: customerNotes,
+      isBatch: isBatch,
+      batchOrderCount: batchOrderCount,
+      surgeBonus: surgeBonus,
+      heavyBagBonus: heavyBagBonus,
+      estimatedMins: estimatedMins,
+      pickupZone: pickupZone,
+      paymentMode: paymentMode,
+      vehicleTypeAllowed: vehicleTypeAllowed,
+      groupCode: groupCode,
+      groupId: groupId,
+      isReturnLeg: isReturnLeg,
+      isRejectedByMill: isRejectedByMill,
+      rejectionReason: rejectionReason,
+      stops: stops ?? this.stops,
+      timeline: timeline,
+      currentStage: currentStage ?? this.currentStage,
+      scannedBagIds: scannedBagIds ?? this.scannedBagIds,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      'orderId': orderId,
+      'orderNumber': orderNumber,
+      'customerName': customerName,
+      'customerPhone': customerPhone,
+      'millName': millName,
+      'millPhone': millPhone,
+      'millAddress': millAddress,
+      'homePickupAddress': homePickupAddress,
+      'homePickupLandmark': homePickupLandmark,
+      'homePickupInstructions': homePickupInstructions,
+      'deliveryAddress': deliveryAddress,
+      'quantityKg': quantityKg,
+      'grainTypeName': grainTypeName,
+      'status': status,
+      'pickupPin': pickupPin,
+      'deliveryOtp': deliveryOtp,
+      'barcodeNumber': barcodeNumber,
+      'customerNotes': customerNotes,
+      'surgeBonus': surgeBonus,
+      'heavyBagBonus': heavyBagBonus,
+      'estimatedMins': estimatedMins,
+      'pickupZone': pickupZone,
+      'paymentMode': paymentMode,
+      'vehicleTypeAllowed': vehicleTypeAllowed,
+      'groupCode': groupCode,
+      'groupId': groupId,
+      'legType': legType,
+      'deliveryFee': deliveryFee,
+      'distanceKm': distanceKm,
+      'isHomeGrainPickup': isHomeGrainPickup,
+      'isBatch': isBatch,
+      'batchOrderCount': batchOrderCount,
+      'tripBadge': tripBadge,
+      'originTitle': originTitle,
+      'destinationTitle': destinationTitle,
+      'currentStage': currentStage,
+      'scannedBagIds': scannedBagIds,
+      'stops': stops.map((s) => s.toJson()).toList(),
+      // snake_case aliases for storage and backend:
       'order_id': orderId,
       'order_number': orderNumber,
       'customer_name': customerName,
@@ -1251,21 +1434,10 @@ class DeliveryTrip {
       'delivery_address': deliveryAddress,
       'quantity_kg': quantityKg,
       'grain_type_name': grainTypeName,
-      'status': status,
-      'pickup_pin': pickupPin,
-      'delivery_otp': deliveryOtp,
-      'customer_notes': customerNotes,
-      'surge_bonus': surgeBonus,
-      'heavy_bag_bonus': heavyBagBonus,
-      'estimated_mins': estimatedMins,
-      'pickup_zone': pickupZone,
-      'payment_mode': paymentMode,
-      'vehicle_type_allowed': vehicleTypeAllowed,
-      'group_code': groupCode,
-      'group_id': groupId,
+      'current_stage': currentStage,
+      'scanned_bags': scannedBagIds,
       'leg_type': legType,
       'delivery_fee': deliveryFee,
-      'distance_km': distanceKm,
     };
   }
 }

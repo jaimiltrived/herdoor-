@@ -19,6 +19,7 @@ exports.deliveryLogin = async (req, res) => {
     const token = generateToken({
       id: user.id,
       name: user.name,
+      phone: user.phone,
       role: user.role
     });
 
@@ -387,6 +388,33 @@ exports.getDeliveryOrders = async (req, res) => {
 exports.getAssignedOrders = async (req, res) => {
   let dbDeliveries = [];
   try {
+    // 1. Auto-heal any orders assigned to delivery that might be missing from deliveries table
+    const unmappedOrders = await query(`
+      SELECT o.*, m.name as mill_name, m.address as mill_address, m.phone as mill_phone,
+             a.address_line1, a.city
+      FROM orders o
+      LEFT JOIN mills m ON o.mill_id = m.id
+      LEFT JOIN addresses a ON o.address_id = a.id
+      WHERE o.status IN ('ASSIGNED', 'OUT_FOR_DELIVERY', 'IN_TRANSIT')
+        AND o.id NOT IN (SELECT order_id FROM deliveries WHERE order_id IS NOT NULL)
+    `);
+
+    for (const o of (unmappedOrders || [])) {
+      const isCust = (o.grain_source || 'CUSTOMER').toUpperCase() === 'CUSTOMER';
+      const leg = isCust ? 'LEG_1_GRAIN_PICKUP' : 'LEG_2_FLOUR_DELIVERY';
+      const stage = o.status === 'OUT_FOR_DELIVERY' ? (isCust ? 'headingToMill' : 'atCustomerDelivery') : (isCust ? 'headingToCustomer' : 'atMillPickup');
+      const custAddr = o.address_line1 ? `${o.address_line1}, ${o.city || 'Ahmedabad'}` : 'Flat 402, Shivalik Towers, Satellite Road';
+      const millAddr = o.mill_address || '12 Market Yard, Ellisbridge, Ahmedabad';
+      try {
+        await query(`
+          INSERT INTO deliveries
+            (order_id, delivery_person_id, delivery_person_name, delivery_person_phone, status, pickup_address, delivery_address, current_latitude, current_longitude, pickup_pin, delivery_otp, delivery_fee, leg_type, current_stage, estimated_minutes, created_at, updated_at)
+          VALUES
+            (?, 3, 'Vikram Delivery Agent', '+919876543212', ?, ?, ?, 23.0225, 72.5714, ?, ?, 90.0, ?, ?, 20, NOW(), NOW())
+        `, [o.id, o.status, isCust ? custAddr : millAddr, isCust ? millAddr : custAddr, o.pickup_pin || '4821', o.delivery_otp || '7391', leg, stage]);
+      } catch (_) {}
+    }
+
     dbDeliveries = await query(`
       SELECT d.*, o.order_number, o.customer_name, o.customer_phone, o.grain_type_name, o.quantity_kg, o.group_id, o.group_code as order_group_code,
              o.status as order_status,
@@ -530,6 +558,9 @@ exports.getAssignedOrders = async (req, res) => {
       paymentMode: 'Online Paid (UPI)',
       isBatch: true,
       status: first.status,
+      currentStage: first.current_stage || null,
+      stage: first.current_stage || null,
+      scannedBags: first.scanned_bags ? (typeof first.scanned_bags === 'string' ? JSON.parse(first.scanned_bags) : first.scanned_bags) : [],
       groupId: first.group_id,
       groupCode: grpCode,
       pickupPin: first.pickup_pin || '4821',
@@ -623,6 +654,9 @@ exports.getAssignedOrders = async (req, res) => {
       isBatch: isBatchTrip,
       batchOrderCount: parsedStops.length > 0 ? parsedStops.length : (d.batch_order_count || 1),
       status: d.status,
+      currentStage: d.current_stage || null,
+      stage: d.current_stage || null,
+      scannedBags: d.scanned_bags ? (typeof d.scanned_bags === 'string' ? JSON.parse(d.scanned_bags) : d.scanned_bags) : [],
       groupId: d.group_id,
       groupCode: d.group_code || (isBatchTrip ? (d.order_number || `#HD-GRP-${d.order_id}`) : null),
       pickupPin: d.pickup_pin || '4821',
@@ -1001,9 +1035,20 @@ exports.getDeliveryOrderById = async (req, res) => {
 exports.acceptDelivery = async (req, res) => {
   const param = req.params.orderId;
   const numId = parseInt(String(param).replace(/[^0-9]/g, ''));
-  const driverName = req.user?.name || 'Vikram Delivery Agent';
-  const driverPhone = req.user?.phone || '+919876543212';
+  let driverName = req.user?.name;
+  let driverPhone = req.user?.phone;
   const driverId = req.user?.id || 3;
+
+  try {
+    const userRows = await query('SELECT name, phone FROM users WHERE id = ? LIMIT 1', [driverId]);
+    if (userRows && userRows.length > 0) {
+      if (userRows[0].name) driverName = userRows[0].name;
+      if (userRows[0].phone) driverPhone = userRows[0].phone;
+    }
+  } catch (_) {}
+
+  if (!driverName) driverName = 'Vikram Delivery Agent';
+  if (!driverPhone) driverPhone = '+919876543212';
 
   // Task 12: Rider isOnline guard
   if (req.user && req.user.role === ROLES.DELIVERY) {
@@ -1092,6 +1137,8 @@ exports.acceptDelivery = async (req, res) => {
     try {
       await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.ASSIGNED, orderId]);
 
+      const initialStage = isLeg1 ? 'headingToCustomer' : 'atMillPickup';
+
       if (existingDels && existingDels.length > 0) {
         await query(`
           UPDATE deliveries SET
@@ -1100,19 +1147,22 @@ exports.acceptDelivery = async (req, res) => {
             delivery_person_phone = ?,
             status = 'ASSIGNED',
             delivery_fee = ?,
+            surge_bonus = ?,
+            heavy_bag_bonus = ?,
             leg_type = ?,
+            current_stage = ?,
             pickup_address = ?,
             delivery_address = ?,
             updated_at = NOW()
           WHERE order_id = ? AND (delivery_person_id IS NULL OR delivery_person_id = 0 OR delivery_person_id = ? OR status IN ('CREATED','AVAILABLE'))
-        `, [driverId, driverName, driverPhone, deliveryFee, resolvedLegType, pickupAddr, deliveryAddr, orderId, driverId]);
+        `, [driverId, driverName, driverPhone, deliveryFee, surgeBonus, heavyBagBonus, resolvedLegType, initialStage, pickupAddr, deliveryAddr, orderId, driverId]);
       } else {
         await query(`
           INSERT INTO deliveries
-            (order_id, delivery_person_id, delivery_person_name, delivery_person_phone, status, pickup_address, delivery_address, current_latitude, current_longitude, pickup_pin, delivery_otp, delivery_fee, leg_type, estimated_minutes, created_at, updated_at)
+            (order_id, delivery_person_id, delivery_person_name, delivery_person_phone, status, pickup_address, delivery_address, current_latitude, current_longitude, pickup_pin, delivery_otp, delivery_fee, surge_bonus, heavy_bag_bonus, leg_type, current_stage, estimated_minutes, created_at, updated_at)
           VALUES
-            (?, ?, ?, ?, 'ASSIGNED', ?, ?, 23.0225, 72.5714, ?, ?, ?, ?, 20, NOW(), NOW())
-        `, [orderId, driverId, driverName, driverPhone, pickupAddr, deliveryAddr, order.pickup_pin || '4821', order.delivery_otp || '7391', deliveryFee, resolvedLegType]);
+            (?, ?, ?, ?, 'ASSIGNED', ?, ?, 23.0225, 72.5714, ?, ?, ?, ?, ?, ?, ?, 20, NOW(), NOW())
+        `, [orderId, driverId, driverName, driverPhone, pickupAddr, deliveryAddr, order.pickup_pin || '4821', order.delivery_otp || '7391', deliveryFee, surgeBonus, heavyBagBonus, resolvedLegType, initialStage]);
       }
 
       const taskLeg = isLeg1 ? 'LEG_1_CUSTOMER_TO_MILL' : 'LEG_2_MILL_TO_CUSTOMER';
@@ -1154,8 +1204,20 @@ exports.acceptDelivery = async (req, res) => {
  */
 exports.acceptGroupDelivery = async (req, res) => {
   const { groupCode, orderIds, stops, totalFee } = req.body;
-  const driverName = req.user?.name || 'Vikram Delivery Agent';
-  const driverPhone = req.user?.phone || '+919876543212';
+  const driverId = req.user?.id || 3;
+  let driverName = req.user?.name;
+  let driverPhone = req.user?.phone;
+
+  try {
+    const userRows = await query('SELECT name, phone FROM users WHERE id = ? LIMIT 1', [driverId]);
+    if (userRows && userRows.length > 0) {
+      if (userRows[0].name) driverName = userRows[0].name;
+      if (userRows[0].phone) driverPhone = userRows[0].phone;
+    }
+  } catch (_) {}
+
+  if (!driverName) driverName = 'Vikram Delivery Agent';
+  if (!driverPhone) driverPhone = '+919876543212';
   const stopsJson = JSON.stringify(stops || []);
 
   // 1. Extract all numeric IDs and string order numbers
@@ -1270,7 +1332,7 @@ exports.acceptGroupDelivery = async (req, res) => {
         if (orderRow.id !== dbPrimaryId) {
           const subExisting = await query('SELECT id FROM deliveries WHERE order_id = ? LIMIT 1', [orderRow.id]);
           if (subExisting && subExisting.length > 0) {
-            await query(`UPDATE deliveries SET status = 'ASSIGNED', delivery_person_id = ?, group_code = ?, updated_at = NOW() WHERE order_id = ?`, [req.user?.id || 3, resolvedGroupCode, orderRow.id]);
+            await query(`UPDATE deliveries SET status = 'ASSIGNED', delivery_person_id = ?, delivery_person_name = ?, delivery_person_phone = ?, group_code = ?, updated_at = NOW() WHERE order_id = ?`, [driverId, driverName, driverPhone, resolvedGroupCode, orderRow.id]);
           } else {
             await query(`
               INSERT INTO deliveries
@@ -1416,12 +1478,30 @@ exports.markPickedUp = async (req, res) => {
     if (allOrderIds.length > 0) {
       const placeholders = allOrderIds.map(() => '?').join(',');
       await query(`UPDATE orders SET status = ?, updated_at = NOW() WHERE id IN (${placeholders})`, [ORDER_STATUS.OUT_FOR_DELIVERY, ...allOrderIds]);
-      await query(`UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id IN (${placeholders}) OR id IN (${placeholders})`, [DELIVERY_STATUS.OUT_FOR_DELIVERY, ...allOrderIds, ...allOrderIds]);
+      await query(`
+        UPDATE deliveries SET
+          status = ?,
+          current_stage = CASE
+            WHEN leg_type = 'LEG_1_GRAIN_PICKUP' THEN 'headingToMill'
+            ELSE 'atCustomerDelivery'
+          END,
+          updated_at = NOW()
+        WHERE order_id IN (${placeholders}) OR id IN (${placeholders})
+      `, [DELIVERY_STATUS.OUT_FOR_DELIVERY, ...allOrderIds, ...allOrderIds]);
     }
     if (allGroupCodes.length > 0) {
       const gPlaceholders = allGroupCodes.map(() => '?').join(',');
       await query(`UPDATE orders SET status = ?, updated_at = NOW() WHERE group_code IN (${gPlaceholders})`, [ORDER_STATUS.OUT_FOR_DELIVERY, ...allGroupCodes]);
-      await query(`UPDATE deliveries SET status = ?, updated_at = NOW() WHERE group_code IN (${gPlaceholders})`, [DELIVERY_STATUS.OUT_FOR_DELIVERY, ...allGroupCodes]);
+      await query(`
+        UPDATE deliveries SET
+          status = ?,
+          current_stage = CASE
+            WHEN leg_type = 'LEG_1_GRAIN_PICKUP' THEN 'headingToMill'
+            ELSE 'atCustomerDelivery'
+          END,
+          updated_at = NOW()
+        WHERE group_code IN (${gPlaceholders})
+      `, [DELIVERY_STATUS.OUT_FOR_DELIVERY, ...allGroupCodes]);
     }
   } catch (dbErr) {
     console.warn('MySQL markPickedUp update warning:', dbErr.message);
@@ -1516,7 +1596,8 @@ exports.updateLocation = async (req, res) => {
     longitude,
     speed,
     heading,
-    etaSeconds
+    etaSeconds,
+    stage
   } = req.body;
 
   if (latitude === undefined || longitude === undefined) {
@@ -1528,7 +1609,14 @@ exports.updateLocation = async (req, res) => {
 
   try {
     if (orderId && !isNaN(orderId)) {
-      await query('UPDATE deliveries SET current_latitude = ?, current_longitude = ?, updated_at = NOW() WHERE order_id = ?', [latNum, lngNum, orderId]);
+      await query(`
+        UPDATE deliveries SET
+          current_latitude = ?,
+          current_longitude = ?,
+          current_stage = COALESCE(?, current_stage),
+          updated_at = NOW()
+        WHERE order_id = ?
+      `, [latNum, lngNum, stage || null, orderId]);
     }
   } catch (err) {
     console.warn('updateLocation MySQL warning:', err.message);
@@ -1543,8 +1631,43 @@ exports.updateLocation = async (req, res) => {
       speed: speed || 32,
       heading: heading || 'NE',
       etaSeconds: etaSeconds || 180,
+      stage: stage || null,
       timestamp: new Date().toISOString()
     }
+  });
+};
+
+/**
+ * @desc Update Current Trip Stage and Scanned Bags
+ * @route POST /api/v1/delivery/orders/:orderId/stage
+ */
+exports.updateTripStage = async (req, res) => {
+  const paramStr = (req.params.orderId || '').toString().trim();
+  const numId = parseInt(paramStr.replace(/[^0-9]/g, ''));
+  const effectiveId = !isNaN(numId) && numId > 0 ? numId : null;
+  const { stage, scannedBags } = req.body;
+
+  if (!stage) {
+    return res.status(400).json({ status: 'error', message: 'stage is required' });
+  }
+
+  try {
+    const scannedBagsJson = scannedBags ? JSON.stringify(scannedBags) : null;
+    await query(`
+      UPDATE deliveries SET
+        current_stage = ?,
+        scanned_bags = COALESCE(?, scanned_bags),
+        updated_at = NOW()
+      WHERE order_id = ? OR id = ? OR group_code = ?
+    `, [stage, scannedBagsJson, effectiveId || 0, effectiveId || 0, paramStr]);
+  } catch (err) {
+    console.warn('updateTripStage MySQL warning:', err.message);
+  }
+
+  res.json({
+    status: 'success',
+    message: 'Trip stage persisted to database',
+    data: { orderId: effectiveId || paramStr, stage, scannedBags }
   });
 };
 

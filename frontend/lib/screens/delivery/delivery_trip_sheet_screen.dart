@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
 import '../../models/merchant_models.dart';
 import '../../services/delivery_api_service.dart';
+import '../../services/auth_api_service.dart';
 import 'active_trip_screen.dart';
 
 class DeliveryTripSheetScreen extends StatefulWidget {
@@ -156,6 +157,20 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
         filteredAssigned.add(t);
       }
 
+      // Ensure all active trips saved in AuthApiService are included (up to 3-4 active orders)
+      final allSavedMaps = await AuthApiService.instance.getAllSavedActiveTrips();
+      for (final sm in allSavedMaps) {
+        try {
+          final savedTrip = DeliveryTrip.fromJson(sm);
+          if (!completedKeys.contains(savedTrip.orderId) &&
+              !completedKeys.contains(savedTrip.orderNumber) &&
+              (savedTrip.groupCode == null || !completedKeys.contains(savedTrip.groupCode)) &&
+              !filteredAssigned.any((t) => t.orderId == savedTrip.orderId || t.orderNumber == savedTrip.orderNumber)) {
+            filteredAssigned.add(savedTrip);
+          }
+        } catch (_) {}
+      }
+
       // If activeTrip passed from parent, ensure it's in assigned list only if not completed
       if (widget.activeTrip != null &&
           !completedKeys.contains(widget.activeTrip!.orderId) &&
@@ -204,77 +219,6 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
     }
   }
 
-  Future<void> _acceptAndAssignTrip(DeliveryTrip trip) async {
-    final batchStopIds = trip.isBatch ? trip.stops.map((s) => s.orderId).toSet() : <int>{};
-    final batchStopNums = trip.isBatch ? trip.stops.map((s) => s.orderNumber).toSet() : <String>{};
-
-    setState(() {
-      // Remove the grouped batch or single trip from available
-      _nearbyAvailableTrips.removeWhere((t) {
-        if (t.orderId == trip.orderId) return true;
-        // Also remove any individual orders that are stops in this grouped batch
-        if (trip.isBatch && batchStopIds.contains(t.orderId)) return true;
-        if (trip.isBatch && batchStopNums.contains(t.orderNumber)) return true;
-        return false;
-      });
-
-      if (!_assignedTrips.any((t) => t.orderId == trip.orderId || t.orderNumber == trip.orderNumber)) {
-        _assignedTrips.insert(0, trip);
-      }
-    });
-
-    final batchLabel = trip.isBatch ? 'Grouped Batch' : 'Order';
-    final activeMsg = trip.isBatch
-        ? 'All ${trip.stops.length} stops are now active'
-        : 'Now active';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('⚡ $batchLabel ${trip.orderNumber} accepted! $activeMsg in Trip Sheet.'),
-        backgroundColor: const Color(0xFF1E8449),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-
-    // Call backend API to persist assignment in MySQL database
-    bool success = false;
-    if (trip.isBatch && trip.stops.isNotEmpty) {
-      success = await DeliveryApiService.instance.acceptGroupTrip(
-        groupCode: trip.orderNumber,
-        orderIds: trip.stops.map((s) => s.orderId).toList(),
-        stops: trip.stops.map((s) => {
-          'orderId': s.orderId,
-          'orderNumber': s.orderNumber,
-          'customerName': s.customerName,
-          'customerPhone': s.customerPhone,
-          'homePickupAddress': s.homePickupAddress,
-          'deliveryAddress': s.deliveryAddress,
-          'quantityKg': s.quantityKg,
-          'grainTypeName': s.grainTypeName,
-          'barcodeNumber': s.barcodeNumber,
-          'pickupPin': s.pickupPin,
-          'deliveryOtp': s.deliveryOtp,
-          'orderPayout': s.orderPayout,
-          'distanceKm': s.distanceKm,
-        }).toList(),
-        totalFee: trip.deliveryFee,
-      );
-    } else {
-      success = await DeliveryApiService.instance.acceptTrip(trip.orderId);
-    }
-
-    if (!mounted) return;
-    if (!success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('⚠️ Oops, another rider claimed this trip first. Refreshing queue...'),
-          backgroundColor: Color(0xFFD32F2F),
-          duration: Duration(seconds: 3),
-        ),
-      );
-      _loadTripSheetData();
-    }
-  }
-
   void _openTripDetail(DeliveryTrip trip) {
     Navigator.push(
       context,
@@ -294,6 +238,13 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
   }
 
   void _handleTripCompletionRealtime(DeliveryTrip trip) {
+    AuthApiService.instance.removeActiveTrip(trip.orderId);
+    if (trip.isBatch && trip.stops.isNotEmpty) {
+      for (final s in trip.stops) {
+        AuthApiService.instance.removeActiveTrip(s.orderId);
+      }
+    }
+
     setState(() {
       _assignedTrips.removeWhere((t) =>
           t.orderId == trip.orderId ||
@@ -668,6 +619,28 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
     );
   }
 
+  String _getTripStageBadge(DeliveryTrip trip) {
+    final stage = trip.currentStage ?? '';
+    if (stage == 'headingToMill') {
+      return trip.isLeg1GrainPickup ? 'Stage 2: To Mill' : 'Stage 1: To Mill';
+    } else if (stage == 'atMillDelivery') {
+      return 'Stage 3: Mill Scan';
+    } else if (stage == 'atMillPickup') {
+      return 'Stage 2: Mill Pickup';
+    } else if (stage == 'headingToCustomer') {
+      return trip.isLeg1GrainPickup ? 'Stage 1: Pick Grain' : 'Stage 3: To Doorstep';
+    } else if (stage == 'atCustomerPickup') {
+      return 'Stage 1: Pick Grain';
+    } else if (stage == 'atCustomerDelivery') {
+      return 'Stage 4: Doorstep';
+    } else if (stage == 'returningToCustomer') {
+      return 'Return: To Customer';
+    } else if (stage == 'returningToMill') {
+      return 'Return: To Mill';
+    }
+    return trip.isLeg1GrainPickup ? 'Stage 1: Pick Grain' : 'Stage 1: Mill Pickup';
+  }
+
   Widget _buildActiveTripCard(DeliveryTrip trip) {
     final isGrouped = (trip.isBatch && trip.stops.length > 1) ||
         trip.stops.length > 1 ||
@@ -724,6 +697,29 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
                       ],
                     ),
                   ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.sync_alt_rounded, size: 12, color: Color(0xFF2563EB)),
+                        const SizedBox(width: 4),
+                        Text(
+                          _getTripStageBadge(trip),
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF1D4ED8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
               Text(
@@ -738,9 +734,7 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
           ),
           const SizedBox(height: 12),
           Text(
-            trip.productBags.length > 1
-                ? '${trip.productBags.length} Products • ${trip.quantityKg.toStringAsFixed(trip.quantityKg.truncateToDouble() == trip.quantityKg ? 0 : 1)} kg • ${trip.grainTypeName}'
-                : '${trip.productBags.isNotEmpty ? trip.productBags.first.unitText : "${trip.quantityKg} kg"} • ${trip.grainTypeName}',
+            trip.productSummaryHeader,
             style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary),
           ),
           const SizedBox(height: 10),
@@ -937,67 +931,6 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
-          ),
-          if (_nearbyAvailableTrips.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            ..._nearbyAvailableTrips.take(2).map((trip) => _buildNearbyQuickTripCard(trip)),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNearbyQuickTripCard(DeliveryTrip trip) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.borderLight),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(trip.orderNumber, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12, color: AppTheme.primaryTerracotta)),
-                    const SizedBox(width: 6),
-                    Text('• ${trip.distanceKm} km', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary)),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(trip.customerName, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13)),
-                Text(
-                  trip.productBags.length > 1
-                      ? '${trip.productBags.length} Products • ${trip.grainTypeName}'
-                      : '${trip.productBags.isNotEmpty ? trip.productBags.first.unitText : "${trip.quantityKg} kg"} • ${trip.grainTypeName}',
-                  style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('₹${trip.deliveryFee.toStringAsFixed(0)}', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w900, fontSize: 16, color: const Color(0xFF1E8449))),
-              const SizedBox(height: 4),
-              ElevatedButton(
-                onPressed: () => _acceptAndAssignTrip(trip),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E8449),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                child: Text('Accept', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-              ),
-            ],
           ),
         ],
       ),

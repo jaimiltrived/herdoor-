@@ -96,35 +96,161 @@ class AuthApiService {
     return 0;
   }
 
-  /// Save active delivery trip JSON payload to survive restarts & app closures
+  // In-memory cache for active delivery trips so they survive across logouts & tab navigations
+  static final Map<String, Map<String, dynamic>> _activeTripsCache = {};
+
+  String _extractTripKey(Map<String, dynamic> trip) {
+    return trip['orderId']?.toString() ??
+        trip['id']?.toString() ??
+        trip['groupCode']?.toString() ??
+        trip['orderNumber']?.toString() ??
+        '';
+  }
+
+  /// Save single active delivery trip JSON payload to survive restarts & logouts
   Future<void> saveActiveTripData(Map<String, dynamic> tripJson) async {
-    if (kIsWeb) return;
+    final key = _extractTripKey(tripJson);
+    if (key.isNotEmpty) {
+      _activeTripsCache[key] = Map<String, dynamic>.from(tripJson);
+    }
     try {
-      await _storage.write(key: 'active_delivery_trip', value: jsonEncode(tripJson));
+      if (!kIsWeb) {
+        await _storage.write(key: 'active_delivery_trip', value: jsonEncode(tripJson));
+        await _storage.write(
+          key: 'active_delivery_trips_list',
+          value: jsonEncode(_activeTripsCache.values.toList()),
+        );
+      }
     } catch (e) {
       debugPrint('Error saving active trip: $e');
     }
   }
 
-  /// Retrieve active delivery trip JSON payload
-  Future<Map<String, dynamic>?> getSavedActiveTripData() async {
-    if (kIsWeb) return null;
+  /// Save multiple active delivery trips
+  Future<void> saveActiveTrips(List<Map<String, dynamic>> trips) async {
+    for (final trip in trips) {
+      final key = _extractTripKey(trip);
+      if (key.isNotEmpty) {
+        _activeTripsCache[key] = Map<String, dynamic>.from(trip);
+      }
+    }
     try {
-      final str = await _storage.read(key: 'active_delivery_trip');
-      if (str != null && str.isNotEmpty) {
-        return jsonDecode(str) as Map<String, dynamic>;
+      if (!kIsWeb) {
+        await _storage.write(
+          key: 'active_delivery_trips_list',
+          value: jsonEncode(_activeTripsCache.values.toList()),
+        );
       }
     } catch (e) {
-      debugPrint('Error reading saved trip data: $e');
+      debugPrint('Error saving active trips: $e');
     }
+  }
+
+  /// Update stage and scanned bags for an active trip
+  Future<void> updateActiveTripStage(int orderId, String stage, {List<String>? scannedBags}) async {
+    for (final entry in _activeTripsCache.entries) {
+      final trip = entry.value;
+      final tripOrderId = trip['orderId'] ?? trip['id'];
+      final stops = trip['stops'] as List?;
+      final bool matchesOrder = tripOrderId == orderId ||
+          (stops != null && stops.any((s) => s is Map && s['orderId'] == orderId));
+
+      if (matchesOrder) {
+        trip['currentStage'] = stage;
+        trip['stage'] = stage;
+        if (scannedBags != null) {
+          trip['scannedBagIds'] = scannedBags;
+        }
+        _activeTripsCache[entry.key] = trip;
+        break;
+      }
+    }
+    try {
+      if (!kIsWeb) {
+        await _storage.write(
+          key: 'active_delivery_trips_list',
+          value: jsonEncode(_activeTripsCache.values.toList()),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error updating active trip stage: $e');
+    }
+  }
+
+  /// Retrieve all active delivery trips (supports 3-4 concurrent trips)
+  Future<List<Map<String, dynamic>>> getAllSavedActiveTrips() async {
+    if (_activeTripsCache.isEmpty && !kIsWeb) {
+      try {
+        final listStr = await _storage.read(key: 'active_delivery_trips_list');
+        if (listStr != null && listStr.isNotEmpty) {
+          final decoded = jsonDecode(listStr) as List;
+          for (final item in decoded) {
+            if (item is Map) {
+              final mapItem = Map<String, dynamic>.from(item);
+              final key = _extractTripKey(mapItem);
+              if (key.isNotEmpty) {
+                _activeTripsCache[key] = mapItem;
+              }
+            }
+          }
+        }
+        // Fallback check for single legacy key
+        if (_activeTripsCache.isEmpty) {
+          final singleStr = await _storage.read(key: 'active_delivery_trip');
+          if (singleStr != null && singleStr.isNotEmpty) {
+            final singleMap = jsonDecode(singleStr) as Map<String, dynamic>;
+            final key = _extractTripKey(singleMap);
+            if (key.isNotEmpty) {
+              _activeTripsCache[key] = singleMap;
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error loading saved active trips: $e');
+      }
+    }
+    return _activeTripsCache.values.toList();
+  }
+
+  /// Retrieve primary active delivery trip JSON payload
+  Future<Map<String, dynamic>?> getSavedActiveTripData() async {
+    final all = await getAllSavedActiveTrips();
+    if (all.isNotEmpty) return all.first;
     return null;
   }
 
-  /// Clear active delivery trip payload on completion
+  /// Remove a specific active trip upon delivery completion
+  Future<void> removeActiveTrip(dynamic tripIdOrOrderId) async {
+    final searchKey = tripIdOrOrderId?.toString() ?? '';
+    _activeTripsCache.removeWhere((k, v) {
+      if (k == searchKey) return true;
+      if (v['orderId']?.toString() == searchKey || v['id']?.toString() == searchKey) return true;
+      final stops = v['stops'] as List?;
+      if (stops != null && stops.any((s) => s is Map && s['orderId']?.toString() == searchKey)) {
+        return true;
+      }
+      return false;
+    });
+    try {
+      if (!kIsWeb) {
+        await _storage.write(
+          key: 'active_delivery_trips_list',
+          value: jsonEncode(_activeTripsCache.values.toList()),
+        );
+        if (_activeTripsCache.isEmpty) {
+          await _storage.delete(key: 'active_delivery_trip');
+        }
+      }
+    } catch (_) {}
+  }
+
+  /// Clear all active delivery trips payload
   Future<void> clearActiveTripData() async {
+    _activeTripsCache.clear();
     if (kIsWeb) return;
     try {
       await _storage.delete(key: 'active_delivery_trip');
+      await _storage.delete(key: 'active_delivery_trips_list');
     } catch (_) {}
   }
 

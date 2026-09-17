@@ -31,6 +31,7 @@ router.post('/orders/:orderId/pickup', deliveryController.markPickedUp);
 router.post('/orders/:orderId/picked-up', deliveryController.markPickedUp);
 router.post('/orders/:orderId/out-for-delivery', deliveryController.markOutForDelivery);
 router.post('/orders/:orderId/location', deliveryController.updateLocation);
+router.post('/orders/:orderId/stage', deliveryController.updateTripStage);
 router.post('/location', deliveryController.updateLocation);
 router.post('/orders/:orderId/deliver', deliveryController.markDelivered);
 router.post('/orders/:orderId/delivered', deliveryController.markDelivered);

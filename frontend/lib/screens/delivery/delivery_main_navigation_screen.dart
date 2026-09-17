@@ -39,16 +39,16 @@ class _DeliveryMainNavigationScreenState extends State<DeliveryMainNavigationScr
 
   Future<void> _loadSavedState() async {
     final tab = await AuthApiService.instance.getSavedTab(UserRole.delivery);
-    final tripData = await AuthApiService.instance.getSavedActiveTripData();
+    final allSavedTrips = await AuthApiService.instance.getAllSavedActiveTrips();
 
     if (mounted) {
       setState(() {
         if (tab >= 0 && tab < 4) {
           _currentIndex = tab;
         }
-        if (tripData != null) {
+        if (allSavedTrips.isNotEmpty) {
           try {
-            _currentActiveTrip = DeliveryTrip.fromJson(tripData);
+            _currentActiveTrip = DeliveryTrip.fromJson(allSavedTrips.first);
             _currentIndex = 1; // Direct to trip sheet if active trip restored
           } catch (e) {
             debugPrint('Failed to parse saved active trip: $e');
@@ -73,8 +73,6 @@ class _DeliveryMainNavigationScreenState extends State<DeliveryMainNavigationScr
     });
     if (trip != null) {
       AuthApiService.instance.saveActiveTripData(trip.toJson());
-    } else {
-      AuthApiService.instance.clearActiveTripData();
     }
   }
 

@@ -815,7 +815,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    order.itemsSummary,
+                    order.timeAgo.isNotEmpty ? order.timeAgo : 'Recently',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 13,
                       color: AppTheme.textSecondary,
@@ -859,8 +859,8 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                               ),
                             ),
                             Text(
-                              order.grainType,
-                              maxLines: 2,
+                              order.displayGrainType,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 15,

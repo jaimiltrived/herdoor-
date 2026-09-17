@@ -18,41 +18,100 @@ function getShopkeeperMillId(req) {
 
 async function getLiveOrders(millId) {
   try {
-    let sql = 'SELECT * FROM orders';
+    let sql = `
+      SELECT 
+        o.*,
+        d.id AS delivery_id,
+        d.delivery_person_id,
+        d.delivery_person_name,
+        d.delivery_person_phone,
+        d.status AS delivery_status,
+        d.leg_type AS delivery_leg_type,
+        d.current_stage AS delivery_stage,
+        u.name AS driver_user_name,
+        u.phone AS driver_user_phone,
+        u.vehicle_number,
+        u.vehicle_type,
+        a.address_line1,
+        a.address_line2,
+        a.city
+      FROM orders o
+      LEFT JOIN deliveries d ON d.order_id = o.id
+      LEFT JOIN users u ON u.id = d.delivery_person_id
+      LEFT JOIN addresses a ON a.id = o.address_id
+    `;
     const params = [];
     if (millId) {
-      sql += ' WHERE mill_id = ?';
+      sql += ' WHERE o.mill_id = ?';
       params.push(millId);
     }
-    sql += ' ORDER BY id DESC';
+    sql += ' ORDER BY o.id DESC';
     const dbOrders = await query(sql, params);
     if (dbOrders && Array.isArray(dbOrders)) {
-      return dbOrders.map(row => ({
-        id: row.id,
-        orderNumber: row.order_number || `#HD-${row.id}`,
-        userId: row.user_id,
-        customerName: row.customer_name || 'Customer',
-        customerPhone: row.customer_phone || '+919876543210',
-        millId: row.mill_id,
-        grainSource: row.grain_source,
-        grainTypeId: row.grain_type_id,
-        grainTypeName: row.grain_type_name,
-        quantityKg: parseFloat(row.quantity_kg) || 5.0,
-        serviceType: row.service_type,
-        fulfillmentType: row.fulfillment_type,
-        addressId: row.address_id,
-        pickupPin: row.pickup_pin,
-        deliveryOtp: row.delivery_otp,
-        paymentMethod: row.payment_method,
-        paymentStatus: row.payment_status,
-        status: row.status,
-        groupId: row.group_id,
-        groupCode: row.group_code,
-        estimatedMinutes: row.estimated_minutes,
-        estimatedCompletionTime: row.estimated_completion_time,
-        totalAmount: parseFloat(row.total_amount) || 0.0,
-        createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString()
-      }));
+      return dbOrders.map(row => {
+        const hasAssignedDriver = Boolean(row.delivery_person_id && row.delivery_status && row.delivery_status !== 'AVAILABLE');
+        const resolvedDriverName = hasAssignedDriver
+          ? (row.delivery_person_name || row.driver_user_name || 'Vikram Delivery Agent')
+          : (row.delivery_person_name || null);
+        const resolvedDriverPhone = hasAssignedDriver
+          ? (row.delivery_person_phone || row.driver_user_phone || '+919876543212')
+          : (row.delivery_person_phone || null);
+        let resolvedDriverVehicle = null;
+        if (hasAssignedDriver) {
+          if (row.vehicle_number) {
+            resolvedDriverVehicle = `${row.vehicle_type || 'Electric Scooter'} #${row.vehicle_number}`;
+          } else {
+            resolvedDriverVehicle = 'Electric Scooter #GJ-01-AB-1234';
+          }
+        }
+
+        const addressText = row.address_line1
+          ? `${row.address_line1}${row.address_line2 ? ', ' + row.address_line2 : ''}, ${row.city || 'Ahmedabad'}`
+          : null;
+
+        return {
+          id: row.id,
+          orderNumber: row.order_number || `#HD-${row.id}`,
+          userId: row.user_id,
+          customerName: row.customer_name || 'Customer',
+          customerPhone: row.customer_phone || '+919876543210',
+          millId: row.mill_id,
+          grainSource: row.grain_source,
+          grainTypeId: row.grain_type_id,
+          grainTypeName: row.grain_type_name,
+          quantityKg: parseFloat(row.quantity_kg) || 5.0,
+          serviceType: row.service_type,
+          fulfillmentType: row.fulfillment_type,
+          addressId: row.address_id,
+          deliveryAddress: addressText,
+          pickupPin: row.pickup_pin,
+          deliveryOtp: row.delivery_otp,
+          paymentMethod: row.payment_method,
+          paymentStatus: row.payment_status,
+          status: row.status,
+          groupId: row.group_id,
+          groupCode: row.group_code,
+          estimatedMinutes: row.estimated_minutes,
+          estimatedCompletionTime: row.estimated_completion_time,
+          totalAmount: parseFloat(row.total_amount) || 0.0,
+          createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+          // Live delivery driver fields from MySQL DB
+          deliveryId: row.delivery_id,
+          deliveryPersonId: row.delivery_person_id,
+          deliveryPersonName: resolvedDriverName,
+          deliveryPersonPhone: resolvedDriverPhone,
+          deliveryPersonVehicle: resolvedDriverVehicle,
+          deliveryDriverName: resolvedDriverName,
+          deliveryDriverPhone: resolvedDriverPhone,
+          deliveryDriverVehicle: resolvedDriverVehicle,
+          driverName: resolvedDriverName,
+          driverPhone: resolvedDriverPhone,
+          driverVehicle: resolvedDriverVehicle,
+          deliveryStatus: row.delivery_status,
+          deliveryLegType: row.delivery_leg_type,
+          deliveryStage: row.delivery_stage
+        };
+      });
     }
   } catch (err) {
     console.warn('MySQL getLiveOrders Error:', err.message);
@@ -79,6 +138,34 @@ function findOrder(param) {
     )) return true;
     return false;
   }) || null;
+}
+
+function isReadyForDispatchOrder(o) {
+  const s = (o.status || '').toUpperCase();
+  const ds = (o.deliveryStatus || '').toUpperCase();
+  const leg = (o.deliveryLegType || '').toUpperCase();
+
+  // 1. Ready or Ready for pickup
+  if ([ORDER_STATUS.READY, ORDER_STATUS.READY_FOR_PICKUP, 'READY FOR PICKUP', 'READY'].includes(s)) {
+    return true;
+  }
+
+  // 2. Out for delivery (shows in Recently Dispatched section)
+  if ([ORDER_STATUS.OUT_FOR_DELIVERY, 'OUT FOR DELIVERY', 'OUT_FOR_DELIVERY'].includes(s) || ds === 'OUT_FOR_DELIVERY') {
+    return true;
+  }
+
+  // 3. Leg 2 order assigned to delivery rider
+  if (s === 'ASSIGNED' && (leg === 'LEG_2_FLOUR_DELIVERY' || ds === 'ASSIGNED' || o.deliveryPersonId)) {
+    return true;
+  }
+
+  // 4. Delivery record has Leg 2 active
+  if (leg === 'LEG_2_FLOUR_DELIVERY' && ['ASSIGNED', 'PICKED_UP_FROM_MILL'].includes(ds)) {
+    return true;
+  }
+
+  return false;
 }
 
 function enrichOrder(o) {
@@ -108,10 +195,30 @@ function enrichOrder(o) {
     }
   }
 
-  const driverUser = delivery ? store.users.find(u => u.id === delivery.deliveryPersonId) : null;
-  const driverName = delivery?.deliveryPersonName || o.deliveryPersonName || (driverUser ? driverUser.name : 'Vikram Delivery Agent');
-  const driverPhone = delivery?.deliveryPersonPhone || o.deliveryPersonPhone || (driverUser ? driverUser.phone : '+919876543212');
-  const driverVehicle = delivery?.vehicleNumber || o.deliveryPersonVehicle || (driverUser && driverUser.vehicleNumber ? `${driverUser.vehicleType || 'Electric Scooter'} #${driverUser.vehicleNumber}` : 'Electric Scooter #GJ-01-AB-1234');
+  const isDriverAssigned = Boolean(o.deliveryPersonId || delivery?.deliveryPersonId);
+  const driverUser = delivery ? store.users.find(usr => usr.id === delivery.deliveryPersonId) : null;
+
+  // Prioritize live driver details joined from DB
+  const driverName = o.deliveryDriverName || o.deliveryPersonName || (delivery?.deliveryPersonName) || (driverUser ? driverUser.name : (isDriverAssigned ? 'Vikram Delivery Agent' : null));
+  const driverPhone = o.deliveryDriverPhone || o.deliveryPersonPhone || (delivery?.deliveryPersonPhone) || (driverUser ? driverUser.phone : (isDriverAssigned ? '+919876543212' : null));
+  let driverVehicle = o.deliveryDriverVehicle || o.deliveryPersonVehicle || delivery?.vehicleNumber;
+  if (!driverVehicle && isDriverAssigned) {
+    if (driverUser && driverUser.vehicleNumber) {
+      driverVehicle = `${driverUser.vehicleType || 'Electric Scooter'} #${driverUser.vehicleNumber}`;
+    } else {
+      driverVehicle = 'Electric Scooter #GJ-01-AB-1234';
+    }
+  }
+
+  // Determine user-friendly statusTag for shopkeeper UI
+  let statusTag = o.status;
+  const isLeg2Assigned = (o.status === 'ASSIGNED' || o.status === ORDER_STATUS.ASSIGNED) && 
+    (o.deliveryLegType === 'LEG_2_FLOUR_DELIVERY' || o.deliveryStatus === 'ASSIGNED' || isDriverAssigned);
+  if (isLeg2Assigned) {
+    statusTag = 'READY FOR PICKUP';
+  } else if (o.status === ORDER_STATUS.OUT_FOR_DELIVERY || o.status === 'OUT_FOR_DELIVERY') {
+    statusTag = 'OUT FOR DELIVERY';
+  }
 
   return {
     ...o,
@@ -123,17 +230,25 @@ function enrichOrder(o) {
     grainType: o.grainTypeName || 'Wheat',
     quantityText: `${o.quantityKg || 5} kg`,
     timeAgo,
-    statusTag: o.status,
-    deliveryAddress: addr ? `${addr.addressLine1}, ${addr.city}` : (o.deliveryAddress || 'Store Pickup'),
+    statusTag,
+    deliveryAddress: o.deliveryAddress || (addr ? `${addr.addressLine1}, ${addr.city}` : 'Store Pickup'),
     deliveryDriverName: driverName,
     deliveryDriverPhone: driverPhone,
     deliveryDriverVehicle: driverVehicle,
-    driverAssigned: delivery ? {
+    driverName: driverName,
+    driverPhone: driverPhone,
+    driverVehicle: driverVehicle,
+    deliveryPersonName: driverName,
+    deliveryPersonPhone: driverPhone,
+    deliveryPersonVehicle: driverVehicle,
+    isDriverAssigned,
+    driverAssigned: isDriverAssigned ? {
+      id: o.deliveryPersonId || delivery?.deliveryPersonId,
       name: driverName,
       phone: driverPhone,
       vehicle: driverVehicle,
-      status: delivery.status,
-      pin: delivery.pickupPin
+      status: o.deliveryStatus || delivery?.status || 'ASSIGNED',
+      pin: o.pickupPin || delivery?.pickupPin
     } : null
   };
 }
@@ -148,7 +263,7 @@ exports.getDashboard = async (req, res) => {
 
   const pendingCount = millOrders.filter(o => o.status === ORDER_STATUS.PLACED || o.status === 'NEW').length;
   const activeCount = millOrders.filter(o => [ORDER_STATUS.ACCEPTED, ORDER_STATUS.PROCESSING, ORDER_STATUS.PACKING, ORDER_STATUS.READY, ORDER_STATUS.READY_FOR_PICKUP, ORDER_STATUS.OUT_FOR_DELIVERY, 'IN PROGRESS', 'MILLING'].includes(o.status)).length;
-  const readyCount = millOrders.filter(o => [ORDER_STATUS.READY, ORDER_STATUS.READY_FOR_PICKUP, 'READY FOR PICKUP', ORDER_STATUS.OUT_FOR_DELIVERY, 'OUT FOR DELIVERY', 'READY'].includes(o.status)).length;
+  const readyCount = millOrders.filter(isReadyForDispatchOrder).length;
   const completedCount = millOrders.filter(o => [ORDER_STATUS.DELIVERED, ORDER_STATUS.PICKED_UP, ORDER_STATUS.COMPLETED].includes(o.status)).length;
   const totalRevenue = millOrders
     .filter(o => o.paymentStatus === 'PAID')
@@ -210,8 +325,7 @@ exports.getActiveOrders = async (req, res) => {
 exports.getReadyOrders = async (req, res) => {
   const millId = getShopkeeperMillId(req);
   const allOrders = await getLiveOrders(millId);
-  const readyStatuses = [ORDER_STATUS.READY, ORDER_STATUS.READY_FOR_PICKUP, 'READY FOR PICKUP', ORDER_STATUS.OUT_FOR_DELIVERY, 'OUT FOR DELIVERY'];
-  const ready = allOrders.filter(o => readyStatuses.includes(o.status)).map(enrichOrder);
+  const ready = allOrders.filter(isReadyForDispatchOrder).map(enrichOrder);
   res.json({ status: 'success', count: ready.length, data: { orders: ready } });
 };
 
@@ -622,7 +736,7 @@ exports.markReady = async (req, res) => {
 
     // Reset deliveries record for Leg 2 so any rider can claim it
     await query(
-      `UPDATE deliveries SET delivery_person_id = NULL, delivery_person_name = NULL, delivery_person_phone = NULL, status = 'AVAILABLE', updated_at = NOW() WHERE order_id = ?`,
+      `UPDATE deliveries SET delivery_person_id = NULL, delivery_person_name = NULL, delivery_person_phone = NULL, status = 'AVAILABLE', leg_type = 'LEG_2_FLOUR_DELIVERY', current_stage = 'atMillPickup', updated_at = NOW() WHERE order_id = ?`,
       [targetId]
     );
   } catch (err) {
@@ -681,7 +795,7 @@ exports.handoverDelivery = async (req, res) => {
   try {
     await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.OUT_FOR_DELIVERY, targetId]);
     await query('INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)', [targetId, ORDER_STATUS.OUT_FOR_DELIVERY, 'Out For Delivery', 'Handed over to delivery partner']);
-    await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.OUT_FOR_DELIVERY, targetId]);
+    await query('UPDATE deliveries SET status = ?, current_stage = ?, updated_at = NOW() WHERE order_id = ?', [DELIVERY_STATUS.OUT_FOR_DELIVERY, 'atCustomerDelivery', targetId]);
   } catch (err) {
     console.warn('MySQL handoverDelivery update warning:', err.message);
   }
