@@ -4,16 +4,19 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
 import '../../models/merchant_models.dart';
 import '../../services/delivery_api_service.dart';
-import 'active_trip_screen.dart';
 
 class DeliveryDashboardScreen extends StatefulWidget {
   final Function(DeliveryTrip trip)? onTripAccepted;
   final VoidCallback? onOpenDrawer;
+  final VoidCallback? onNavigateToShifts;
+  final VoidCallback? onNavigateToTripSheet;
 
   const DeliveryDashboardScreen({
     super.key,
     this.onTripAccepted,
     this.onOpenDrawer,
+    this.onNavigateToShifts,
+    this.onNavigateToTripSheet,
   });
 
   @override
@@ -33,13 +36,17 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
   RiderEarnings? _earnings;
   List<DeliveryTrip> _allTrips = [];
   List<DeliveryTrip> _assignedTrips = [];
-  bool _hasAutoResumedActiveTrip = false;
+  bool _hasRedirectedToTripSheet = false;
   final Set<int> _selectedTripOrderIds = <int>{};
   DeliveryTrip? _incomingAlertTrip;
   int _alertCountdown = 30;
   Timer? _alertTimer;
   Timer? _realtimeSyncTimer;
   late AnimationController _radarPulseController;
+  List<RiderShiftSlot> _shifts = [];
+
+  bool get _hasActiveShift => _shifts.any((s) => s.isBooked);
+  RiderShiftSlot? get _activeShift => _shifts.where((s) => s.isBooked).firstOrNull;
 
   void _toggleTripSelection(int orderId) {
     setState(() {
@@ -76,12 +83,24 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
 
+    _shifts = DeliveryApiService.instance.shiftsNotifier.value;
+    DeliveryApiService.instance.shiftsNotifier.addListener(_onShiftsUpdated);
+
     _loadDashboardData();
     _startRealtimeLiveSync();
   }
 
+  void _onShiftsUpdated() {
+    if (mounted) {
+      setState(() {
+        _shifts = DeliveryApiService.instance.shiftsNotifier.value;
+      });
+    }
+  }
+
   @override
   void dispose() {
+    DeliveryApiService.instance.shiftsNotifier.removeListener(_onShiftsUpdated);
     _radarPulseController.dispose();
     _alertTimer?.cancel();
     _realtimeSyncTimer?.cancel();
@@ -132,11 +151,13 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           DeliveryApiService.instance.getEarnings(),
           DeliveryApiService.instance.getAssignedTrips(),
           DeliveryApiService.instance.getCompletedTrips(),
+          DeliveryApiService.instance.getShiftSlots(),
         ]);
         final trips = results[0] as List<DeliveryTrip>;
         final earnings = results[1] as RiderEarnings;
         final assigned = results[2] as List<DeliveryTrip>;
         final completed = results[3] as List<Map<String, dynamic>>;
+        final shifts = results[4] as List<RiderShiftSlot>;
 
         final completedKeys = <dynamic>{};
         for (final c in completed) {
@@ -187,12 +208,18 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
         if (mounted) {
           final previousIds = _allTrips.map((t) => t.orderId).toSet();
           final newTrips = filteredTrips.where((t) => !previousIds.contains(t.orderId)).toList();
+          final bool shiftsChanged = shifts.length != _shifts.length ||
+              shifts.any((s) => !_shifts.any((os) => os.id == s.id && os.isBooked == s.isBooked));
 
-          if (newTrips.isNotEmpty || filteredTrips.length != _allTrips.length || filteredAssigned.length != _assignedTrips.length) {
+          if (newTrips.isNotEmpty ||
+              filteredTrips.length != _allTrips.length ||
+              filteredAssigned.length != _assignedTrips.length ||
+              shiftsChanged) {
             setState(() {
               _allTrips = filteredTrips;
               _assignedTrips = filteredAssigned;
               _earnings = earnings;
+              _shifts = shifts;
               _selectedTripOrderIds.retainAll(filteredTrips.map((t) => t.orderId));
             });
 
@@ -218,11 +245,13 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
         ),
         DeliveryApiService.instance.getAssignedTrips(),
         DeliveryApiService.instance.getCompletedTrips(),
+        DeliveryApiService.instance.getShiftSlots(),
       ]);
 
       final trips = results[2] as List<DeliveryTrip>;
       final assigned = results[3] as List<DeliveryTrip>;
       final completed = results[4] as List<Map<String, dynamic>>;
+      final shifts = results[5] as List<RiderShiftSlot>;
 
       final completedKeys = <dynamic>{};
       for (final c in completed) {
@@ -277,33 +306,20 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           _earnings = results[1] as RiderEarnings;
           _allTrips = filteredTrips;
           _assignedTrips = filteredAssigned;
+          _shifts = shifts;
           _selectedTripOrderIds.retainAll(filteredTrips.map((t) => t.orderId));
           _isLoading = false;
         });
 
-        if (!_hasAutoResumedActiveTrip && filteredAssigned.isNotEmpty) {
-          _hasAutoResumedActiveTrip = true;
-          final activeTrip = filteredAssigned.first;
+        if (!_hasRedirectedToTripSheet && filteredAssigned.isNotEmpty) {
+          _hasRedirectedToTripSheet = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ActiveTripScreen(
-                    trip: activeTrip,
-                    onTripCompleted: () {
-                      if (Navigator.canPop(context)) {
-                        Navigator.pop(context);
-                      }
-                      DeliveryApiService.instance.invalidateCache();
-                      _loadDashboardData();
-                    },
-                  ),
-                ),
-              ).then((_) {
-                DeliveryApiService.instance.invalidateCache();
-                _loadDashboardData();
-              });
+              if (widget.onNavigateToTripSheet != null) {
+                widget.onNavigateToTripSheet!();
+              } else if (widget.onTripAccepted != null) {
+                widget.onTripAccepted!(filteredAssigned.first);
+              }
             }
           });
         }
@@ -317,6 +333,10 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
 
   void _triggerIncomingOrderAlert(DeliveryTrip trip) {
     if (_isAutoAccept) {
+      if (!_hasActiveShift) {
+        // Auto-accept requires an active shift
+        return;
+      }
       _acceptOrder(trip);
       return;
     }
@@ -360,7 +380,281 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
     );
   }
 
+  void _showShiftBookingBottomSheet({bool isRequiredPrompt = false}) {
+    DeliveryApiService.instance.getShiftSlots();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: isRequiredPrompt ? const Color(0xFFFDEDEC) : const Color(0xFFE8F8F5),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                isRequiredPrompt ? Icons.event_busy_rounded : Icons.event_available_rounded,
+                                color: isRequiredPrompt ? const Color(0xFFC0392B) : const Color(0xFF1E8449),
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isRequiredPrompt ? 'Active Shift Required' : 'Shift Booking Hub',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.textPrimary,
+                                  ),
+                                ),
+                                Text(
+                                  isRequiredPrompt
+                                      ? 'Book a slot below to unlock order acceptance'
+                                      : 'Guaranteed hourly pay & surge bonuses',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          icon: const Icon(Icons.close, size: 20),
+                        ),
+                      ],
+                    ),
+                    if (isRequiredPrompt) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF9E6),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFF1C40F)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline_rounded, color: Color(0xFFB7791F), size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Delivery partners must have an active shift reservation to accept runs.',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF7A4D05),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    Text(
+                      'Available Shift Slots',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ValueListenableBuilder<List<RiderShiftSlot>>(
+                      valueListenable: DeliveryApiService.instance.shiftsNotifier,
+                      builder: (context, liveShifts, _) {
+                        final displayShifts = liveShifts.isNotEmpty ? liveShifts : _shifts;
+                        return ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: displayShifts.length,
+                          separatorBuilder: (ctx, i) => const SizedBox(height: 8),
+                          itemBuilder: (ctx, i) {
+                            final s = displayShifts[i];
+                            return Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: s.isBooked ? const Color(0xFFE8F8F5) : const Color(0xFFFBF9F6),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: s.isBooked ? const Color(0xFF2ECC71) : AppTheme.borderLight,
+                                  width: s.isBooked ? 1.5 : 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text(
+                                              s.title,
+                                              style: GoogleFonts.plusJakartaSans(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                            if (s.isBooked) ...[
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF2ECC71),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  'ACTIVE',
+                                                  style: GoogleFonts.plusJakartaSans(
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${s.timing} • ${s.zone}',
+                                          style: GoogleFonts.plusJakartaSans(
+                                            fontSize: 11,
+                                            color: AppTheme.textSecondary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Min ₹${s.guaranteedPay.toStringAsFixed(0)} Pay (${s.surgeMultiplier} Surge)',
+                                          style: GoogleFonts.plusJakartaSans(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: const Color(0xFF1E8449),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () async {
+                                      final wasBooked = s.isBooked;
+                                      await DeliveryApiService.instance.toggleShiftBooking(s.id);
+                                      if (!wasBooked && isRequiredPrompt) {
+                                        if (ctx.mounted) {
+                                          Navigator.pop(ctx);
+                                        }
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('✅ Shift booked! You can now accept delivery runs.'),
+                                              backgroundColor: Color(0xFF1E8449),
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: s.isBooked ? const Color(0xFFC0392B) : const Color(0xFF1E8449),
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    child: Text(
+                                      s.isBooked ? 'Cancel' : 'Book Slot',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                    if (widget.onNavigateToShifts != null) ...[
+                      const SizedBox(height: 12),
+                      Center(
+                        child: TextButton.icon(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            widget.onNavigateToShifts!();
+                          },
+                          icon: const Icon(Icons.open_in_new_rounded, size: 16, color: AppTheme.primaryTerracotta),
+                          label: Text(
+                            'Open Full Rider Hub & Profile',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryTerracotta,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _acceptOrder(DeliveryTrip trip) async {
+    bool hasShift = _hasActiveShift;
+    if (!hasShift) {
+      hasShift = await DeliveryApiService.instance.hasActiveShiftSlot();
+      if (hasShift && mounted) {
+        final fresh = await DeliveryApiService.instance.getShiftSlots();
+        setState(() => _shifts = fresh);
+      }
+    }
+    if (!hasShift) {
+      _showShiftBookingBottomSheet(isRequiredPrompt: true);
+      return;
+    }
     _alertTimer?.cancel();
     final batchIds = trip.isBatch ? trip.stops.map((s) => s.orderId).toSet() : <int>{};
     final batchNums = trip.isBatch ? trip.stops.map((s) => s.orderNumber).toSet() : <String>{};
@@ -414,27 +708,26 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
 
       if (widget.onTripAccepted != null) {
         widget.onTripAccepted!(trip);
-      } else {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ActiveTripScreen(
-              trip: trip,
-              onTripCompleted: () {
-                if (Navigator.canPop(context)) {
-                  Navigator.pop(context);
-                }
-                _loadDashboardData();
-              },
-            ),
-          ),
-        ).then((_) => _loadDashboardData());
+      } else if (widget.onNavigateToTripSheet != null) {
+        widget.onNavigateToTripSheet!();
       }
     }
   }
 
   Future<void> _acceptCustomBatch(List<DeliveryTrip> selectedTrips) async {
     if (selectedTrips.isEmpty) return;
+    bool hasShift = _hasActiveShift;
+    if (!hasShift) {
+      hasShift = await DeliveryApiService.instance.hasActiveShiftSlot();
+      if (hasShift && mounted) {
+        final fresh = await DeliveryApiService.instance.getShiftSlots();
+        setState(() => _shifts = fresh);
+      }
+    }
+    if (!hasShift) {
+      _showShiftBookingBottomSheet(isRequiredPrompt: true);
+      return;
+    }
     if (selectedTrips.length == 1) {
       return _acceptOrder(selectedTrips.first);
     }
@@ -559,21 +852,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
 
       if (widget.onTripAccepted != null) {
         widget.onTripAccepted!(groupedTrip);
-      } else {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ActiveTripScreen(
-              trip: groupedTrip,
-              onTripCompleted: () {
-                if (Navigator.canPop(context)) {
-                  Navigator.pop(context);
-                }
-                _loadDashboardData();
-              },
-            ),
-          ),
-        ).then((_) => _loadDashboardData());
+      } else if (widget.onNavigateToTripSheet != null) {
+        widget.onNavigateToTripSheet!();
       }
     }
   }
@@ -1107,6 +1387,10 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                     inactiveThumbColor: Colors.white70,
                     inactiveTrackColor: Colors.white.withValues(alpha: 0.2),
                     onChanged: (val) {
+                      if (val && !_hasActiveShift) {
+                        _showShiftBookingBottomSheet(isRequiredPrompt: true);
+                        return;
+                      }
                       setState(() => _isAutoAccept = val);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -1117,6 +1401,74 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                     },
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            // Dynamic Active Shift Status Banner inside Duty Card
+            InkWell(
+              onTap: () => _showShiftBookingBottomSheet(isRequiredPrompt: !_hasActiveShift),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: _hasActiveShift ? Colors.white.withValues(alpha: 0.2) : const Color(0xFFFFF3CD),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _hasActiveShift ? Colors.white38 : const Color(0xFFFFC107),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _hasActiveShift ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
+                      size: 18,
+                      color: _hasActiveShift ? Colors.white : const Color(0xFF856404),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _hasActiveShift
+                                ? 'Active Shift: ${_activeShift!.title}'
+                                : 'No Shift Slot Active',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: _hasActiveShift ? Colors.white : const Color(0xFF856404),
+                            ),
+                          ),
+                          Text(
+                            _hasActiveShift
+                                ? '${_activeShift!.timing} • ${_activeShift!.surgeMultiplier} Guaranteed Surge'
+                                : 'You must book a shift to accept delivery runs',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 10,
+                              color: _hasActiveShift ? Colors.white70 : const Color(0xFF856404),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _hasActiveShift ? Colors.white24 : const Color(0xFF1E8449),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _hasActiveShift ? 'Manage' : 'Book Slot',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -2039,90 +2391,86 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
     if (_assignedTrips.isEmpty) return const SizedBox.shrink();
     final activeTrip = _assignedTrips.first;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E8449),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF1E8449).withValues(alpha: 0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              shape: BoxShape.circle,
+    void goToTripSheet() {
+      if (widget.onNavigateToTripSheet != null) {
+        widget.onNavigateToTripSheet!();
+      } else if (widget.onTripAccepted != null) {
+        widget.onTripAccepted!(activeTrip);
+      }
+    }
+
+    return GestureDetector(
+      onTap: goToTripSheet,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E8449),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF1E8449).withValues(alpha: 0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
-            child: const Icon(Icons.navigation_rounded, color: Colors.white, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'RUN IN PROGRESS • ${activeTrip.orderNumber}',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                    color: Colors.white,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  activeTrip.resolvedLegBadge,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    color: Colors.white.withValues(alpha: 0.9),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.navigation_rounded, color: Colors.white, size: 22),
             ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ActiveTripScreen(
-                    trip: activeTrip,
-                    onTripCompleted: () {
-                      if (Navigator.canPop(context)) {
-                        Navigator.pop(context);
-                      }
-                      _loadDashboardData();
-                    },
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'RUN IN PROGRESS • ${activeTrip.orderNumber}',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                    ),
                   ),
-                ),
-              ).then((_) => _loadDashboardData());
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF1E8449),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 0,
-            ),
-            child: Text(
-              'RESUME ➔',
-              style: GoogleFonts.plusJakartaSans(
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
+                  const SizedBox(height: 2),
+                  Text(
+                    activeTrip.resolvedLegBadge,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      color: Colors.white.withValues(alpha: 0.9),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
+            ElevatedButton(
+              onPressed: goToTripSheet,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFF1E8449),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              child: Text(
+                'TRIP SHEET ➔',
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

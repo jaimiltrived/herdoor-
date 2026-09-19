@@ -304,9 +304,30 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
     }
   }
 
+  bool get _canCancelOrder {
+    final s = _order.statusStep.toUpperCase().replaceAll(' ', '_');
+    // If order is completed or terminal
+    if (s == 'CANCELLED' || s == 'CANCELED' || s == 'REJECTED' || s == 'DELIVERED' || s == 'COMPLETED') {
+      return false;
+    }
+    // If milling/packing or out for delivery has started
+    if (s == 'PROCESSING' || s == 'MILLING' || s == 'IN_PROGRESS' || s == 'PACKING' || s == 'READY' || s == 'READY_FOR_PICKUP' || s == 'OUT_FOR_DELIVERY') {
+      return false;
+    }
+    if (s.contains('RETURN')) {
+      return false;
+    }
+    // If Leg 1 pickup has already completed in the tracking steps
+    if (_order.trackingSteps.length > 1 && _order.trackingSteps[1].isCompleted) {
+      return false;
+    }
+    // Cancellable as long as raw grain is not picked up: PLACED, NEW, PENDING, ACCEPTED, CONFIRMED, ASSIGNED
+    return ['PLACED', 'NEW', 'PENDING', 'ACCEPTED', 'CONFIRMED', 'ASSIGNED'].contains(s);
+  }
+
   Future<void> _confirmCancelOrder() async {
     final numericId = int.tryParse(_order.orderId.replaceAll(RegExp(r'[^0-9]'), ''));
-    if (numericId == null) return;
+    final idToCancel = (numericId != null && numericId > 0) ? numericId : _order.orderId;
 
     final shouldCancel = await showDialog<bool>(
       context: context,
@@ -314,10 +335,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           'Cancel Order?',
-style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 20),
+          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 20),
         ),
         content: Text(
-          'Are you sure you want to cancel order ${_order.orderId}? This cannot be undone once milling begins.',
+          'Are you sure you want to cancel order ${_order.orderId}? You can cancel anytime before raw grain is picked up from your doorstep.',
           style: GoogleFonts.plusJakartaSans(fontSize: 14, color: AppTheme.textSecondary),
         ),
         actions: [
@@ -339,22 +360,27 @@ style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 20),
     );
 
     if (shouldCancel == true) {
-      final success = await CustomerApiService.instance.cancelOrder(numericId);
+      final res = await CustomerApiService.instance.cancelOrderWithDetails(idToCancel);
       if (mounted) {
-        if (success) {
+        if (res['success'] == true) {
           setState(() {
             _order.statusStep = 'CANCELLED';
             _order.isActive = false;
+            _applyStatusToTrackingSteps('CANCELLED');
           });
+          _uiRefreshTimer?.cancel();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Order has been cancelled successfully.'),
-              backgroundColor: Color(0xFFD9534F),
+            SnackBar(
+              content: Text(res['message'] ?? 'Order has been cancelled successfully.'),
+              backgroundColor: const Color(0xFFD9534F),
             ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not cancel order. It may already be in progress.')),
+            SnackBar(
+              content: Text(res['message'] ?? 'Could not cancel order. Grain may already be picked up.'),
+              backgroundColor: Colors.orange.shade800,
+            ),
           );
         }
       }
@@ -748,7 +774,7 @@ style: GoogleFonts.plusJakartaSans(
                 ),
               ),
             ),
-            if (_order.statusStep.toUpperCase() == 'PLACED' || _order.statusStep.toUpperCase() == 'NEW') ...[
+            if (_canCancelOrder) ...[
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton.icon(
@@ -1158,6 +1184,27 @@ style: GoogleFonts.plusJakartaSans(
 
         // Itemized Receipt Box
         _buildItemsSummaryBox(items),
+        if (_canCancelOrder) ...[
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _confirmCancelOrder,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFDECEB),
+                foregroundColor: const Color(0xFFD9534F),
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              icon: const Icon(Icons.close_rounded, size: 18),
+              label: Text(
+                'Cancel Order',
+                style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 24),
       ],
     );

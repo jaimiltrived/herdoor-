@@ -885,8 +885,57 @@ class DeliveryApiService {
     ];
   }
 
+  /// Observable Live Shifts Notifier for reactive HUD / UI updates
+  final ValueNotifier<List<RiderShiftSlot>> shiftsNotifier = ValueNotifier<List<RiderShiftSlot>>([
+    RiderShiftSlot(
+      id: 'SHIFT-1',
+      title: 'Morning Breakfast Rush',
+      timing: '07:00 AM - 11:00 AM',
+      guaranteedPay: 450.0,
+      surgeMultiplier: '1.4x',
+      zone: 'Ellisbridge & Navrangpura',
+      spotsLeft: 3,
+      isBooked: true,
+      status: 'BOOKED',
+    ),
+    RiderShiftSlot(
+      id: 'SHIFT-2',
+      title: 'Lunch & Fresh Milling Peak',
+      timing: '11:30 AM - 03:30 PM',
+      guaranteedPay: 520.0,
+      surgeMultiplier: '1.6x',
+      zone: 'Satellite & Bodakdev',
+      spotsLeft: 5,
+      isBooked: false,
+      status: 'OPEN',
+    ),
+    RiderShiftSlot(
+      id: 'SHIFT-3',
+      title: 'Evening Dinner Atta Rush',
+      timing: '05:00 PM - 09:30 PM',
+      guaranteedPay: 600.0,
+      surgeMultiplier: '1.8x',
+      zone: 'Vastrapur & Prahladnagar',
+      spotsLeft: 2,
+      isBooked: false,
+      status: 'HOT',
+    ),
+    RiderShiftSlot(
+      id: 'SHIFT-4',
+      title: 'Late Night Reserve Shift',
+      timing: '10:00 PM - 01:00 AM',
+      guaranteedPay: 350.0,
+      surgeMultiplier: '1.3x',
+      zone: 'SG Highway Corridor',
+      spotsLeft: 8,
+      isBooked: false,
+      status: 'OPEN',
+    ),
+  ]);
+
   /// Get Shift Slots
   Future<List<RiderShiftSlot>> getShiftSlots() async {
+    List<RiderShiftSlot> result = [];
     if (!shouldSkipNetwork) {
       final authOk = await ensureAuthenticated();
       if (authOk) {
@@ -899,7 +948,7 @@ class DeliveryApiService {
             final body = jsonDecode(response.body);
             final list = body['data']?['shifts'] as List?;
             if (list != null) {
-              return list
+              result = list
                   .map((s) => RiderShiftSlot.fromJson(Map<String, dynamic>.from(s as Map)))
                   .toList();
             }
@@ -910,56 +959,38 @@ class DeliveryApiService {
       }
     }
 
-    return [
-      RiderShiftSlot(
-        id: 'SHIFT-1',
-        title: 'Morning Breakfast Rush',
-        timing: '07:00 AM - 11:00 AM',
-        guaranteedPay: 450.0,
-        surgeMultiplier: '1.4x',
-        zone: 'Ellisbridge & Navrangpura',
-        spotsLeft: 3,
-        isBooked: true,
-        status: 'BOOKED',
-      ),
-      RiderShiftSlot(
-        id: 'SHIFT-2',
-        title: 'Lunch & Fresh Milling Peak',
-        timing: '11:30 AM - 03:30 PM',
-        guaranteedPay: 520.0,
-        surgeMultiplier: '1.6x',
-        zone: 'Satellite & Bodakdev',
-        spotsLeft: 5,
-        isBooked: false,
-        status: 'OPEN',
-      ),
-      RiderShiftSlot(
-        id: 'SHIFT-3',
-        title: 'Evening Dinner Atta Rush',
-        timing: '05:00 PM - 09:30 PM',
-        guaranteedPay: 600.0,
-        surgeMultiplier: '1.8x',
-        zone: 'Vastrapur & Prahladnagar',
-        spotsLeft: 2,
-        isBooked: false,
-        status: 'HOT',
-      ),
-      RiderShiftSlot(
-        id: 'SHIFT-4',
-        title: 'Late Night Reserve Shift',
-        timing: '10:00 PM - 01:00 AM',
-        guaranteedPay: 350.0,
-        surgeMultiplier: '1.3x',
-        zone: 'SG Highway Corridor',
-        spotsLeft: 8,
-        isBooked: false,
-        status: 'OPEN',
-      ),
-    ];
+    if (result.isEmpty) {
+      result = shiftsNotifier.value;
+    } else {
+      shiftsNotifier.value = result;
+    }
+    return result;
+  }
+
+  /// Check if rider currently has any booked active shift slot
+  Future<bool> hasActiveShiftSlot() async {
+    if (shiftsNotifier.value.isEmpty) {
+      await getShiftSlots();
+    }
+    return shiftsNotifier.value.any((s) => s.isBooked);
   }
 
   /// Toggle Shift Slot Booking
   Future<bool> toggleShiftBooking(String shiftId) async {
+    // Immediately flip state locally on ValueNotifier for instant UI responsiveness
+    final currentList = shiftsNotifier.value;
+    final updatedList = currentList.map((s) {
+      if (s.id == shiftId) {
+        final newBooked = !s.isBooked;
+        return s.copyWith(
+          isBooked: newBooked,
+          status: newBooked ? 'BOOKED' : 'OPEN',
+        );
+      }
+      return s;
+    }).toList();
+    shiftsNotifier.value = updatedList;
+
     if (!shouldSkipNetwork) {
       final authOk = await ensureAuthenticated();
       if (authOk) {

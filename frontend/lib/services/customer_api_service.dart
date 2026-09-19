@@ -500,22 +500,41 @@ class CustomerApiService {
     return null;
   }
 
-  /// Cancel Order
-  Future<bool> cancelOrder(int orderId, {String reason = 'Customer requested cancellation'}) async {
+  /// Cancel Order with detailed server message
+  Future<Map<String, dynamic>> cancelOrderWithDetails(dynamic orderId, {String reason = 'Customer requested cancellation'}) async {
     await ensureAuthenticated();
     try {
+      final cleanId = orderId.toString().trim();
       final response = await http.post(
-        Uri.parse('$baseUrl/orders/$orderId/cancel'),
+        Uri.parse('$baseUrl/orders/$cleanId/cancel'),
         headers: _headers,
         body: jsonEncode({'reason': reason}),
       );
+      final body = jsonDecode(response.body);
       if (response.statusCode == 200) {
-        return true;
+        return {
+          'success': true,
+          'message': body['message'] ?? 'Order cancelled successfully before grain pickup.',
+        };
+      } else {
+        return {
+          'success': false,
+          'message': body['message'] ?? 'Could not cancel order.',
+        };
       }
     } catch (e) {
       debugPrint('Cancel Order Error: $e');
+      return {
+        'success': false,
+        'message': 'Network error while cancelling order.',
+      };
     }
-    return false;
+  }
+
+  /// Cancel Order (boolean convenience helper)
+  Future<bool> cancelOrder(dynamic orderId, {String reason = 'Customer requested cancellation'}) async {
+    final res = await cancelOrderWithDetails(orderId, reason: reason);
+    return res['success'] == true;
   }
 
   /// Confirm Order Receipt (Customer Handover Confirmation)

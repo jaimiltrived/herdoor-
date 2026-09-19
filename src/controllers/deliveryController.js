@@ -1058,6 +1058,16 @@ exports.acceptDelivery = async (req, res) => {
     }
   }
 
+  // Shift Slot guard: Delivery boy must have an active booked shift slot to accept trips
+  const hasBookedShift = shiftSlots.some(s => s.isBooked === true) || req.body?.hasBookedShift === true;
+  if (!hasBookedShift) {
+    return res.status(400).json({
+      status: 'error',
+      code: 'NO_ACTIVE_SHIFT',
+      message: 'No active shift slot booked. Please reserve a shift slot in Shift Booking Hub before accepting orders.'
+    });
+  }
+
   // Accept fee/bonus/leg from request body (sent by Flutter client)
   const bodyFee = req.body?.deliveryFee;
   const bodySurge = req.body?.surgeBonus;
@@ -1218,6 +1228,17 @@ exports.acceptGroupDelivery = async (req, res) => {
 
   if (!driverName) driverName = 'Vikram Delivery Agent';
   if (!driverPhone) driverPhone = '+919876543212';
+
+  // Shift Slot guard: Delivery boy must have an active booked shift slot to accept trips
+  const hasBookedShift = shiftSlots.some(s => s.isBooked === true) || req.body?.hasBookedShift === true;
+  if (!hasBookedShift) {
+    return res.status(400).json({
+      status: 'error',
+      code: 'NO_ACTIVE_SHIFT',
+      message: 'No active shift slot booked. Please reserve a shift slot in Shift Booking Hub before accepting orders.'
+    });
+  }
+
   const stopsJson = JSON.stringify(stops || []);
 
   // 1. Extract all numeric IDs and string order numbers
@@ -2203,8 +2224,8 @@ let shiftSlots = [
     surgeMultiplier: '1.4x',
     zone: 'Ellisbridge & Navrangpura',
     spotsLeft: 3,
-    isBooked: true,
-    status: 'BOOKED'
+    isBooked: false,
+    status: 'OPEN'
   },
   {
     id: 'SHIFT-2',

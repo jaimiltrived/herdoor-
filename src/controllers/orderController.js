@@ -538,43 +538,132 @@ exports.getOrderTimeline = async (req, res) => {
   });
 };
 
-exports.cancelOrder = (req, res) => {
-  const orderId = parseInt(req.params.orderId);
-  const { reason = 'User requested cancellation' } = req.body;
-  const order = store.orders.find(o => o.id === orderId);
+exports.cancelOrder = async (req, res) => {
+  const paramStr = (req.params.orderId || '').toString().trim();
+  const numId = parseInt(paramStr.replace(/[^0-9]/g, ''));
+  const effectiveId = !isNaN(numId) && numId > 0 ? numId : null;
+  const { reason = 'Customer requested cancellation' } = req.body;
 
-  if (!order) {
+  let dbOrder = null;
+  try {
+    const dbOrders = await query(
+      'SELECT * FROM orders WHERE id = ? OR order_number = ? OR order_number = ? LIMIT 1',
+      [effectiveId || 0, paramStr, paramStr.startsWith('#') ? paramStr : `#${paramStr}`]
+    );
+    if (dbOrders && dbOrders.length > 0) {
+      dbOrder = dbOrders[0];
+    }
+  } catch (err) {
+    console.warn('MySQL cancelOrder lookup warning:', err.message);
+  }
+
+  const memoryOrder = findOrder(paramStr);
+  if (!dbOrder && !memoryOrder) {
     return res.status(404).json({ status: 'error', message: 'Order not found' });
   }
 
-  const nonCancellable = [
+  const orderId = dbOrder ? dbOrder.id : memoryOrder.id;
+  const orderNumber = dbOrder ? (dbOrder.order_number || `#HD-${dbOrder.id}`) : (memoryOrder.orderNumber || `#HD-${memoryOrder.id}`);
+  const currentStatus = ((dbOrder ? dbOrder.status : memoryOrder.status) || '').toUpperCase();
+
+  // 1. Check if already in terminal state
+  if (['CANCELLED', 'CANCELED', 'REJECTED'].includes(currentStatus)) {
+    return res.status(400).json({ status: 'error', message: 'Order has already been cancelled.' });
+  }
+
+  if (['DELIVERED', 'COMPLETED'].includes(currentStatus)) {
+    return res.status(400).json({ status: 'error', message: 'Completed or delivered orders cannot be cancelled.' });
+  }
+
+  if (['RETURN_TO_CUSTOMER', 'RETURNED_TO_CUSTOMER', 'RETURN_TO_MILL', 'RETURNED_TO_MILL'].includes(currentStatus)) {
+    return res.status(400).json({ status: 'error', message: 'Order cannot be cancelled while in return processing.' });
+  }
+
+  // 2. Check if processing/milling has begun or flour is ready/dispatched
+  const processingOrLaterStatuses = [
+    ORDER_STATUS.PROCESSING,
+    ORDER_STATUS.MILLING,
     ORDER_STATUS.PACKING,
     ORDER_STATUS.READY,
     ORDER_STATUS.READY_FOR_PICKUP,
     ORDER_STATUS.OUT_FOR_DELIVERY,
-    ORDER_STATUS.DELIVERED,
-    ORDER_STATUS.COMPLETED,
-    ORDER_STATUS.CANCELLED
+    'PROCESSING',
+    'MILLING',
+    'PACKING',
+    'READY',
+    'READY_FOR_PICKUP',
+    'OUT_FOR_DELIVERY'
   ];
 
-  if (nonCancellable.includes(order.status)) {
+  if (processingOrLaterStatuses.includes(currentStatus)) {
     return res.status(400).json({
       status: 'error',
-      message: `Order cannot be cancelled in state '${order.status}'`
+      message: `Order cannot be cancelled because milling or delivery has already begun (${currentStatus}).`
     });
   }
 
-  order.status = ORDER_STATUS.CANCELLED;
-  order.timeline.push({
-    status: ORDER_STATUS.CANCELLED,
-    timestamp: new Date().toISOString(),
-    note: reason
-  });
+  // 3. Check delivery stage if assigned to a rider:
+  // If driver has already picked up the grain from customer home (stage headingToMill, atMillPickup, etc. or status OUT_FOR_DELIVERY/PICKED_UP)
+  try {
+    const delRows = await query('SELECT * FROM deliveries WHERE order_id = ? LIMIT 1', [orderId]);
+    if (delRows && delRows.length > 0) {
+      const del = delRows[0];
+      const delStatus = (del.status || '').toUpperCase();
+      const delStage = (del.current_stage || '').toString();
+
+      const pickedUpStages = ['headingToMill', 'atMillPickup', 'atMill', 'atCustomerDelivery'];
+      const pickedUpStatuses = ['OUT_FOR_DELIVERY', 'PICKED_UP', 'PICKED_UP_FROM_MILL', 'GRAIN_DROPPED', 'DELIVERED'];
+
+      if (pickedUpStatuses.includes(delStatus) || pickedUpStages.includes(delStage)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Order cannot be cancelled because raw grain has already been collected from your doorstep.'
+        });
+      }
+    }
+  } catch (delErr) {
+    console.warn('MySQL cancelOrder delivery check warning:', delErr.message);
+  }
+
+  // 4. Perform cancellation in MySQL
+  try {
+    await query('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?', [ORDER_STATUS.CANCELLED, orderId]);
+    await query('UPDATE deliveries SET status = ?, updated_at = NOW() WHERE order_id = ?', ['CANCELLED', orderId]);
+    await query('UPDATE delivery_tasks SET status = ?, updated_at = NOW() WHERE order_id = ?', ['CANCELLED', orderId]);
+    await query('UPDATE packages SET status = ?, updated_at = NOW() WHERE order_id = ?', ['CANCELLED', orderId]);
+
+    await query(
+      'INSERT INTO order_timeline (order_id, status, title, description) VALUES (?, ?, ?, ?)',
+      [orderId, ORDER_STATUS.CANCELLED, 'Order Cancelled', `Order cancelled by customer before grain pickup (${reason})`]
+    );
+  } catch (dbErr) {
+    console.warn('MySQL cancelOrder update warning:', dbErr.message);
+  }
+
+  // 5. Update in-memory store
+  if (memoryOrder) {
+    memoryOrder.status = ORDER_STATUS.CANCELLED;
+    if (!memoryOrder.timeline) memoryOrder.timeline = [];
+    memoryOrder.timeline.push({
+      status: ORDER_STATUS.CANCELLED,
+      timestamp: new Date().toISOString(),
+      note: reason
+    });
+  }
+  if (store.deliveries) {
+    const memDel = store.deliveries.find(d => d.orderId === orderId);
+    if (memDel) memDel.status = 'CANCELLED';
+  }
 
   res.json({
     status: 'success',
-    message: 'Order cancelled successfully',
-    data: { order }
+    message: 'Order cancelled successfully before grain pickup.',
+    data: {
+      orderId,
+      orderNumber,
+      status: ORDER_STATUS.CANCELLED,
+      reason
+    }
   });
 };
 

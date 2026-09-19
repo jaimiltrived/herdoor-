@@ -1632,6 +1632,30 @@ class RiderShiftSlot {
       status: json['status'] ?? 'OPEN',
     );
   }
+
+  RiderShiftSlot copyWith({
+    String? id,
+    String? title,
+    String? timing,
+    double? guaranteedPay,
+    String? surgeMultiplier,
+    String? zone,
+    int? spotsLeft,
+    bool? isBooked,
+    String? status,
+  }) {
+    return RiderShiftSlot(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      timing: timing ?? this.timing,
+      guaranteedPay: guaranteedPay ?? this.guaranteedPay,
+      surgeMultiplier: surgeMultiplier ?? this.surgeMultiplier,
+      zone: zone ?? this.zone,
+      spotsLeft: spotsLeft ?? this.spotsLeft,
+      isBooked: isBooked ?? this.isBooked,
+      status: status ?? this.status,
+    );
+  }
 }
 
 class RiderLeaderboardEntry {
