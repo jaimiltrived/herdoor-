@@ -105,6 +105,7 @@ class OrderModel {
   final String deliveryAddress;
   final String paymentMethod;
   final double millingFee;
+  final double pickupFee;
   final double deliveryFee;
   final List<Map<String, dynamic>> items;
 
@@ -131,8 +132,9 @@ class OrderModel {
     this.pickupAddress = 'Home - 124 Heritage Way',
     this.deliveryAddress = 'Home - 124 Heritage Way',
     this.paymentMethod = 'Visa Card (•••• 4242)',
-    this.millingFee = 5.00,
-    this.deliveryFee = 2.50,
+    this.millingFee = 0.0,
+    this.pickupFee = 0.0,
+    this.deliveryFee = 0.0,
     this.items = const [],
     this.millPhone = '+919876543211',
     this.deliveryDriverName,

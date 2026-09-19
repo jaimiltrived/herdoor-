@@ -92,6 +92,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       deliveryAddress: widget.address,
       paymentMethod: widget.paymentMethod,
       millingFee: widget.subtotal,
+      pickupFee: widget.pickupFee,
       deliveryFee: widget.deliveryFee,
       items: List<Map<String, dynamic>>.from(widget.cartItems.map((item) => Map<String, dynamic>.from(item))),
     );

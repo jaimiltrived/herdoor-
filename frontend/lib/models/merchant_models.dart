@@ -156,6 +156,10 @@ class MerchantOrder {
   String? intakeStatus; // 'ACCEPTED' | 'REJECTED' | 'PENDING'
   final String? rejectionReason;
   final String? rejectionNotes;
+  final double pickupFee;
+  final double deliveryFee;
+  final double millingFee;
+  final List<Map<String, dynamic>> items;
 
   MerchantOrder({
     this.numericId,
@@ -178,6 +182,10 @@ class MerchantOrder {
     this.intakeStatus,
     this.rejectionReason,
     this.rejectionNotes,
+    this.pickupFee = 0.0,
+    this.deliveryFee = 35.0,
+    this.millingFee = 0.0,
+    this.items = const [],
   });
 
   factory MerchantOrder.fromJson(Map<String, dynamic> json) {
@@ -274,6 +282,17 @@ class MerchantOrder {
           .toList();
     }
 
+    final double pickup = (json['pickupFee'] as num?)?.toDouble() ?? 0.0;
+    final double delivery = (json['deliveryFee'] as num?)?.toDouble() ?? 35.0;
+    final double milling = (json['millingFee'] as num?)?.toDouble() ?? 0.0;
+    List<Map<String, dynamic>> orderItems = [];
+    if (json['items'] is List) {
+      orderItems = (json['items'] as List)
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+
     return MerchantOrder(
       numericId: rawId,
       orderId: displayOrderId,
@@ -304,6 +323,10 @@ class MerchantOrder {
       intakeStatus: json['intakeStatus'] ?? (rawStatus == 'PROCESSING' ? 'ACCEPTED' : null),
       rejectionReason: json['rejectionReason'],
       rejectionNotes: json['rejectionNotes'],
+      pickupFee: pickup,
+      deliveryFee: delivery,
+      millingFee: milling,
+      items: orderItems,
     );
   }
 

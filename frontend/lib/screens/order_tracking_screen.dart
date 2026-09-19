@@ -389,33 +389,88 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with SingleTi
 
   List<Map<String, dynamic>> _getOrderItems() {
     if (_order.items.isNotEmpty) {
-      return _order.items;
-    }
+      return _order.items.map((item) {
+        final name = (item['name'] ?? 'Product').toString();
+        final num qty = (item['quantity'] is num)
+            ? item['quantity']
+            : (double.tryParse(item['quantity']?.toString() ?? '1') ?? 1);
+        final num rawPrice = (item['price'] is num)
+            ? item['price']
+            : (double.tryParse(item['price']?.toString() ?? '5') ?? 5.0);
+        final type = item['type']?.toString() ?? 'milling';
+        final isMilling = type == 'milling' || name.toLowerCase().contains('milling');
 
-    final summary = _order.itemSummary;
-    final qtyNumber = int.tryParse(_order.quantityKg.replaceAll(RegExp(r'[^0-9]'), '')) ?? 5;
-    final total = _order.totalPrice > 0 ? _order.totalPrice : 13.52;
+        final double itemTotal = (item['itemTotal'] is num)
+            ? (item['itemTotal'] as num).toDouble()
+            : (item['total'] is num)
+                ? (item['total'] as num).toDouble()
+                : (rawPrice * qty).toDouble();
 
-    if (summary.contains(',')) {
-      final parts = summary.split(',');
-      final itemPrice = total / parts.length;
-      return parts.map((part) {
-        final name = part.trim();
         return {
           'name': name,
-          'type': name.toLowerCase().contains('pack') || name.toLowerCase().contains('mix') ? 'readymade' : 'milling',
-          'quantity': 1,
-          'price': itemPrice,
+          'type': type,
+          'quantity': qty % 1 == 0 ? qty.toInt() : qty,
+          'price': rawPrice,
+          'itemTotal': itemTotal,
+          'isMilling': isMilling,
         };
       }).toList();
     }
 
+    final summary = _order.itemSummary.trim();
+    final rawParts = summary.split(RegExp(r',\s*')).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+
+    if (rawParts.isNotEmpty) {
+      final parsed = <Map<String, dynamic>>[];
+      for (final part in rawParts) {
+        // Match expressions like "5kg Wheat (Gehun) (Milling)" or "15kg Ragi (Finger Millet) (Milling)"
+        final match = RegExp(r'^(\d+(\.\d+)?)\s*(kg|g|unit|x|pack|bag)?\s*(.*)$', caseSensitive: false).firstMatch(part);
+        double qty = 5.0;
+        String name = part;
+        if (match != null) {
+          qty = double.tryParse(match.group(1) ?? '5') ?? 5.0;
+          final remainder = match.group(4)?.trim() ?? '';
+          if (remainder.isNotEmpty) {
+            name = remainder;
+          }
+        }
+
+        final isMilling = part.toLowerCase().contains('milling') ||
+            part.toLowerCase().contains('grain') ||
+            part.toLowerCase().contains('gehun') ||
+            part.toLowerCase().contains('wheat') ||
+            part.toLowerCase().contains('ragi') ||
+            part.toLowerCase().contains('rice') ||
+            part.toLowerCase().contains('chawal') ||
+            part.toLowerCase().contains('bajra') ||
+            part.toLowerCase().contains('chana') ||
+            part.toLowerCase().contains('atta');
+
+        // Standard milling grinding fee is ₹5.00 per kg
+        final unitPrice = isMilling ? 5.0 : 35.0;
+        final itemTotal = qty * unitPrice;
+
+        parsed.add({
+          'name': name,
+          'type': isMilling ? 'milling' : 'readymade',
+          'quantity': qty % 1 == 0 ? qty.toInt() : qty,
+          'price': unitPrice,
+          'itemTotal': itemTotal,
+          'isMilling': isMilling,
+        });
+      }
+      return parsed;
+    }
+
+    final qtyNumber = int.tryParse(_order.quantityKg.replaceAll(RegExp(r'[^0-9]'), '')) ?? 5;
     return [
       {
-        'name': summary.isNotEmpty ? summary : '20kg Wheat (Gehun) (Milling)',
+        'name': summary.isNotEmpty ? summary : 'Wheat (Gehun) (Milling)',
         'type': 'milling',
         'quantity': qtyNumber,
-        'price': total,
+        'price': 5.0,
+        'itemTotal': qtyNumber * 5.0,
+        'isMilling': true,
       }
     ];
   }
@@ -1212,9 +1267,44 @@ style: GoogleFonts.plusJakartaSans(
 
   // --- ORDERED ITEMS BREAKDOWN BOX ---
   Widget _buildItemsSummaryBox(List<Map<String, dynamic>> items) {
-    final subtotal = _order.totalPrice > 0 ? _order.totalPrice : 13.52;
-    final millingFee = _order.millingFee > 0 ? _order.millingFee : 5.0;
-    final deliveryFee = _order.deliveryFee > 0 ? _order.deliveryFee : 2.50;
+    // 1. Calculate computed item subtotal
+    double computedItemsSubtotal = 0.0;
+    for (final item in items) {
+      final num itemTotal = (item['itemTotal'] is num)
+          ? item['itemTotal']
+          : (((item['price'] is num ? item['price'] : 5.0) as num) *
+              ((item['quantity'] is num ? item['quantity'] : 1) as num));
+      computedItemsSubtotal += itemTotal.toDouble();
+    }
+
+    // 2. Resolve grand total and fees with mathematical accuracy matching Checkout & Invoice
+    final double grandTotal = _order.totalPrice > 0
+        ? _order.totalPrice
+        : (computedItemsSubtotal > 0 ? computedItemsSubtotal + 55.0 : 105.0);
+
+    double resolvedDeliveryFee = _order.deliveryFee > 0 ? _order.deliveryFee : 35.0;
+    double resolvedPickupFee = _order.pickupFee;
+    double resolvedSubtotal = _order.millingFee > 0 ? _order.millingFee : computedItemsSubtotal;
+
+    // Harmonize fees so that subtotal + pickupFee + deliveryFee == grandTotal
+    final double feesSum = resolvedPickupFee + resolvedDeliveryFee;
+    if (resolvedPickupFee == 0.0 && (grandTotal - resolvedSubtotal) >= 50.0) {
+      resolvedPickupFee = 20.0;
+      resolvedDeliveryFee = 35.0;
+      resolvedSubtotal = grandTotal - (resolvedPickupFee + resolvedDeliveryFee);
+    } else if (resolvedSubtotal + feesSum != grandTotal) {
+      if (grandTotal >= 55.0) {
+        if (resolvedPickupFee == 0.0 && grandTotal > (computedItemsSubtotal + 35.0)) {
+          resolvedPickupFee = 20.0;
+        }
+        resolvedDeliveryFee = 35.0;
+        resolvedSubtotal = grandTotal - (resolvedPickupFee + resolvedDeliveryFee);
+      } else {
+        resolvedSubtotal = grandTotal > resolvedDeliveryFee ? (grandTotal - resolvedDeliveryFee) : grandTotal;
+      }
+    }
+
+    if (resolvedSubtotal < 0) resolvedSubtotal = 0;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1271,9 +1361,12 @@ style: GoogleFonts.plusJakartaSans(
           ...items.map((item) {
             final name = item['name']?.toString() ?? 'Flour Item';
             final qty = item['quantity'] ?? 1;
-            final price = (item['price'] is num) ? (item['price'] as num).toDouble() : 3.38;
             final type = item['type']?.toString() ?? 'milling';
-            final isMilling = type == 'milling' || name.toLowerCase().contains('milling');
+            final isMilling = item['isMilling'] == true || type == 'milling' || name.toLowerCase().contains('milling');
+            final num rawPrice = (item['price'] is num) ? item['price'] : 5.0;
+            final double itemTotal = (item['itemTotal'] is num)
+                ? (item['itemTotal'] as num).toDouble()
+                : (rawPrice * (qty is num ? qty : 1)).toDouble();
 
             return Container(
               margin: const EdgeInsets.only(bottom: 12.0),
@@ -1326,7 +1419,7 @@ style: GoogleFonts.plusJakartaSans(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        '₹${(price * (qty is int ? qty : 1)).toStringAsFixed(2)}',
+                        '₹${itemTotal.toStringAsFixed(2)}',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
@@ -1334,7 +1427,7 @@ style: GoogleFonts.plusJakartaSans(
                         ),
                       ),
                       Text(
-                        'Qty: $qty${isMilling && (qty is int && qty > 1) ? 'kg' : ''}',
+                        isMilling ? '$qty kg' : 'Qty: $qty',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -1352,25 +1445,41 @@ style: GoogleFonts.plusJakartaSans(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Milling & Processing Fee',
+                items.length > 1 ? 'Subtotal (${items.length} items)' : 'Subtotal (1 item)',
                 style: GoogleFonts.plusJakartaSans(fontSize: 13, color: AppTheme.textSecondary),
               ),
               Text(
-                '₹${millingFee.toStringAsFixed(2)}',
+                '₹${resolvedSubtotal.toStringAsFixed(2)}',
                 style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
               ),
             ],
           ),
+          if (resolvedPickupFee > 0) ...[
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Pickup Fee',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 13, color: AppTheme.textSecondary),
+                ),
+                Text(
+                  '₹${resolvedPickupFee.toStringAsFixed(2)}',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 6),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Delivery & Handling Fee',
+                'Delivery Fee',
                 style: GoogleFonts.plusJakartaSans(fontSize: 13, color: AppTheme.textSecondary),
               ),
               Text(
-                '₹${deliveryFee.toStringAsFixed(2)}',
+                '₹${resolvedDeliveryFee.toStringAsFixed(2)}',
                 style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
               ),
             ],
@@ -1391,7 +1500,7 @@ style: GoogleFonts.plusJakartaSans(
                     ),
                   ),
                   Text(
-                    _order.paymentMethod,
+                    _order.paymentMethod.isNotEmpty ? _order.paymentMethod : 'Visa Card (•••• 4242)',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 11,
                       color: const Color(0xFF27AE60),
@@ -1401,7 +1510,7 @@ style: GoogleFonts.plusJakartaSans(
                 ],
               ),
               Text(
-                '₹${subtotal.toStringAsFixed(2)}',
+                '₹${grandTotal.toStringAsFixed(2)}',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 19,
                   fontWeight: FontWeight.bold,

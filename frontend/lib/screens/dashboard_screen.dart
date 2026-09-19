@@ -184,6 +184,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               isActive: true,
               estimatedDelivery: 'Within 20 minutes',
               statusStep: o.statusTag,
+              pickupFee: o.pickupFee,
+              deliveryFee: o.deliveryFee,
+              millingFee: o.millingFee,
+              items: o.items,
               trackingSteps: [
                 TrackingStep(title: 'Order Placed', subtitle: 'Received at mill', timeText: '10:00 AM', isCompleted: true),
                 TrackingStep(title: 'Grain Cleaning', subtitle: 'Moisture checked', timeText: '10:15 AM', isCompleted: true),

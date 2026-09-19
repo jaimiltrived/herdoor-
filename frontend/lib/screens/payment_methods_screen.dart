@@ -266,6 +266,7 @@ style: GoogleFonts.plusJakartaSans(
                       deliveryAddress: widget.address,
                       paymentMethod: paymentStr,
                       millingFee: widget.subtotal,
+                      pickupFee: widget.pickupFee,
                       deliveryFee: widget.deliveryFee,
                       items: widget.cartItems,
                       trackingSteps: [
