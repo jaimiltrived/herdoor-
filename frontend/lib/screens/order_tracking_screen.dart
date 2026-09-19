@@ -669,53 +669,30 @@ style: GoogleFonts.plusJakartaSans(
                   height: 1.25,
                 ),
               ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceCream,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppTheme.borderLight),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppTheme.borderLight),
-                      ),
-                      child: Icon(
-                        isCancelled ? Icons.cancel_outlined : Icons.access_time_rounded,
-                        color: isCancelled ? const Color(0xFFD9534F) : AppTheme.mustardDark,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isCancelled ? 'Order Status' : 'Estimated Delivery',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 12,
-                            color: AppTheme.textSecondary,
-                          ),
+              if (isCancelled)
+                Container(
+                  margin: const EdgeInsets.only(top: 14),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFDECEB),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFF5C6CB)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.cancel_outlined, color: Color(0xFFD9534F), size: 20),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Order Cancelled',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFFD9534F),
                         ),
-                        Text(
-                          isCancelled ? 'Order Cancelled' : _order.estimatedDelivery,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: isCancelled ? const Color(0xFFD9534F) : AppTheme.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
               if (_order.statusStep.toUpperCase() == 'DELIVERED' || _order.statusStep.toUpperCase() == 'COMPLETED')
                 Container(
                   margin: const EdgeInsets.only(top: 14),
@@ -1013,14 +990,6 @@ style: GoogleFonts.plusJakartaSans(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Estimated delivery: ${_order.estimatedDelivery}',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 14,
-                  color: AppTheme.textSecondary,
                 ),
               ),
             ],
