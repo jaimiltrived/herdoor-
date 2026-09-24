@@ -140,7 +140,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
   void _startRealtimeLiveSync() {
     _realtimeSyncTimer?.cancel();
     _realtimeSyncTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
-      if (!mounted || !_isOnline) return;
+      if (!mounted) return;
       try {
         final results = await Future.wait([
           DeliveryApiService.instance.getAvailableTrips(
@@ -208,24 +208,17 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
         if (mounted) {
           final previousIds = _allTrips.map((t) => t.orderId).toSet();
           final newTrips = filteredTrips.where((t) => !previousIds.contains(t.orderId)).toList();
-          final bool shiftsChanged = shifts.length != _shifts.length ||
-              shifts.any((s) => !_shifts.any((os) => os.id == s.id && os.isBooked == s.isBooked));
 
-          if (newTrips.isNotEmpty ||
-              filteredTrips.length != _allTrips.length ||
-              filteredAssigned.length != _assignedTrips.length ||
-              shiftsChanged) {
-            setState(() {
-              _allTrips = filteredTrips;
-              _assignedTrips = filteredAssigned;
-              _earnings = earnings;
-              _shifts = shifts;
-              _selectedTripOrderIds.retainAll(filteredTrips.map((t) => t.orderId));
-            });
+          setState(() {
+            _allTrips = filteredTrips;
+            _assignedTrips = filteredAssigned;
+            _earnings = earnings;
+            _shifts = shifts;
+            _selectedTripOrderIds.retainAll(filteredTrips.map((t) => t.orderId));
+          });
 
-            if (newTrips.isNotEmpty && _incomingAlertTrip == null && _isOnline) {
-              _triggerIncomingOrderAlert(newTrips.first);
-            }
+          if (newTrips.isNotEmpty && _incomingAlertTrip == null && _isOnline) {
+            _triggerIncomingOrderAlert(newTrips.first);
           }
         }
       } catch (_) {}

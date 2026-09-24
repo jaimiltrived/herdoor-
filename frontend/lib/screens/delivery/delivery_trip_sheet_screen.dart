@@ -604,17 +604,21 @@ class _DeliveryTripSheetScreenState extends State<DeliveryTripSheetScreen> with 
   }
 
   Widget _buildActiveTripsTab() {
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (_assignedTrips.isNotEmpty)
-            ..._assignedTrips.map((t) => _buildActiveTripCard(t))
-          else
-            _buildEmptyActiveTripState(),
-        ],
+    return RefreshIndicator(
+      color: AppTheme.primaryTerracotta,
+      onRefresh: _loadTripSheetData,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_assignedTrips.isNotEmpty)
+              ..._assignedTrips.map((t) => _buildActiveTripCard(t))
+            else
+              _buildEmptyActiveTripState(),
+          ],
+        ),
       ),
     );
   }

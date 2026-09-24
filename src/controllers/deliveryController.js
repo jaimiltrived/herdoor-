@@ -232,8 +232,8 @@ exports.getAvailableTrips = async (req, res) => {
 
   if ((!rawTrips || rawTrips.length === 0) && store.orders && Array.isArray(store.orders)) {
     // In-memory fallback
-    const validStatuses = ['ACCEPTED', 'CONFIRMED', 'READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY', 'PACKED', 'COMPLETED', 'MILLED'];
-    const filtered = store.orders.filter(o => validStatuses.includes(o.status) && !['DELIVERED', 'CANCELLED', 'OUT_FOR_DELIVERY'].includes(o.status));
+    const validStatuses = ['ACCEPTED', 'CONFIRMED', 'READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY', 'PACKED'];
+    const filtered = store.orders.filter(o => validStatuses.includes(o.status) && !['DELIVERED', 'COMPLETED', 'CANCELLED', 'OUT_FOR_DELIVERY', 'ASSIGNED'].includes(o.status));
       
       rawTrips = filtered.map((o, idx) => {
         const isCustomerGrain = (o.grainSource || 'CUSTOMER').toUpperCase() === 'CUSTOMER';
@@ -689,6 +689,67 @@ exports.getAssignedOrders = async (req, res) => {
     });
   }
 
+  // Fallback to in-memory store if dbDeliveries is empty
+  if (trips.length === 0 && store && store.orders) {
+    const storeAssigned = store.orders.filter(o => ['ASSIGNED', 'OUT_FOR_DELIVERY'].includes(o.status));
+    for (const o of storeAssigned) {
+      trips.push({
+        orderId: o.id,
+        orderNumber: o.orderNumber || `#HD-${o.id}`,
+        customerName: o.customerName || 'Customer',
+        customerPhone: o.customerPhone || '+919876543210',
+        millName: o.millName || 'Shree Ganesh Flour Mill & Grinding Hub',
+        millAddress: o.millAddress || '12 Market Yard, Ellisbridge, Ahmedabad',
+        millPhone: '+919876543211',
+        homePickupAddress: o.customerAddress || 'Flat 402, Shivalik Towers, Satellite Road, Ahmedabad',
+        deliveryAddress: o.deliveryAddress || o.customerAddress || 'Flat 402, Shivalik Towers, Satellite Road, Ahmedabad',
+        legType: 'LEG_2_FLOUR_DELIVERY',
+        tripBadge: '🍞 Flour Delivery (Mill ➔ Home)',
+        isHomeGrainPickup: false,
+        isReturnLeg: false,
+        originTitle: 'Flour Mill (Pick up Flour)',
+        destinationTitle: 'Customer Doorstep (Deliver Flour)',
+        pickupAddress: o.millAddress || '12 Market Yard, Ellisbridge, Ahmedabad',
+        quantityKg: parseFloat(o.quantityKg) || 5.0,
+        grainTypeName: o.grainTypeName || 'Fresh Stone Ground Flour',
+        deliveryFee: 65.0,
+        estimatedDeliveryFee: 65.0,
+        surgeBonus: 0.0,
+        heavyBagBonus: 0.0,
+        distanceKm: 2.1,
+        estimatedMins: 18,
+        pickupZone: 'Ellisbridge Central Hub',
+        paymentMode: o.paymentMethod || 'Online Paid (UPI)',
+        isBatch: false,
+        batchOrderCount: 1,
+        status: o.status,
+        currentStage: o.status === 'OUT_FOR_DELIVERY' ? 'atCustomerDelivery' : 'atMillPickup',
+        stage: o.status === 'OUT_FOR_DELIVERY' ? 'atCustomerDelivery' : 'atMillPickup',
+        groupId: o.groupId || null,
+        groupCode: o.groupCode || null,
+        pickupPin: o.pickupPin || '4821',
+        deliveryOtp: o.deliveryOtp || '7391',
+        barcodeNumber: `HD-BAG-${o.id}-01`,
+        stops: [
+          {
+            orderId: o.id,
+            orderNumber: o.orderNumber || `#HD-${o.id}`,
+            customerName: o.customerName || 'Customer',
+            customerPhone: o.customerPhone || '+919876543210',
+            deliveryAddress: o.deliveryAddress || o.customerAddress || 'Flat 402, Shivalik Towers, Satellite Road, Ahmedabad',
+            quantityKg: parseFloat(o.quantityKg) || 5.0,
+            grainTypeName: o.grainTypeName || 'Fresh Stone Ground Flour',
+            deliveryOtp: o.deliveryOtp || '7391',
+            pickupPin: o.pickupPin || '4821',
+            barcodeNumber: `HD-BAG-${o.id}-01`,
+            distanceKm: 2.1,
+            orderPayout: 65.0
+          }
+        ]
+      });
+    }
+  }
+
   res.json({ status: 'success', count: trips.length, data: { trips, deliveries: dbDeliveries } });
 };
 
@@ -957,6 +1018,49 @@ exports.getCompletedTrips = async (req, res) => {
     }
   }
 
+  if (store && store.orders) {
+    const storeCompleted = store.orders.filter(o => ['DELIVERED', 'COMPLETED'].includes(o.status));
+    for (const o of storeCompleted) {
+      if (!processedOrderIds.has(o.id) && !completedTrips.some(t => t.orderId === o.id || t.orderNumber === o.orderNumber)) {
+        processedOrderIds.add(o.id);
+        const earned = parseFloat(o.deliveryFee) || 65.0;
+        completedTrips.push({
+          orderId: o.id,
+          orderNumber: o.orderNumber || `#HD-${o.id}`,
+          customerName: o.customerName || 'Customer',
+          customerPhone: o.customerPhone || '+919876543210',
+          millName: o.millName || 'Shree Ganesh Flour Mill & Grinding Hub',
+          millAddress: o.millAddress || '12 Market Yard, Ellisbridge, Ahmedabad',
+          millPhone: '+919876543211',
+          homePickupAddress: o.customerAddress || 'Flat 402, Shivalik Towers, Satellite Road, Ahmedabad',
+          deliveryAddress: o.deliveryAddress || o.customerAddress || 'Flat 402, Shivalik Towers, Satellite Road, Ahmedabad',
+          quantityKg: parseFloat(o.quantityKg) || 5.0,
+          grainTypeName: o.grainTypeName || 'Fresh Stone Ground Flour',
+          deliveryFee: earned,
+          totalEarned: earned,
+          tipAmount: 0.0,
+          surgeBonus: 0.0,
+          heavyBagBonus: 0.0,
+          distanceKm: 2.1,
+          isBatch: false,
+          stopsCount: 1,
+          status: 'DELIVERED',
+          groupId: o.groupId || null,
+          groupCode: o.groupCode || null,
+          deliveredAt: o.deliveredAt || new Date().toISOString(),
+          deliveredTimeAgo: formatTimeAgo(o.deliveredAt || new Date()),
+          customerRating: 5.0,
+          customerReview: 'Delivered fresh flour on time!',
+          barcodeVerified: true,
+          otpVerified: true,
+          paymentMode: o.paymentMethod || 'Online Paid (UPI)',
+          paymentStatus: 'PAID',
+          stops: []
+        });
+      }
+    }
+  }
+
   // Sort completed trips by real deliveredAt timestamp descending (newest first)
   completedTrips.sort((a, b) => {
     const ta = new Date(a.deliveredAt || 0).getTime();
@@ -1189,6 +1293,25 @@ exports.acceptDelivery = async (req, res) => {
       console.log('MySQL acceptDelivery warning:', dbErr.message);
     }
 
+    if (store && store.orders) {
+      for (const o of store.orders) {
+        if (o.id === orderId || o.orderNumber === String(param) || `#${o.id}` === String(param)) {
+          o.status = ORDER_STATUS.ASSIGNED;
+          o.deliveryPersonId = driverId;
+          o.deliveryPersonName = driverName;
+          o.deliveryPersonPhone = driverPhone;
+          o.deliveryStatus = 'ASSIGNED';
+          if (o.timeline) {
+            o.timeline.push({
+              status: ORDER_STATUS.ASSIGNED,
+              timestamp: new Date().toISOString(),
+              note: `Trip accepted by rider ${driverName}`
+            });
+          }
+        }
+      }
+    }
+
     return res.json({
       status: 'success',
       message: 'Delivery task accepted and locked to rider',
@@ -1373,6 +1496,32 @@ exports.acceptGroupDelivery = async (req, res) => {
     console.warn('MySQL acceptGroupDelivery error:', err.message);
   }
 
+  if (store && store.orders) {
+    for (const o of store.orders) {
+      const isMatch = idArray.includes(o.id) ||
+                      numStrArray.includes(o.orderNumber) ||
+                      numStrArray.includes(`#${o.orderNumber}`) ||
+                      (o.groupCode && o.groupCode === resolvedGroupCode) ||
+                      (allNumericIds.size >= 5 && [ORDER_STATUS.READY_FOR_PICKUP, ORDER_STATUS.READY].includes(o.status));
+      if (isMatch) {
+        o.status = ORDER_STATUS.ASSIGNED;
+        o.groupCode = resolvedGroupCode;
+        o.groupId = uniqueGroupId;
+        o.deliveryPersonId = driverId;
+        o.deliveryPersonName = driverName;
+        o.deliveryPersonPhone = driverPhone;
+        o.deliveryStatus = 'ASSIGNED';
+        if (o.timeline) {
+          o.timeline.push({
+            status: ORDER_STATUS.ASSIGNED,
+            timestamp: new Date().toISOString(),
+            note: `Grouped batch accepted by rider ${driverName}`
+          });
+        }
+      }
+    }
+  }
+
   res.json({
     status: 'success',
     message: 'Multi-stop grouped batch order accepted and stored in database',
@@ -1532,6 +1681,35 @@ exports.markPickedUp = async (req, res) => {
     console.warn('MySQL markPickedUp update warning:', dbErr.message);
   }
 
+  if (store && store.orders) {
+    const isGroupBatch = paramStr.startsWith('#HD-GRP') || paramStr.startsWith('HD-GRP') || paramStr.includes('GRP');
+    for (const o of store.orders) {
+      const isMatch = (effectiveId && o.id === effectiveId) ||
+                      (paramStr && (
+                        o.orderNumber === paramStr ||
+                        `#${o.id}` === paramStr ||
+                        o.groupCode === paramStr ||
+                        `#${o.groupCode}` === paramStr ||
+                        (isGroupBatch && (
+                          o.groupCode === paramStr ||
+                          [ORDER_STATUS.READY_FOR_PICKUP, ORDER_STATUS.ASSIGNED].includes(o.status)
+                        ))
+                      ));
+      if (isMatch) {
+        o.status = ORDER_STATUS.OUT_FOR_DELIVERY;
+        o.deliveryStatus = 'OUT_FOR_DELIVERY';
+        o.deliveryDriverName = 'Vikram Delivery Agent';
+        if (o.timeline) {
+          o.timeline.push({
+            status: ORDER_STATUS.OUT_FOR_DELIVERY,
+            timestamp: new Date().toISOString(),
+            note: 'Picked up from mill, out for delivery to customer doorstep'
+          });
+        }
+      }
+    }
+  }
+
   res.json({
     status: 'success',
     message: 'Order picked up from mill and stored in database',
@@ -1597,6 +1775,35 @@ exports.markOutForDelivery = async (req, res) => {
     }
   } catch (dbErr) {
     console.warn('MySQL markOutForDelivery update warning:', dbErr.message);
+  }
+
+  if (store && store.orders) {
+    const isGroupBatch = paramStr.startsWith('#HD-GRP') || paramStr.startsWith('HD-GRP') || paramStr.includes('GRP');
+    for (const o of store.orders) {
+      const isMatch = (effectiveId && o.id === effectiveId) ||
+                      (paramStr && (
+                        o.orderNumber === paramStr ||
+                        `#${o.id}` === paramStr ||
+                        o.groupCode === paramStr ||
+                        `#${o.groupCode}` === paramStr ||
+                        (isGroupBatch && (
+                          o.groupCode === paramStr ||
+                          [ORDER_STATUS.READY_FOR_PICKUP, ORDER_STATUS.ASSIGNED].includes(o.status)
+                        ))
+                      ));
+      if (isMatch) {
+        o.status = ORDER_STATUS.OUT_FOR_DELIVERY;
+        o.deliveryStatus = 'OUT_FOR_DELIVERY';
+        o.deliveryDriverName = 'Vikram Delivery Agent';
+        if (o.timeline) {
+          o.timeline.push({
+            status: ORDER_STATUS.OUT_FOR_DELIVERY,
+            timestamp: new Date().toISOString(),
+            note: 'Picked up from mill, out for delivery to customer doorstep'
+          });
+        }
+      }
+    }
   }
 
   res.json({
@@ -2049,6 +2256,44 @@ exports.markDelivered = async (req, res) => {
     }
   } catch (dbErr) {
     console.warn('MySQL markDelivered update warning:', dbErr.message);
+  }
+
+  if (store && store.orders) {
+    const isGroupBatch = paramStr.startsWith('#HD-GRP') || paramStr.startsWith('HD-GRP') || paramStr.includes('GRP');
+    for (const o of store.orders) {
+      const isMatch = (effectiveId && o.id === effectiveId) ||
+                      (paramStr && (
+                        o.orderNumber === paramStr ||
+                        `#${o.id}` === paramStr ||
+                        o.groupCode === paramStr ||
+                        `#${o.groupCode}` === paramStr ||
+                        (isGroupBatch && (
+                          o.groupCode === paramStr ||
+                          [ORDER_STATUS.READY_FOR_PICKUP, ORDER_STATUS.ASSIGNED, ORDER_STATUS.OUT_FOR_DELIVERY].includes(o.status)
+                        ))
+                      ));
+      if (isMatch) {
+        o.status = ORDER_STATUS.DELIVERED;
+        o.deliveryStatus = 'DELIVERED';
+        o.paymentStatus = 'PAID';
+        o.deliveredAt = new Date().toISOString();
+        if (o.timeline) {
+          o.timeline.push({
+            status: ORDER_STATUS.DELIVERED,
+            timestamp: new Date().toISOString(),
+            note: 'Order delivered to customer doorstep'
+          });
+        }
+      }
+    }
+  }
+
+  if (store && store.deliveries) {
+    for (const d of store.deliveries) {
+      if ((effectiveId && d.orderId === effectiveId) || (paramStr && (d.groupCode === paramStr || d.orderId === effectiveId))) {
+        d.status = DELIVERY_STATUS.DELIVERED;
+      }
+    }
   }
 
   res.json({
