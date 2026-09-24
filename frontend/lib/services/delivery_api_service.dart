@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 import '../models/merchant_models.dart';
 import '../models/package_model.dart';
 import 'auth_api_service.dart';
@@ -11,7 +12,7 @@ class DeliveryApiService {
   DeliveryApiService._internal();
 
   String get baseUrl => AuthApiService.instance.baseUrl;
-  static const Duration _timeout = Duration(seconds: 6);
+  static const Duration _timeout = ApiConfig.timeout;
 
 
   DateTime? _lastLocationUpdate;

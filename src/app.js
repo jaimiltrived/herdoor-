@@ -13,16 +13,25 @@ const app = express();
 app.use(helmet({
   contentSecurityPolicy: false // Allow Swagger UI inline scripts & styles
 }));
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim())
-  : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174', 'http://127.0.0.1:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174'];
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  // Allow all localhost and 127.0.0.1 ports (for Flutter web, local dev, Vite, etc.)
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  // Allow jenili.in and all subdomains (https://vps.jenili.in, https://admin.jenili.in, etc.)
+  if (/^https?:\/\/([a-zA-Z0-9-]+\.)*jenili\.in(:\d+)?$/.test(origin)) return true;
+  // Allow custom env origins
+  if (process.env.ALLOWED_ORIGINS) {
+    const list = process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim());
+    if (list.includes(origin) || list.includes('*')) return true;
+  }
+  return false;
+};
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow non-browser requests (mobile apps, Postman, curl)
-    if (!origin) return callback(null, true);
-    if (process.env.NODE_ENV !== 'production' || allowedOrigins.includes(origin)) {
-      return callback(null, origin);
+    // Allow non-browser requests (mobile apps, Postman, curl) and verified origins
+    if (!origin || isAllowedOrigin(origin)) {
+      return callback(null, origin || true);
     }
     return callback(new Error('CORS policy: Not allowed by CORS'));
   },
@@ -62,6 +71,11 @@ app.get('/', (req, res) => {
       health: '/api/v1/health'
     }
   });
+});
+
+// Redirect /api and /api/ to /api/v1
+app.get(['/api', '/api/'], (req, res) => {
+  res.redirect('/api/v1');
 });
 
 // API Routes

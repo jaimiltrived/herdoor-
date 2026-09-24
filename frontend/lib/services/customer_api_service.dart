@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 import '../models/app_models.dart';
 import '../models/merchant_models.dart';
 import 'auth_api_service.dart';
@@ -10,13 +11,7 @@ class CustomerApiService {
   factory CustomerApiService() => instance;
   CustomerApiService._internal();
 
-  // Dynamic host determination (10.0.2.2 for Android emulator, localhost for Web/Windows/iOS)
-  String get baseUrl {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:5000/api/v1';
-    }
-    return 'http://localhost:5000/api/v1';
-  }
+  String get baseUrl => ApiConfig.baseUrl;
 
   String? _authToken;
 

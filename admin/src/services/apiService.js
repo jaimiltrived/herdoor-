@@ -1,6 +1,10 @@
 import { initialOrders, pendingRequests, inventoryItems } from '../data/mockData';
 
-const BASE_URL = (import.meta.env && import.meta.env.VITE_API_URL) ? import.meta.env.VITE_API_URL : 'http://localhost:5000/api/v1';
+const BASE_URL = (import.meta.env && import.meta.env.VITE_API_URL)
+  ? import.meta.env.VITE_API_URL
+  : (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+      ? 'http://localhost:5000/api/v1'
+      : '/api/v1');
 
 // Check if admin is currently authenticated
 function getStoredToken() {

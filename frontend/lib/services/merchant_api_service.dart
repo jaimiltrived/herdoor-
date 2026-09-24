@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 import '../models/merchant_models.dart';
 import 'auth_api_service.dart';
 
@@ -10,17 +10,11 @@ class MerchantApiService {
   factory MerchantApiService() => instance;
   MerchantApiService._internal();
 
-  // Dynamic host determination (10.0.2.2 for Android emulator, localhost elsewhere).
-  String get baseUrl {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:5000/api/v1';
-    }
-    return 'http://localhost:5000/api/v1';
-  }
+  String get baseUrl => ApiConfig.baseUrl;
 
   String? _authToken;
 
-  static const Duration _timeout = Duration(seconds: 4);
+  static const Duration _timeout = ApiConfig.timeout;
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 import '../models/merchant_models.dart';
 
 class AuthApiService {
@@ -11,14 +12,9 @@ class AuthApiService {
 
   static const _storage = FlutterSecureStorage();
 
-  String get baseUrl {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:5000/api/v1';
-    }
-    return 'http://localhost:5000/api/v1';
-  }
+  String get baseUrl => ApiConfig.baseUrl;
 
-  static const Duration _timeout = Duration(seconds: 5);
+  static const Duration _timeout = ApiConfig.timeout;
   String? _token;
   Map<String, dynamic>? _currentUser;
   UserRole? _savedRole;
@@ -347,9 +343,13 @@ class AuthApiService {
       }
     } catch (e) {
       debugPrint('Auth Login Error: $e');
+      final errorMsg = e.toString();
+      final isTimeout = errorMsg.contains('TimeoutException');
       return {
         'success': false,
-        'message': 'Unable to connect to HerDoor server. Please check your internet connection.',
+        'message': isTimeout
+            ? 'Connection timed out. Server took too long to respond.'
+            : 'Unable to connect to HerDoor server ($baseUrl): $e',
       };
     }
   }
