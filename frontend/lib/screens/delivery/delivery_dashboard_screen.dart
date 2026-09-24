@@ -1091,104 +1091,117 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(
-          children: [
-            if (widget.onOpenDrawer != null) ...[
+        Expanded(
+          child: Row(
+            children: [
+              if (widget.onOpenDrawer != null) ...[
+                InkWell(
+                  onTap: widget.onOpenDrawer,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.borderLight),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.menu_rounded, color: AppTheme.textPrimary, size: 20),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               InkWell(
                 onTap: widget.onOpenDrawer,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(25),
                 child: Container(
-                  padding: const EdgeInsets.all(9),
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.borderLight),
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF8C4A3E), Color(0xFF5A2E25)],
+                    ),
+                    border: Border.all(color: Colors.white, width: 2),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
                       ),
                     ],
                   ),
-                  child: const Icon(Icons.menu_rounded, color: AppTheme.textPrimary, size: 22),
+                  child: const Icon(Icons.two_wheeler_rounded, color: Colors.white, size: 24),
                 ),
               ),
               const SizedBox(width: 10),
-            ],
-            InkWell(
-              onTap: widget.onOpenDrawer,
-              borderRadius: BorderRadius.circular(25),
-              child: Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF8C4A3E), Color(0xFF5A2E25)],
-                  ),
-                  border: Border.all(color: Colors.white, width: 2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: const Icon(Icons.two_wheeler_rounded, color: Colors.white, size: 26),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      _profile?.name ?? 'Vikram Delivery Agent',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF8E7),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFFF6AD55)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.star_rounded, size: 12, color: Color(0xFFB7791F)),
-                          const SizedBox(width: 2),
-                          Text(
-                            '${_profile?.rating ?? 4.9}',
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            _profile?.name ?? 'Vikram Delivery Agent',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.plusJakartaSans(
-                              fontSize: 11,
+                              fontSize: 15,
                               fontWeight: FontWeight.bold,
-                              color: const Color(0xFFB7791F),
+                              color: AppTheme.textPrimary,
                             ),
                           ),
-                        ],
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF8E7),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFFF6AD55)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.star_rounded, size: 12, color: Color(0xFFB7791F)),
+                              const SizedBox(width: 2),
+                              Text(
+                                '${_profile?.rating ?? 4.9}',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFFB7791F),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '${_profile?.vehicleType ?? 'Hero Electric Nyx'} • ${_profile?.vehicleNumber ?? 'GJ-01-AB-4821'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        color: AppTheme.textSecondary,
                       ),
                     ),
                   ],
                 ),
-                Text(
-                  '${_profile?.vehicleType ?? 'Hero Electric Nyx'} • ${_profile?.vehicleNumber ?? 'GJ-01-AB-4821'}',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
+        const SizedBox(width: 8),
 
         // 24/7 Rider Helpline SOS
         InkWell(
