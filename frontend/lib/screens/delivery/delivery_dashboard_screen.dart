@@ -1250,10 +1250,10 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
             );
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppTheme.borderLight),
               boxShadow: [
                 BoxShadow(
@@ -1264,14 +1264,15 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
               ],
             ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.shield_outlined, size: 16, color: Color(0xFFC0392B)),
-                const SizedBox(width: 4),
+                const Icon(Icons.shield_outlined, size: 15, color: Color(0xFFC0392B)),
+                const SizedBox(width: 3),
                 Text(
-                  'SOS Help',
+                  'SOS',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                     color: const Color(0xFFC0392B),
                   ),
                 ),
@@ -1302,52 +1303,60 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 14,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _isOnline ? const Color(0xFF2ECC71) : Colors.grey,
-                      boxShadow: _isOnline
-                          ? [
-                              BoxShadow(
-                                color: const Color(0xFF2ECC71).withValues(alpha: 0.8),
-                                blurRadius: 10,
-                                spreadRadius: 3,
-                              ),
-                            ]
-                          : null,
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _isOnline ? const Color(0xFF2ECC71) : Colors.grey,
+                        boxShadow: _isOnline
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFF2ECC71).withValues(alpha: 0.8),
+                                  blurRadius: 8,
+                                  spreadRadius: 2,
+                                ),
+                              ]
+                            : null,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _isOnline ? 'RIDER ON DUTY (ONLINE)' : 'DUTY OFF (BREAK MODE)',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.5,
-                          color: Colors.white,
-                        ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _isOnline ? 'RIDER ON DUTY (ONLINE)' : 'DUTY OFF (BREAK MODE)',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.3,
+                              color: Colors.white,
+                            ),
+                          ),
+                          Text(
+                            _isOnline
+                                ? 'Scanning nearby mills & customer drops'
+                                : 'Toggle switch to start receiving orders',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 11,
+                              color: Colors.white.withValues(alpha: 0.85),
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        _isOnline
-                            ? 'Scanning nearby chakki mills & customer drops'
-                            : 'Toggle switch to start receiving delivery requests',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          color: Colors.white.withValues(alpha: 0.85),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
-
+              const SizedBox(width: 6),
               Switch(
                 value: _isOnline,
                 activeThumbColor: Colors.white,
@@ -1369,23 +1378,30 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.flash_auto_rounded, size: 16, color: Color(0xFFF1C40F)),
-                      const SizedBox(width: 6),
-                      Text(
-                        _isOnline
-                            ? (_assignedTrips.isNotEmpty ? 'DUTY ACTIVE • ${_assignedTrips.length} RUN IN PROGRESS' : 'DUTY ACTIVE • READY FOR RUNS')
-                            : 'OFFLINE • GO ONLINE TO ACCEPT TRIPS',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          letterSpacing: 0.5,
+                  Expanded(
+                    child: Row(
+                      children: [
+                        const Icon(Icons.flash_auto_rounded, size: 16, color: Color(0xFFF1C40F)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            _isOnline
+                                ? (_assignedTrips.isNotEmpty ? 'DUTY ACTIVE • ${_assignedTrips.length} RUNS ACTIVE' : 'DUTY ACTIVE • READY FOR RUNS')
+                                : 'OFFLINE • GO ONLINE TO ACCEPT TRIPS',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 6),
                   Switch(
                     value: _isAutoAccept,
                     activeThumbColor: const Color(0xFFF1C40F),
@@ -1573,24 +1589,24 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
 
           // Daily Bonus Quest
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.emoji_events_rounded, size: 16, color: Color(0xFFD4AC0D)),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Daily Quest: Complete 8 trips for +₹150 Bonus',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF9A7D0A),
-                    ),
+              const Icon(Icons.emoji_events_rounded, size: 16, color: Color(0xFFD4AC0D)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Daily Quest: 8 trips for +₹150 Bonus',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF9A7D0A),
                   ),
-                ],
+                ),
               ),
+              const SizedBox(width: 8),
               Text(
-                '7/8 Done (1 left)',
+                '7/8 Done',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
@@ -1989,20 +2005,27 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.commute_rounded, color: AppTheme.primaryTerracotta, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Active Transport Vehicle Mode',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimary,
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(Icons.commute_rounded, color: AppTheme.primaryTerracotta, size: 18),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        'Active Vehicle Mode',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -2011,6 +2034,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
                   border: Border.all(color: const Color(0xFF2ECC71).withValues(alpha: 0.5)),
                 ),
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
                       width: 6,
@@ -2184,20 +2208,27 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> with 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.map_rounded, color: Color(0xFF2ECC71), size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Live 5.0 km Radar Map View',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(Icons.map_rounded, color: Color(0xFF2ECC71), size: 18),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Live 5.0 km Radar',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(

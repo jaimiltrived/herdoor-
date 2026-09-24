@@ -346,19 +346,17 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Total Orders Today',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          'Total Orders',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.bold,
                             color: AppTheme.textSecondary,
                           ),
                         ),
                         Text(
-                          '(₹${_metrics.totalRevenue.toInt()})',
+                          'Today (₹${_metrics.totalRevenue.toInt()})',
                           style: GoogleFonts.plusJakartaSans(
-                            fontSize: 12,
+                            fontSize: 11,
                             color: AppTheme.textMuted,
                           ),
                         ),
@@ -455,19 +453,15 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Ready for Dispatch',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            'Ready to Dispatch',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.bold,
                               color: AppTheme.textPrimary,
                             ),
                           ),
                           Text(
-                            'Shop Ready • Pickup Pending',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            'Pickup Pending',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
@@ -585,18 +579,23 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Order ${order.orderId}',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.textPrimary,
+                          Flexible(
+                            child: Text(
+                              'Order ${order.orderId}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimary,
+                              ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                             decoration: BoxDecoration(
                               color: order.statusTag == 'NEW'
                                   ? const Color(0xFFFFECEB)
@@ -606,7 +605,7 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                             child: Text(
                               order.statusTag,
                               style: GoogleFonts.plusJakartaSans(
-                                fontSize: 10,
+                                fontSize: 9.5,
                                 fontWeight: FontWeight.bold,
                                 color: order.statusTag == 'NEW'
                                     ? AppTheme.primaryTerracotta
