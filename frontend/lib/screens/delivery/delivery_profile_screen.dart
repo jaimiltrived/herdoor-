@@ -168,21 +168,24 @@ style: GoogleFonts.plusJakartaSans(
                       style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary),
                     ),
                     const SizedBox(height: 6),
-                    Row(
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFF8E7),
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(color: const Color(0xFFF6AD55)),
                           ),
                           child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               const Icon(Icons.star_rounded, size: 14, color: Color(0xFFB7791F)),
                               const SizedBox(width: 3),
                               Text(
-                                '${_profile?.rating ?? 4.9} (348 ratings)',
+                                '${_profile?.rating ?? 4.9} (348)',
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
@@ -192,9 +195,8 @@ style: GoogleFonts.plusJakartaSans(
                             ],
                           ),
                         ),
-                        const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: const Color(0xFFE8F8F5),
                             borderRadius: BorderRadius.circular(6),
@@ -325,21 +327,25 @@ style: GoogleFonts.plusJakartaSans(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.event_available_rounded, color: AppTheme.primaryTerracotta),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Shift Booking Hub',
-          style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ],
+              const Icon(Icons.event_available_rounded, color: AppTheme.primaryTerracotta, size: 20),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Shift Booking Hub',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
               ),
-              Text(
-                'Guaranteed Hourly Pay',
-                style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF1E8449)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F8F5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Guaranteed Pay',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 10.5, fontWeight: FontWeight.bold, color: const Color(0xFF1E8449)),
+                ),
               ),
             ],
           ),
@@ -359,27 +365,47 @@ style: GoogleFonts.plusJakartaSans(
                   border: Border.all(color: s.isBooked ? const Color(0xFF2ECC71) : AppTheme.borderLight),
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(s.title, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text('${s.timing} • ${s.zone}', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary)),
-                        const SizedBox(height: 2),
-                        Text('Min ₹${s.guaranteedPay.toStringAsFixed(0)} Pay (${s.surgeMultiplier} Surge)', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF1E8449))),
-                      ],
-                    ),
-                    ElevatedButton(
-                      onPressed: () => _toggleShift(s),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: s.isBooked ? const Color(0xFFC0392B) : const Color(0xFF1E8449),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            s.title,
+                            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${s.timing} • ${s.zone}',
+                            style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textSecondary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Min ₹${s.guaranteedPay.toStringAsFixed(0)} Pay (${s.surgeMultiplier} Surge)',
+                            style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF1E8449)),
+                          ),
+                        ],
                       ),
-                      child: Text(
-                        s.isBooked ? 'Cancel' : 'Book Slot',
-                        style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      height: 34,
+                      child: ElevatedButton(
+                        onPressed: () => _toggleShift(s),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: s.isBooked ? const Color(0xFFC0392B) : const Color(0xFF1E8449),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        child: Text(
+                          s.isBooked ? 'Cancel' : 'Book Slot',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
                       ),
                     ),
                   ],
@@ -404,21 +430,28 @@ style: GoogleFonts.plusJakartaSans(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.leaderboard_rounded, color: Color(0xFFB7791F)),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Ahmedabad Rider Leaderboard',
-          style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold),
-                  ),
-                ],
+              const Icon(Icons.leaderboard_rounded, color: Color(0xFFB7791F), size: 20),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Ahmedabad Leaderboard',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              Text(
-                'Weekly Rank #2',
-                style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFFB7791F)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8E7),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFF6AD55)),
+                ),
+                child: Text(
+                  'Rank #2',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFFB7791F)),
+                ),
               ),
             ],
           ),

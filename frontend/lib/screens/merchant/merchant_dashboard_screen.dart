@@ -581,19 +581,19 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Flexible(
+                          Expanded(
                             child: Text(
                               'Order ${order.orderId}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.plusJakartaSans(
-                                fontSize: 15,
+                                fontSize: 14.5,
                                 fontWeight: FontWeight.bold,
                                 color: AppTheme.textPrimary,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                             decoration: BoxDecoration(
@@ -603,7 +603,7 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              order.statusTag,
+                              order.statusTag == 'READY FOR PICKUP' ? 'READY PICKUP' : order.statusTag,
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 9.5,
                                 fontWeight: FontWeight.bold,

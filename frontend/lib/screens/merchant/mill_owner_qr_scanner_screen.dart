@@ -500,33 +500,54 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
 
                         return Padding(
                           padding: const EdgeInsets.only(right: 8),
-                          child: ChoiceChip(
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (isRej)
-                                  const Icon(Icons.cancel, size: 14, color: Color(0xFFE74C3C))
-                                else if (isAcc)
-                                  const Icon(Icons.check_circle, size: 14, color: Color(0xFF2ECC71))
-                                else if (isScanned)
-                                  const Icon(Icons.qr_code_scanner, size: 14, color: Color(0xFFF1C40F))
-                                else
-                                  const Icon(Icons.radio_button_unchecked, size: 14, color: Colors.white54),
-                                const SizedBox(width: 4),
-                                Text('Bag ${idx + 1}: ${bag.productName}'),
-                              ],
+                          child: InkWell(
+                            onTap: () => setState(() => _selectedBagIndex = idx),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? const Color(0xFF6E5616)
+                                    : (isAcc
+                                        ? const Color(0xFF1E8449).withValues(alpha: 0.35)
+                                        : (isRej
+                                            ? const Color(0xFFC0392B).withValues(alpha: 0.35)
+                                            : Colors.white.withValues(alpha: 0.12))),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFFF1C40F)
+                                      : (isAcc
+                                          ? const Color(0xFF2ECC71)
+                                          : (isRej
+                                              ? const Color(0xFFE74C3C)
+                                              : Colors.white24)),
+                                  width: isSelected ? 1.5 : 1.0,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (isRej)
+                                    const Icon(Icons.cancel, size: 14, color: Color(0xFFE74C3C))
+                                  else if (isAcc)
+                                    const Icon(Icons.check_circle, size: 14, color: Color(0xFF2ECC71))
+                                  else if (isScanned)
+                                    const Icon(Icons.qr_code_scanner, size: 14, color: Color(0xFFF1C40F))
+                                  else
+                                    const Icon(Icons.radio_button_unchecked, size: 14, color: Colors.white54),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    'Bag ${idx + 1}: ${bag.productName}',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      color: isSelected ? Colors.white : Colors.white70,
+                                      fontSize: 11,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            selected: isSelected,
-                            selectedColor: const Color(0xFF6E5616),
-                            backgroundColor: Colors.white12,
-                            labelStyle: GoogleFonts.plusJakartaSans(
-                              color: isSelected ? Colors.white : Colors.white70,
-                              fontSize: 11,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            ),
-                            onSelected: (val) {
-                              if (val) setState(() => _selectedBagIndex = idx);
-                            },
                           ),
                         );
                       }).toList(),
@@ -534,30 +555,41 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                   ),
 
                 // Quick Scan Triggers
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (!currentBagScanned)
-                      TextButton.icon(
-                        onPressed: () => _scanBag(_currentBag),
-                        icon: const Icon(Icons.touch_app_rounded, color: Color(0xFFCBA034), size: 18),
-                        label: Text(
-                          'Scan Unit ${_selectedBagIndex + 1} (${_currentBag.productName})',
-                          style: GoogleFonts.plusJakartaSans(color: const Color(0xFFE8C86A), fontWeight: FontWeight.bold, fontSize: 13),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (!currentBagScanned)
+                        Flexible(
+                          child: TextButton.icon(
+                            onPressed: () => _scanBag(_currentBag),
+                            icon: const Icon(Icons.touch_app_rounded, color: Color(0xFFCBA034), size: 18),
+                            label: Text(
+                              'Scan Unit ${_selectedBagIndex + 1}',
+                              style: GoogleFonts.plusJakartaSans(color: const Color(0xFFE8C86A), fontWeight: FontWeight.bold, fontSize: 13),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ),
-                      ),
-                    if (!_isAllScanned && _productBags.length > 1) ...[
-                      const SizedBox(width: 8),
-                      TextButton.icon(
-                        onPressed: () => _scanAllBags(acceptAll: true),
-                        icon: const Icon(Icons.done_all_rounded, color: Color(0xFF2ECC71), size: 18),
-                        label: Text(
-                          'Scan All (${_productBags.length} Bags)',
-                          style: GoogleFonts.plusJakartaSans(color: const Color(0xFF2ECC71), fontWeight: FontWeight.bold, fontSize: 13),
+                      if (!_isAllScanned && _productBags.length > 1) ...[
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: TextButton.icon(
+                            onPressed: () => _scanAllBags(acceptAll: true),
+                            icon: const Icon(Icons.done_all_rounded, color: Color(0xFF2ECC71), size: 18),
+                            label: Text(
+                              'Scan All (${_productBags.length})',
+                              style: GoogleFonts.plusJakartaSans(color: const Color(0xFF2ECC71), fontWeight: FontWeight.bold, fontSize: 13),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
 
                 const Spacer(),
@@ -578,45 +610,54 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: currentBagRejected
-                                      ? const Color(0xFFFDEDEC)
-                                      : (currentBagAccepted ? const Color(0xFFE8F8F0) : const Color(0xFFFBF4ED)),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  currentBagRejected
-                                      ? Icons.cancel_outlined
-                                      : (currentBagAccepted ? Icons.verified_rounded : Icons.inventory_2_outlined),
-                                  color: currentBagRejected
-                                      ? const Color(0xFFC0392B)
-                                      : (currentBagAccepted ? const Color(0xFF2ECC71) : AppTheme.primaryTerracotta),
-                                  size: 22,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${widget.order.orderId} • ${_currentBag.bagId}',
-                                    style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryTerracotta),
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: currentBagRejected
+                                        ? const Color(0xFFFDEDEC)
+                                        : (currentBagAccepted ? const Color(0xFFE8F8F0) : const Color(0xFFFBF4ED)),
+                                    shape: BoxShape.circle,
                                   ),
-                                  Text(
-                                    '${_currentBag.productName} (${_currentBag.unitText})',
-                                    style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                                  child: Icon(
+                                    currentBagRejected
+                                        ? Icons.cancel_outlined
+                                        : (currentBagAccepted ? Icons.verified_rounded : Icons.inventory_2_outlined),
+                                    color: currentBagRejected
+                                        ? const Color(0xFFC0392B)
+                                        : (currentBagAccepted ? const Color(0xFF2ECC71) : AppTheme.primaryTerracotta),
+                                    size: 22,
                                   ),
-                                ],
-                              ),
-                            ],
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${widget.order.orderId} • ${_currentBag.bagId}',
+                                        style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryTerracotta),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        '${_currentBag.productName} (${_currentBag.unitText})',
+                                        style: GoogleFonts.plusJakartaSans(fontSize: 14.5, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
+                          const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                             decoration: BoxDecoration(
                               color: currentBagRejected
                                   ? const Color(0xFFFDEDEC)
@@ -630,10 +671,10 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                             ),
                             child: Text(
                               currentBagRejected
-                                  ? 'REJECTED ✕'
-                                  : (currentBagAccepted ? 'ACCEPTED ✓' : 'INSPECTING...'),
+                                  ? 'REJECTED'
+                                  : (currentBagAccepted ? 'ACCEPTED' : 'INSPECTING'),
                               style: GoogleFonts.plusJakartaSans(
-                                fontSize: 11,
+                                fontSize: 10.5,
                                 fontWeight: FontWeight.bold,
                                 color: currentBagRejected
                                     ? const Color(0xFFC0392B)
@@ -667,15 +708,18 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                         children: [
                           Expanded(
                             child: SizedBox(
-                              height: 38,
+                              height: 42,
                               child: OutlinedButton.icon(
                                 onPressed: () => _openBagRejectionModal(_currentBag),
                                 icon: const Icon(Icons.close_rounded, size: 16, color: Color(0xFFC0392B)),
                                 label: Text(
                                   currentBagRejected ? 'Reason Added' : 'Reject This Bag',
                                   style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFFC0392B)),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6),
                                   side: const BorderSide(color: Color(0xFFE74C3C)),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 ),
@@ -685,7 +729,7 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                           const SizedBox(width: 8),
                           Expanded(
                             child: SizedBox(
-                              height: 38,
+                              height: 42,
                               child: ElevatedButton.icon(
                                 onPressed: () {
                                   setState(() {
@@ -701,8 +745,11 @@ class _MillOwnerQrScannerScreenState extends State<MillOwnerQrScannerScreen>
                                 label: Text(
                                   'Accept Bag',
                                   style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6),
                                   backgroundColor: const Color(0xFF1E8449),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 ),
