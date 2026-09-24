@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const { query } = require('../config/database');
 const { generateToken } = require('../utils/jwt');
 const { ROLES, ORDER_STATUS, DELIVERY_STATUS } = require('../constants/enums');
+const store = require('../store/dataStore');
 
 /**
  * @desc Delivery Rider Login
@@ -109,6 +110,7 @@ exports.updateOnlineStatus = async (req, res) => {
  */
 exports.getAvailableTrips = async (req, res) => {
   let availableOrders = [];
+  let rawTrips = [];
   try {
     const dbOrders = await query(`
       SELECT o.*, m.name as mill_name, m.address as mill_address, m.phone as mill_phone,
@@ -134,7 +136,6 @@ exports.getAvailableTrips = async (req, res) => {
       ORDER BY o.id DESC
     `);
 
-    let rawTrips = [];
     if (dbOrders && Array.isArray(dbOrders) && dbOrders.length > 0) {
       rawTrips = dbOrders.map((o, idx) => {
         const isHeavy = (parseFloat(o.quantity_kg) || 5.0) >= 10;
@@ -224,10 +225,15 @@ exports.getAvailableTrips = async (req, res) => {
           ]
         };
       });
-    } else if (store.orders && Array.isArray(store.orders)) {
-      // In-memory fallback
-      const validStatuses = ['ACCEPTED', 'CONFIRMED', 'READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY', 'PACKED', 'COMPLETED', 'MILLED'];
-      const filtered = store.orders.filter(o => validStatuses.includes(o.status) && !['DELIVERED', 'CANCELLED', 'OUT_FOR_DELIVERY'].includes(o.status));
+    }
+  } catch (err) {
+    console.warn('MySQL getAvailableTrips query warning:', err.message);
+  }
+
+  if ((!rawTrips || rawTrips.length === 0) && store.orders && Array.isArray(store.orders)) {
+    // In-memory fallback
+    const validStatuses = ['ACCEPTED', 'CONFIRMED', 'READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY', 'PACKED', 'COMPLETED', 'MILLED'];
+    const filtered = store.orders.filter(o => validStatuses.includes(o.status) && !['DELIVERED', 'CANCELLED', 'OUT_FOR_DELIVERY'].includes(o.status));
       
       rawTrips = filtered.map((o, idx) => {
         const isCustomerGrain = (o.grainSource || 'CUSTOMER').toUpperCase() === 'CUSTOMER';
@@ -357,9 +363,6 @@ exports.getAvailableTrips = async (req, res) => {
 
       availableOrders.push(...standaloneTrips);
     }
-  } catch (err) {
-    console.warn('MySQL getAvailableTrips query warning:', err.message);
-  }
 
   res.json({
     status: 'success',
@@ -377,7 +380,8 @@ exports.getDeliveryOrders = async (req, res) => {
     const rows = await query('SELECT * FROM deliveries ORDER BY id DESC');
     return res.json({ status: 'success', count: rows.length, data: { deliveries: rows } });
   } catch (err) {
-    return res.status(500).json({ status: 'error', message: err.message });
+    console.warn('MySQL getDeliveryOrders fallback:', err.message);
+    return res.json({ status: 'success', count: (store.deliveries || []).length, data: { deliveries: store.deliveries || [] } });
   }
 };
 
